@@ -83,11 +83,12 @@ class SettingsRepository(private val context: Context) {
         val target = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
         GestureBinding(action, target)
     }
-
-    /** Raw snapshot of every stored preference, used for JSON export in BackupManager. */
+    
+/** Raw snapshot of every stored preference, used for JSON export in BackupManager. */
     suspend fun snapshot(): Map<Preferences.Key<*>, Any> {
-        return kotlinx.coroutines.flow.first(context.dataStore.data.map { it.asMap() })
+        return context.dataStore.data.map { it.asMap() }.first()
     }
+    
 
     /** Restores preferences from a key/value map produced by [snapshot] (used by BackupManager). */
     suspend fun restore(values: Map<String, String>) {
