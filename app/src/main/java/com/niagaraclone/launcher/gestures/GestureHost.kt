@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -72,9 +73,10 @@ fun GestureHost(
         content()
     }
 }
-
 private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectTapGesturesWithDoubleTap(
     onDoubleTap: () -> Unit
 ) {
-    androidx.compose.foundation.gestures.detectTapGestures(onDoubleTap = { onDoubleTap() })
+    detectTapGestures(onDoubleTap = { onDoubleTap() })
 }
+
+
