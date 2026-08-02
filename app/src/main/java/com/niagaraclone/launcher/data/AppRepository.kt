@@ -2,82 +2,57 @@ package com.niagaraclone.launcher.data
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.graphics.drawable.Drawable
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 
-/**
- * A single installed app entry as shown in the vertical app list.
- */
-data class AppEntry(
-    val label: String,
+data class AppModel(
     val packageName: String,
-    val activityClassName: String,
-    val isSystemApp: Boolean
-) {
-    val firstLetter: Char
-        get() = label.firstOrNull()?.uppercaseChar()?.takeIf { it.isLetter() } ?: '#'
-}
+    val label: String,
+    val icon: android.graphics.drawable.Drawable?,
+    val notificationText: String? = null
+)
 
-/**
- * Wraps PackageManager to list launchable apps and resolve their icons,
- * optionally substituting icons from a user-selected icon pack.
- */
-class AppRepository(private val context: Context) {
-
+class AppRepository(context: Context) {
     private val packageManager: PackageManager = context.packageManager
 
-    suspend fun getLaunchableApps(): List<AppEntry> = withContext(Dispatchers.IO) {
+    private val _installedApps = MutableStateFlow<List<AppModel>>(emptyList())
+    val installedApps: StateFlow<List<AppModel>> = _installedApps.asStateFlow()
+
+    private val _favoritePackages = MutableStateFlow<Set<String>>(setOf())
+    val favoritePackages: StateFlow<Set<String>> = _favoritePackages.asStateFlow()
+
+    suspend fun loadInstalledApps() = withContext(Dispatchers.IO) {
         val intent = Intent(Intent.ACTION_MAIN, null).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
         }
-        packageManager.queryIntentActivities(intent, 0)
-            .map { resolveInfo ->
-                val appInfo: ApplicationInfo = resolveInfo.activityInfo.applicationInfo
-                AppEntry(
-                    label = resolveInfo.loadLabel(packageManager).toString(),
-                    packageName = resolveInfo.activityInfo.packageName,
-                    activityClassName = resolveInfo.activityInfo.name,
-                    isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                )
-            }
-            .distinctBy { it.packageName }
-            .sortedBy { it.label.lowercase() }
-    }
+        val resolveInfos = packageManager.queryIntentActivities(intent, 0)
+        val apps = resolveInfos.map {
+            AppModel(
+                packageName = it.activityInfo.packageName,
+                label = it.loadLabel(packageManager).toString(),
+                icon = it.loadIcon(packageManager)
+            )
+        }.sortedBy { it.label.lowercase() }
 
-    fun launch(entry: AppEntry) {
-        val intent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_LAUNCHER)
-            component = android.content.ComponentName(entry.packageName, entry.activityClassName)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        _installedApps.value = apps
+        
+        // Default pin first 4 apps as favorites if none selected
+        if (_favoritePackages.value.isEmpty() && apps.isNotEmpty()) {
+            _favoritePackages.value = apps.take(4).map { it.packageName }.toSet()
         }
-        context.startActivity(intent)
     }
 
-    fun openAppInfo(entry: AppEntry) {
-        val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = android.net.Uri.parse("package:${entry.packageName}")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    fun toggleFavorite(packageName: String) {
+        val currentFavorites = _favoritePackages.value.toMutableSet()
+        if (currentFavorites.contains(packageName)) {
+            currentFavorites.remove(packageName)
+        } else {
+            currentFavorites.add(packageName)
         }
-        context.startActivity(intent)
-    }
-
-    fun uninstall(entry: AppEntry) {
-        val intent = Intent(Intent.ACTION_DELETE).apply {
-            data = android.net.Uri.parse("package:${entry.packageName}")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
-    }
-
-    /** Loads the default (un-themed) icon for an app. */
-    fun loadDefaultIcon(entry: AppEntry): Drawable? = try {
-        packageManager.getActivityIcon(
-            android.content.ComponentName(entry.packageName, entry.activityClassName)
-        )
-    } catch (e: PackageManager.NameNotFoundException) {
-        null
+        _favoritePackages.value = currentFavorites
     }
 }
