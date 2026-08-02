@@ -1,6 +1,9 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.niagaraclone.launcher.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,34 +16,46 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.niagaraclone.launcher.data.AppEntry
+import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import kotlinx.coroutines.launch
 
+private val AppModel.firstLetter: Char
+    get() = label.firstOrNull()?.uppercaseChar() ?: '#'
+
 /**
- * The full A-Z app list. Niagara's signature move is a thin letter index down
- * the right edge that jumps the list instantly, plus a search bar that filters
- * as you type.
+ * The full A-Z app list. Features a right-edge letter index, search bar filtering,
+ * and long-press dialog management.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppDrawerScreen(
     viewModel: LauncherViewModel,
     onDismiss: () -> Unit
 ) {
-    val apps by viewModel.visibleApps.collectAsState()
-    val query by viewModel.searchQuery.collectAsState()
-    val favorites by viewModel.favorites.collectAsState()
+    val context = LocalContext.current
+    val allApps by viewModel.apps.collectAsState(initial = emptyList())
+    val favorites by viewModel.favoritePackages.collectAsState(initial = emptySet())
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    var appForMenu by remember { mutableStateOf<AppEntry?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var appForMenu by remember { mutableStateOf<AppModel?>(null) }
 
-    val grouped = remember(apps) { apps.groupBy { it.firstLetter } }
+    val filteredApps = remember(allApps, searchQuery) {
+        if (searchQuery.isBlank()) {
+            allApps
+        } else {
+            allApps.filter { it.label.contains(searchQuery, ignoreCase = true) }
+        }
+    }
+
+    val grouped = remember(filteredApps) { filteredApps.groupBy { it.firstLetter } }
     val letters = remember(grouped) { grouped.keys.sorted() }
-    // index of the first item for each letter, for fast scroll-to
-    val letterStartIndex = remember(apps, letters) {
+    val letterStartIndex = remember(filteredApps, letters) {
         val map = mutableMapOf<Char, Int>()
         var idx = 0
         for (letter in letters) {
@@ -53,8 +68,8 @@ fun AppDrawerScreen(
     Row(Modifier.fillMaxSize()) {
         Column(Modifier.weight(1f)) {
             OutlinedTextField(
-                value = query,
-                onValueChange = viewModel::onSearchQueryChange,
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
@@ -65,18 +80,21 @@ fun AppDrawerScreen(
             )
 
             LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
-                itemsIndexed(apps, key = { _, app -> app.packageName }) { _, app ->
+                itemsIndexed(filteredApps, key = { _, app -> app.packageName }) { _, app ->
                     AppRow(
                         app = app,
-                        isFavorite = app.packageName in favorites,
-                        onClick = { viewModel.launchApp(app) },
+                        isFavorite = favorites.contains(app.packageName),
+                        onClick = {
+                            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                            intent?.let { context.startActivity(it) }
+                        },
                         onLongClick = { appForMenu = app }
                     )
                 }
             }
         }
 
-        // Right-edge letter index, the defining Niagara interaction
+        // Right-edge letter index
         Column(
             modifier = Modifier
                 .fillMaxHeight()
@@ -104,18 +122,38 @@ fun AppDrawerScreen(
     appForMenu?.let { app ->
         AppLongPressMenu(
             app = app,
-            isFavorite = app.packageName in favorites,
+            isFavorite = favorites.contains(app.packageName),
             onDismiss = { appForMenu = null },
-            onToggleFavorite = { viewModel.toggleFavorite(app); appForMenu = null },
-            onHide = { viewModel.setAppHidden(app, true); appForMenu = null },
-            onAppInfo = { viewModel.openAppInfo(app); appForMenu = null },
-            onUninstall = { viewModel.uninstallApp(app); appForMenu = null }
+            onToggleFavorite = {
+                viewModel.toggleFavorite(app.packageName)
+                appForMenu = null
+            },
+            onAppInfo = {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", app.packageName, null)
+                }
+                context.startActivity(intent)
+                appForMenu = null
+            },
+            onUninstall = {
+                val intent = Intent(Intent.ACTION_DELETE).apply {
+                    data = Uri.fromParts("package", app.packageName, null)
+                }
+                context.startActivity(intent)
+                appForMenu = null
+            }
         )
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AppRow(app: AppEntry, isFavorite: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun AppRow(
+    app: AppModel,
+    isFavorite: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -132,11 +170,10 @@ private fun AppRow(app: AppEntry, isFavorite: Boolean, onClick: () -> Unit, onLo
 
 @Composable
 private fun AppLongPressMenu(
-    app: AppEntry,
+    app: AppModel,
     isFavorite: Boolean,
     onDismiss: () -> Unit,
     onToggleFavorite: () -> Unit,
-    onHide: () -> Unit,
     onAppInfo: () -> Unit,
     onUninstall: () -> Unit
 ) {
@@ -148,7 +185,6 @@ private fun AppLongPressMenu(
                 TextButton(onClick = onToggleFavorite) {
                     Text(if (isFavorite) "Remove from favorites" else "Add to favorites")
                 }
-                TextButton(onClick = onHide) { Text("Hide app") }
                 TextButton(onClick = onAppInfo) { Text("App info") }
                 TextButton(onClick = onUninstall) { Text("Uninstall") }
             }
