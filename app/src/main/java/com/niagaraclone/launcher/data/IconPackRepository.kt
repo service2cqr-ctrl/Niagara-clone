@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.XmlResourceParser
 import android.graphics.drawable.Drawable
+import androidx.core.content.res.ResourcesCompat
+import com.niagaraclone.launcher.data.AppModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
@@ -43,13 +45,19 @@ class IconPackRepository(private val context: Context) {
     }
 
     /** Returns a themed icon for the app if the current icon pack has one, else null. */
-    fun getThemedIcon(entry: AppEntry): Drawable? {
+    fun getThemedIcon(app: AppModel, activityClassName: String? = null): Drawable? {
         val packPkg = currentPackPackage ?: return null
-        val key = "ComponentInfo{${entry.packageName}/${entry.activityClassName}}"
+        val targetActivity = activityClassName ?: ""
+        val key = "ComponentInfo{${app.packageName}/$targetActivity}"
         val drawableName = componentToDrawable[key] ?: return null
-        val resId = pm.getResourcesForApplication(packPkg).getIdentifier(drawableName, "drawable", packPkg)
-        if (resId == 0) return null
-        return pm.getResourcesForApplication(packPkg).getDrawable(resId, null)
+
+        return try {
+            val res = pm.getResourcesForApplication(packPkg)
+            val resId = res.getIdentifier(drawableName, "drawable", packPkg)
+            if (resId == 0) null else ResourcesCompat.getDrawable(res, resId, null)
+        } catch (e: Exception) {
+            null
+        }
     }
 
     /**
