@@ -1,6 +1,7 @@
 package com.niagaraclone.launcher.data
 
 import android.content.Context
+import kotlinx.coroutines.flow.first
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
