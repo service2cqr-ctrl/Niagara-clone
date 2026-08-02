@@ -1,92 +1,181 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.niagaraclone.launcher.ui.screens
 
-import androidx.compose.foundation.combinedClickable
+import android.content.Intent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.niagaraclone.launcher.data.AppEntry
-import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.data.AppModel
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-/**
- * The Niagara-style home: a big clock, then the favorites list (a handful of
- * pinned apps as plain text rows for fast one-handed reach), and a bottom hint
- * that swiping up opens the full app drawer.
- */
 @Composable
 fun HomeScreen(
-    viewModel: LauncherViewModel,
-    onOpenAppDrawer: () -> Unit
+    apps: List<AppModel>,
+    favoritePackages: Set<String>,
+    onToggleFavorite: (String) -> Unit
 ) {
-    val allApps by viewModel.allApps.collectAsState()
-    val favoritePkgs by viewModel.favorites.collectAsState()
-    val favoriteApps = remember(allApps, favoritePkgs) {
-        favoritePkgs.mapNotNull { pkg -> allApps.find { it.packageName == pkg } }
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    val alphabet = ('A'..'Z').toList()
+
+    // Separate favorites and alphabetical apps list
+    val favorites = remember(apps, favoritePackages) {
+        apps.filter { favoritePackages.contains(it.packageName) }
+    }
+    val otherApps = remember(apps, favoritePackages) {
+        apps.filter { !favoritePackages.contains(it.packageName) }
     }
 
-    var clock by remember { mutableStateOf(currentTime()) }
+    val alphabetMap = remember(otherApps) {
+        alphabet.associateWith { char ->
+            otherApps.indexOfFirst { it.label.startsWith(char, ignoreCase = true) }
+        }.filter { it.value != -1 }
+    }
+
+    var currentTime by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
-        while (true) {
-            clock = currentTime()
-            kotlinx.coroutines.delay(1000)
-        }
+        val sdf = SimpleDateFormat("hh:mm a", Locale.getDefault())
+        currentTime = sdf.format(Date())
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.Start
-    ) {
-        Spacer(Modifier.height(64.dp))
-        Text(clock, fontSize = 56.sp, fontWeight = FontWeight.Light)
-        Spacer(Modifier.height(32.dp))
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().padding(end = 24.dp),
+            contentPadding = PaddingValues(vertical = 32.dp, horizontal = 20.dp)
+        ) {
+            // 1. Integrated Clock & Weather Minimalist Header
+            item {
+                Column(modifier = Modifier.padding(bottom = 28.dp)) {
+                    Text(text = currentTime, color = Color.White, fontSize = 48.sp)
+                    Text(text = "Sunny • 24°C", color = Color.Gray, fontSize = 16.sp)
+                }
+            }
 
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(favoriteApps, key = { it.packageName }) { app ->
-                FavoriteRow(
-                    app = app,
-                    onClick = { viewModel.launchApp(app) },
-                    onLongClick = { viewModel.toggleFavorite(app) }
-                )
+            // 2. Favorite Apps Section
+            if (favorites.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "FAVORITES",
+                        color = Color.DarkGray,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+                items(favorites, key = { "fav_${it.packageName}" }) { app ->
+                    AppRowItem(app = app, onClick = {
+                        val launchIntent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                        launchIntent?.let { context.startActivity(it) }
+                    }, onLongClick = {
+                        onToggleFavorite(app.packageName)
+                    })
+                }
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "ALL APPS",
+                        color = Color.DarkGray,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+            }
+
+            // 3. Alphabetical App List Section
+            items(otherApps, key = { it.packageName }) { app ->
+                AppRowItem(app = app, onClick = {
+                    val launchIntent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                    launchIntent?.let { context.startActivity(it) }
+                }, onLongClick = {
+                    onToggleFavorite(app.packageName)
+                })
             }
         }
 
-        Text(
-            text = "swipe up for all apps",
-            fontSize = 13.sp,
+        // Wave-side alphabetical indexer ticker with haptic feedback ticks
+        var lastSelectedIndex by remember { mutableStateOf(-1) }
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-        )
-    }
+                .align(Alignment.CenterEnd)
+                .width(24.dp)
+                .fillMaxHeight()
+                .padding(vertical = 64.dp)
+                .pointerInput(alphabetMap) {
+                    detectVerticalDragGestures { change, _ ->
+                        val y = change.position.y
+                        val indexFraction = (y / size.height).coerceIn(0f, 1f)
+                        val targetCharIndex = (indexFraction * alphabet.size).toInt().coerceIn(0, alphabet.size - 1)
+                        
+                        if (targetCharIndex != lastSelectedIndex) {
+                            lastSelectedIndex = targetCharIndex
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
 
-    // Tapping the empty area also opens the drawer, mirroring Niagara's "tap anywhere" affordance
-    LaunchedEffect(Unit) { /* reserved for future one-shot onboarding hints */ }
+                        val targetChar = alphabet[targetCharIndex]
+                        alphabetMap[targetChar]?.let { listIndex ->
+                            coroutineScope.launch {
+                                // Offset list index by header elements count
+                                listState.scrollToItem(listIndex + (if (favorites.isNotEmpty()) 4 else 2))
+                            }
+                        }
+                    }
+                },
+            verticalArrangement = Arrangement.SpaceEvenly,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            alphabet.forEach { char ->
+                Text(
+                    text = char.toString(),
+                    color = if (alphabetMap.containsKey(char)) Color.LightGray else Color.DarkGray,
+                    fontSize = 10.sp
+                )
+            }
+        }
+    }
 }
 
 @Composable
-private fun FavoriteRow(app: AppEntry, onClick: () -> Unit, onLongClick: () -> Unit) {
-    Text(
-        text = app.label,
-        fontSize = 22.sp,
+fun AppRowItem(app: AppModel, onClick: () -> Unit, onLongClick: () -> Unit) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .clickable(onClick = onClick)
             .padding(vertical = 10.dp)
-    )
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = app.label,
+                color = Color.White,
+                fontSize = 20.sp
+            )
+        }
+        // Notification Snippet preview line if available
+        if (!app.notificationText.isNullOrEmpty()) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = app.notificationText,
+                color = Color.Gray,
+                fontSize = 13.sp,
+                maxLines = 1
+            )
+        }
+    }
 }
-
-private fun currentTime(): String =
-    SimpleDateFormat("h:mm", Locale.getDefault()).format(Date())
