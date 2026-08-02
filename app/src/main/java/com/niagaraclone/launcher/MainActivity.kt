@@ -8,8 +8,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -46,16 +47,24 @@ class MainActivity : ComponentActivity() {
                         page = when (direction) {
                             SwipeDirection.UP -> if (page == Page.HOME) Page.APP_DRAWER else page
                             SwipeDirection.DOWN -> {
-                                if (page == Page.HOME) openNotificationShade(this@MainActivity)
-                                if (page == Page.APP_DRAWER) Page.HOME else page
+                                if (page == Page.HOME) {
+                                    openNotificationShade(this@MainActivity)
+                                    page
+                                } else if (page == Page.APP_DRAWER) {
+                                    Page.HOME
+                                } else page
                             }
                             SwipeDirection.LEFT -> if (page == Page.HOME) Page.WIDGETS else page
                             SwipeDirection.RIGHT -> if (page == Page.WIDGETS) Page.HOME else page
                         }
                     },
-                    onDoubleTap = { /* e.g. lock screen — needs device admin, left as extension point */ }
+                    onDoubleTap = { /* Extension point for double-tap gestures */ }
                 ) {
-                    AnimatedContent(targetState = page, label = "page") { current ->
+                    AnimatedContent(
+                        targetState = page,
+                        label = "page_transition",
+                        transitionSpec = { fadeIn() togetherWith fadeOut() }
+                    ) { current ->
                         when (current) {
                             Page.HOME -> HomeScreen(
                                 viewModel = viewModel,
@@ -67,8 +76,8 @@ class MainActivity : ComponentActivity() {
                             )
                             Page.WIDGETS -> WidgetsScreen()
                             Page.SETTINGS -> SettingsScreen(
-                                viewModel = viewModel,
-                                onDismiss = { page = Page.HOME }
+                                repository = viewModel.repository,
+                                onBack = { page = Page.HOME }
                             )
                         }
                     }
@@ -92,6 +101,6 @@ private fun openNotificationShade(context: Context) {
         val method = statusBarManagerClass.getMethod(methodName)
         method.invoke(statusBarService)
     } catch (e: Exception) {
-        // Reflection into StatusBarManager is best-effort across OEMs/versions; fail silently.
+        // Best-effort attempt across OEM devices; ignore failure silently
     }
 }
