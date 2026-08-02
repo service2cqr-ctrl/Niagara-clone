@@ -2,7 +2,6 @@ package com.niagaraclone.launcher.backup
 
 import android.content.Context
 import android.net.Uri
-import androidx.datastore.preferences.core.Preferences
 import com.niagaraclone.launcher.data.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,9 +27,11 @@ class BackupManager(
         val json = JSONObject()
         json.put("backupVersion", BACKUP_VERSION)
         val prefsJson = JSONObject()
-        snapshot.forEach { (key: Preferences.Key<*>, value) ->
+        
+        snapshot.forEach { (key, value) ->
             prefsJson.put(key.name, value.toString())
         }
+        
         json.put("preferences", prefsJson)
         json.toString(2)
     }
