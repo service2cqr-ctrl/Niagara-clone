@@ -1,5 +1,6 @@
 package com.niagaraclone.launcher.ui.screens
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -8,8 +9,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -28,12 +30,13 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     apps: List<AppModel>,
     favoritePackages: Set<String>,
-    onToggleFavorite: (String) -> Unit
+    onToggleFavorite: (String) -> Unit,
+    onOpenSettings: () -> Unit = {},
+    onOpenRecentApps: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
-    var showDotMenu by remember { mutableStateOf(false) }
 
     val favorites = remember(apps, favoritePackages) {
         apps.filter { favoritePackages.contains(it.packageName) }
@@ -91,7 +94,7 @@ fun HomeScreen(
                 }
             }
 
-            // 5. Full App Drawer (Appears below favorites as you scroll down)
+            // 5. Full App Drawer (Alphabetical)
             items(apps, key = { it.packageName }) { app ->
                 Row(
                     modifier = Modifier
@@ -104,6 +107,36 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(text = app.label, color = Color.White, fontSize = 18.sp)
+                }
+            }
+
+            // 6. The "o" Section: Bottom launcher options matching the app drawer tail
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenRecentApps() }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.History, contentDescription = null, tint = Color.White.copy(alpha = 0.7f))
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(text = "Recently Installed Apps", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp)
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenSettings() }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White.copy(alpha = 0.7f))
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(text = "Niagara Settings", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp)
                 }
             }
         }
@@ -127,7 +160,10 @@ fun HomeScreen(
             onCharSelected = { char ->
                 when (char) {
                     "⭐" -> coroutineScope.launch { listState.scrollToItem(0) }
-                    "o" -> showDotMenu = true
+                    "o" -> coroutineScope.launch { 
+                        // Scroll directly to the bottom items
+                        listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1) 
+                    }
                     else -> {
                         alphabetMap[char]?.let { targetIndex ->
                             coroutineScope.launch {
@@ -140,13 +176,5 @@ fun HomeScreen(
             },
             onDragEnd = {}
         )
-
-        if (showDotMenu) {
-            DotMenuBottomSheet(
-                onDismiss = { showDotMenu = false },
-                onOpenSettings = { /* Open Settings Screen */ },
-                onOpenRecentApps = { /* Filter Recent Apps */ }
-            )
-        }
     }
 }
