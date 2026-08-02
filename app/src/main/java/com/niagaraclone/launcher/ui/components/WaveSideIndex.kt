@@ -2,7 +2,6 @@ package com.niagaraclone.launcher.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -13,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -22,6 +22,9 @@ import kotlin.math.exp
 
 val INDEX_ITEMS = listOf("⭐") + ('A'..'Z').map { it.toString() } + listOf("o")
 
+/**
+ * Niagara-style wave side index component for quick alphabet jump scrolling.
+ */
 @Composable
 fun WaveSideIndex(
     modifier: Modifier = Modifier,
@@ -30,17 +33,25 @@ fun WaveSideIndex(
 ) {
     val haptics = LocalHapticFeedback.current
     var touchY by remember { mutableStateOf<Float?>(null) }
-    var lastSelectedIndex by remember { mutableStateOf(-1) }
-    var totalHeight by remember { mutableStateOf(1f) }
+    var lastSelectedIndex by remember { mutableIntStateOf(-1) }
+    var totalHeight by remember { mutableFloatStateOf(1f) }
 
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .width(120.dp) // Wide area to accommodate the leftward arc
+            .width(120.dp) // Wide touch hit area for the fluid wave arc
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragStart = { offset ->
                         touchY = offset.y
+                        val indexFraction = (offset.y / totalHeight).coerceIn(0f, 1f)
+                        val targetIndex = (indexFraction * (INDEX_ITEMS.size - 1)).toInt()
+
+                        if (targetIndex in INDEX_ITEMS.indices) {
+                            lastSelectedIndex = targetIndex
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onCharSelected(INDEX_ITEMS[targetIndex])
+                        }
                     },
                     onDragEnd = {
                         touchY = null
@@ -85,13 +96,13 @@ fun WaveSideIndex(
                 // Gaussian curve calculation for wave effect (X-offset and Scale)
                 val distance = if (currentTouchY != null) abs(currentTouchY - itemY) else Float.MAX_VALUE
                 val waveOffset = if (currentTouchY != null && distance < 250f) {
-                    (exp(-((distance * distance) / (2 * 60f * 60f))) * 70f) // Max 70dp arc to left
+                    (exp(-((distance * distance) / (2 * 60f * 60f))) * 70f)
                 } else {
                     0f
                 }
 
                 val scale = if (currentTouchY != null && distance < 180f) {
-                    1f + (exp(-((distance * distance) / (2 * 50f * 50f))) * 1.2f) // Scale up active item
+                    1f + (exp(-((distance * distance) / (2 * 50f * 50f))) * 1.2f)
                 } else {
                     1f
                 }
