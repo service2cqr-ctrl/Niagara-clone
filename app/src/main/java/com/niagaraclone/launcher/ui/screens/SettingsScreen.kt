@@ -69,7 +69,7 @@ fun SettingsScreen(
         ) {
             Text("Theme", style = MaterialTheme.typography.titleMedium)
             Row(modifier = Modifier.padding(vertical = 8.dp)) {
-                AppTheme.values().forEach { theme ->
+                AppTheme.entries.forEach { theme ->
                     Button(
                         onClick = {
                             scope.launch { repository.setTheme(theme) }
@@ -85,22 +85,22 @@ fun SettingsScreen(
 
             Text("Accent Color", style = MaterialTheme.typography.titleMedium)
             Row(modifier = Modifier.padding(vertical = 8.dp)) {
-                val colors = listOf(
+                val colorOptions = listOf(
                     Color(0xFF3B82F6), // Niagara Blue
                     Color(0xFF10B981), // Emerald
                     Color(0xFFEF4444), // Crimson
                     Color(0xFF8B5CF6)  // Purple
                 )
-                colors.forEach { color ->
+                colorOptions.forEach { itemColor ->
                     Button(
                         onClick = {
                             scope.launch {
-                                repository.setAccentColor(color.toArgb())
+                                repository.setAccentColor(itemColor.toArgb())
                             }
                         },
                         modifier = Modifier.padding(end = 8.dp)
                     ) {
-                        Text("●", color = color)
+                        Text("●", color = itemColor)
                     }
                 }
             }
