@@ -16,7 +16,9 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun WidgetsScreen() {
     Column(
-        Modifier.fillMaxSize().padding(24.dp),
+        Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
