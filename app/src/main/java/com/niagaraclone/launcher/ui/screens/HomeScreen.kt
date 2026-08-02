@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.niagaraclone.launcher.ui.screens
 
 import androidx.compose.foundation.combinedClickable
