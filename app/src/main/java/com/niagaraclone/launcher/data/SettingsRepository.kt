@@ -1,10 +1,13 @@
 package com.niagaraclone.launcher.data
 
 import android.content.Context
-import kotlinx.coroutines.flow.first
-import androidx.datastore.preferences.core.*
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 val Context.dataStore by preferencesDataStore(name = "launcher_settings")
@@ -36,7 +39,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     val accentColor: Flow<Int> = context.dataStore.data.map {
-        it[Keys.ACCENT_COLOR] ?: 0xFF3B82F6.toInt() // default blue accent, Niagara-style
+        it[Keys.ACCENT_COLOR] ?: 0xFF3B82F6.toInt() // Default Niagara blue accent
     }
 
     val favorites: Flow<List<String>> = context.dataStore.data.map {
@@ -84,12 +87,11 @@ class SettingsRepository(private val context: Context) {
         val target = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
         GestureBinding(action, target)
     }
-    
-/** Raw snapshot of every stored preference, used for JSON export in BackupManager. */
+
+    /** Raw snapshot of every stored preference, used for JSON export in BackupManager. */
     suspend fun snapshot(): Map<Preferences.Key<*>, Any> {
         return context.dataStore.data.map { it.asMap() }.first()
     }
-    
 
     /** Restores preferences from a key/value map produced by [snapshot] (used by BackupManager). */
     suspend fun restore(values: Map<String, String>) {
