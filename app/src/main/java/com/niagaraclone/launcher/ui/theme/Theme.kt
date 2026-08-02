@@ -53,5 +53,5 @@ val AccentPresets = listOf(
     Color(0xFFEF4444), // red
     Color(0xFF8B5CF6), // violet
     Color(0xFFEC4899), // pink
-    Color(0xFF64748B), // slate
+    Color(0xFF64748B)  // slate
 )
