@@ -9,13 +9,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 
-data class AppModel(
-    val packageName: String,
-    val label: String,
-    val icon: android.graphics.drawable.Drawable?,
-    val notificationText: String? = null
-)
-
 class AppRepository(context: Context) {
     private val packageManager: PackageManager = context.packageManager
 
