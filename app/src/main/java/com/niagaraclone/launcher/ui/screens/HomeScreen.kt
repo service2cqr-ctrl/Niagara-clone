@@ -23,11 +23,39 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.data.AppModel
+import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.*
 import kotlinx.coroutines.launch
 
+private val DEFAULT_INDEX_ITEMS = listOf("⭐") + ('A'..'Z').map { it.toString() } + listOf("o")
+
+/**
+ * Primary Composable signature used by MainActivity.
+ */
 @Composable
 fun HomeScreen(
+    viewModel: LauncherViewModel,
+    onOpenAppDrawer: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+    onOpenRecentApps: () -> Unit = {}
+) {
+    val apps by viewModel.apps.collectAsState(initial = emptyList())
+    val favoritePackages by viewModel.favoritePackages.collectAsState(initial = emptySet())
+
+    HomeScreenContent(
+        apps = apps,
+        favoritePackages = favoritePackages,
+        onToggleFavorite = { pkg -> viewModel.toggleFavorite(pkg) },
+        onOpenSettings = onOpenSettings,
+        onOpenRecentApps = onOpenRecentApps
+    )
+}
+
+/**
+ * Underlying Content Composable rendering all UI components & widgets.
+ */
+@Composable
+fun HomeScreenContent(
     apps: List<AppModel>,
     favoritePackages: Set<String>,
     onToggleFavorite: (String) -> Unit,
@@ -42,8 +70,10 @@ fun HomeScreen(
         apps.filter { favoritePackages.contains(it.packageName) }
     }
 
-    val alphabetMap = remember(apps) {
-        INDEX_ITEMS.associateWith { char ->
+    val indexItems = DEFAULT_INDEX_ITEMS
+
+    val alphabetMap = remember(apps, indexItems) {
+        indexItems.associateWith { char ->
             apps.indexOfFirst { it.label.startsWith(char, ignoreCase = true) }
         }.filter { it.value != -1 }
     }
@@ -54,7 +84,7 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize().padding(end = 40.dp),
             contentPadding = PaddingValues(top = 48.dp, bottom = 96.dp, start = 20.dp)
         ) {
-            // 1. Digital Clock & Weather Line (⚡ 52% 💧 25°)
+            // 1. Digital Clock & Weather Line
             item {
                 Column(modifier = Modifier.padding(bottom = 20.dp)) {
                     Text(text = "06:27", color = Color(0xFF4DD0E1), fontSize = 64.sp)
@@ -62,7 +92,7 @@ fun HomeScreen(
                 }
             }
 
-            // 2. Custom Embedded Widget Slot (Samsung Calendar View)
+            // 2. Custom Embedded Widget Slot
             item {
                 Box(
                     modifier = Modifier
@@ -73,12 +103,7 @@ fun HomeScreen(
                 }
             }
 
-            // 3. Media Player Widget Card
-            item {
-                MediaPlayerCard()
-            }
-
-            // 4. Favorites App List
+            // 3. Favorites App List
             items(favorites, key = { "fav_${it.packageName}" }) { app ->
                 Row(
                     modifier = Modifier
@@ -94,7 +119,7 @@ fun HomeScreen(
                 }
             }
 
-            // 5. Full App Drawer (Alphabetical)
+            // 4. Full App List (Alphabetical)
             items(apps, key = { it.packageName }) { app ->
                 Row(
                     modifier = Modifier
@@ -110,7 +135,7 @@ fun HomeScreen(
                 }
             }
 
-            // 6. The "o" Section: Bottom launcher options matching the app drawer tail
+            // 5. Launcher Options Tail Section
             item {
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(
@@ -136,12 +161,12 @@ fun HomeScreen(
                 ) {
                     Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White.copy(alpha = 0.7f))
                     Spacer(modifier = Modifier.width(16.dp))
-                    Text(text = "Niagara Settings", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp)
+                    Text(text = "Cascadia Settings", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp)
                 }
             }
         }
 
-        // Floating Action Button (FAB)
+        // Floating Action Button
         FloatingActionButton(
             onClick = { /* Open Phone or Search */ },
             containerColor = Color(0xFF4DD0E1),
@@ -154,21 +179,19 @@ fun HomeScreen(
             Icon(Icons.Default.Phone, contentDescription = "Action", tint = Color.Black)
         }
 
-        // Wave Scroller on Edge
+        // Wave Side Indexer
         WaveSideIndex(
             modifier = Modifier.align(Alignment.CenterEnd),
             onCharSelected = { char ->
                 when (char) {
                     "⭐" -> coroutineScope.launch { listState.scrollToItem(0) }
-                    "o" -> coroutineScope.launch { 
-                        // Scroll directly to the bottom items
-                        listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1) 
+                    "o" -> coroutineScope.launch {
+                        listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
                     }
                     else -> {
                         alphabetMap[char]?.let { targetIndex ->
                             coroutineScope.launch {
-                                // Offset past the top widgets/header items
-                                listState.scrollToItem(targetIndex + 3)
+                                listState.scrollToItem(targetIndex + 2)
                             }
                         }
                     }
