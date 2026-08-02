@@ -1,13 +1,11 @@
 package com.niagaraclone.launcher.gestures
 
-import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -31,15 +29,17 @@ fun GestureHost(
     val density = LocalDensity.current
     val thresholdPx = with(density) { thresholdDp.dp.toPx() }
 
-    var dragTotalX by remember { mutableStateOf(0f) }
-    var dragTotalY by remember { mutableStateOf(0f) }
+    var dragTotalX by remember { mutableFloatStateOf(0f) }
+    var dragTotalY by remember { mutableFloatStateOf(0f) }
     var consumed by remember { mutableStateOf(false) }
 
-    androidx.compose.foundation.layout.Box(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTapGesturesWithDoubleTap(onDoubleTap = onDoubleTap)
+                detectTapGestures(
+                    onDoubleTap = { onDoubleTap() }
+                )
             }
             .pointerInput(Unit) {
                 detectDragGestures(
@@ -73,10 +73,3 @@ fun GestureHost(
         content()
     }
 }
-private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectTapGesturesWithDoubleTap(
-    onDoubleTap: () -> Unit
-) {
-    detectTapGestures(onDoubleTap = { onDoubleTap() })
-}
-
-
