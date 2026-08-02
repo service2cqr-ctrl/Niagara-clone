@@ -5,15 +5,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,14 +63,14 @@ fun MediaPlayerCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Playback controls row using core icons
+            // Playback controls row
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 IconButton(onClick = onPrevClick, modifier = Modifier.size(32.dp)) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = Icons.Default.SkipPrevious,
                         contentDescription = "Previous",
                         tint = Color.White
                     )
@@ -84,7 +85,7 @@ fun MediaPlayerCard(
                 ) {
                     IconButton(onClick = onPlayPauseClick) {
                         Icon(
-                            imageVector = Icons.Default.PlayArrow,
+                            imageVector = Icons.Default.Pause,
                             contentDescription = "Play/Pause",
                             tint = Color.White
                         )
@@ -93,7 +94,7 @@ fun MediaPlayerCard(
 
                 IconButton(onClick = onNextClick, modifier = Modifier.size(32.dp)) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        imageVector = Icons.Default.SkipNext,
                         contentDescription = "Next",
                         tint = Color.White
                     )
