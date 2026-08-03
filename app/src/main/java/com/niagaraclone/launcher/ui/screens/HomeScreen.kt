@@ -8,7 +8,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -71,20 +71,8 @@ fun HomeScreenContent(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent)
-            // Left & Right Edge Gesture Detection to trigger App Drawer switch
-            .pointerInput(Unit) {
-                detectVerticalDragGestures { change, dragAmount ->
-                    val touchX = change.position.x
-                    val edgeThreshold = 80.dp.toPx()
-                    val isLeftEdge = touchX <= edgeThreshold
-                    val isRightEdge = touchX >= (size.width - edgeThreshold)
-
-                    if ((isLeftEdge || isRightEdge) && dragAmount > 0) {
-                        onOpenAppDrawer()
-                    }
-                }
-            }
     ) {
+        // Main Home Screen Content
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = 56.dp, bottom = 96.dp, start = 20.dp, end = 20.dp)
@@ -139,14 +127,14 @@ fun HomeScreenContent(
                 }
             }
 
-            // 3. Custom Widget Slot Area (Clean container)
+            // 3. Custom Widget Slot Area
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
                 ) {
-                    // System/Samsung Widget views render here directly
+                    // Widget views render here
                 }
             }
 
@@ -162,6 +150,40 @@ fun HomeScreenContent(
                 )
             }
         }
+
+        // ==========================================
+        // OVERLAY ACTIVE EDGE TOUCH ZONES FOR APP DRAWER
+        // ==========================================
+
+        // Left Edge Touch Strip
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .fillMaxHeight()
+                .width(48.dp)
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { onOpenAppDrawer() },
+                        onDrag = { _, _ -> }
+                    )
+                }
+                .clickable { onOpenAppDrawer() }
+        )
+
+        // Right Edge Touch Strip
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .width(48.dp)
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { onOpenAppDrawer() },
+                        onDrag = { _, _ -> }
+                    )
+                }
+                .clickable { onOpenAppDrawer() }
+        )
 
         // Floating Action Button (Phone)
         FloatingActionButton(
