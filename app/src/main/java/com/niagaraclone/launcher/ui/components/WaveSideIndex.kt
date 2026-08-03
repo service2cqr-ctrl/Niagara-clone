@@ -30,7 +30,7 @@ fun WaveSideIndex(
     modifier: Modifier = Modifier,
     activeChar: String? = null,
     isIndexerVisible: Boolean = false,
-    onTouchStart: () -> Unit = {}, // Added default value here,,
+    onTouchStart: () -> Unit = {},
     onCharSelected: (String) -> Unit = {},
     onDragEnd: (String) -> Unit = {}
 ) {
@@ -47,7 +47,7 @@ fun WaveSideIndex(
                 bottom = 50.dp,
                 end = 24.dp
             )
-            .width(48.dp) // Edge touch zone
+            .width(48.dp)
             .layout { measurable, constraints ->
                 totalHeight = constraints.maxHeight.toFloat()
                 val placeable = measurable.measure(constraints)
@@ -57,7 +57,6 @@ fun WaveSideIndex(
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    // 1. TOUCH DOWN (Triggers drawer & indexer immediately)
                     val down = awaitFirstDown(requireUnconsumed = false)
                     touchY = down.position.y
                     onTouchStart()
@@ -71,7 +70,6 @@ fun WaveSideIndex(
                         onCharSelected(INDEX_ITEMS[initialIndex])
                     }
 
-                    // 2. UNBROKEN CONTINUOUS DRAG
                     do {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull() ?: break
@@ -89,7 +87,6 @@ fun WaveSideIndex(
                         }
                     } while (event.changes.any { it.pressed })
 
-                    // 3. FINGER LIFT
                     val finalChar = if (lastSelectedIndex in INDEX_ITEMS.indices) {
                         INDEX_ITEMS[lastSelectedIndex]
                     } else {
