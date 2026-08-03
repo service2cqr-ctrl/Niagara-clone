@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,20 +20,25 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.components.WaveSideIndex
 import kotlinx.coroutines.launch
 
-private val AppModel.firstLetter: Char
-    get() = label.firstOrNull()?.uppercaseChar() ?: '#'
+private val AppModel.firstLetter: String
+    get() = label.firstOrNull()?.uppercaseChar()?.toString() ?: "#"
 
 /**
- * The full A-Z app list. Features a right-edge letter index, search bar filtering,
- * long-press dialog management, and launcher settings action triggers.
+ * The full A-Z app list drawer featuring search filtering, custom Wave Side Indexer,
+ * long-press dialog management, app icons, and bottom launcher settings action triggers.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -58,34 +64,59 @@ fun AppDrawerScreen(
         }
     }
 
-    val grouped = remember(filteredApps) { filteredApps.groupBy { it.firstLetter } }
-    val letters = remember(grouped) { grouped.keys.sorted() }
-    val letterStartIndex = remember(filteredApps, letters) {
-        val map = mutableMapOf<Char, Int>()
-        var idx = 0
-        for (letter in letters) {
-            map[letter] = idx
-            idx += grouped[letter]?.size ?: 0
+    // Map each alphabet letter to its exact index in filteredApps
+    val letterStartIndex = remember(filteredApps) {
+        val map = mutableMapOf<String, Int>()
+        filteredApps.forEachIndexed { index, app ->
+            val letter = app.firstLetter
+            if (!map.containsKey(letter)) {
+                map[letter] = index
+            }
         }
         map
     }
 
-    Row(Modifier.fillMaxSize()) {
-        Column(Modifier.weight(1f)) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(end = 40.dp)
+        ) {
+            // Search Bar
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                placeholder = { Text("Search apps") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                placeholder = { Text("Search apps", color = Color.Gray) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = Color.Gray
+                    )
+                },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions.Default
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF4DD0E1),
+                    unfocusedBorderColor = Color.DarkGray,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                )
             )
 
-            LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
-                itemsIndexed(filteredApps, key = { _, app -> app.packageName }) { _, app ->
+            // Main A-Z App List
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(bottom = 32.dp)
+            ) {
+                itemsIndexed(
+                    items = filteredApps,
+                    key = { _, app -> app.packageName }
+                ) { _, app ->
                     AppRow(
                         app = app,
                         isFavorite = favorites.contains(app.packageName),
@@ -97,12 +128,12 @@ fun AppDrawerScreen(
                     )
                 }
 
-                // Explicit keys assigned to ensure touch target accuracy
+                // Explicit keys for bottom action rows
                 item(key = "action_recently_installed") {
                     DrawerActionRow(
                         icon = Icons.Outlined.History,
                         label = "Recently Installed Apps",
-                        onClick = { /* Optional: show recently installed list */ }
+                        onClick = { /* Optional action */ }
                     )
                 }
 
@@ -116,31 +147,29 @@ fun AppDrawerScreen(
             }
         }
 
-        // Right-edge letter index
-        Column(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(28.dp)
-                .padding(vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            letters.forEach { letter ->
-                Text(
-                    text = letter.toString(),
-                    fontSize = 11.sp,
-                    modifier = Modifier
-                        .padding(vertical = 2.dp)
-                        .combinedClickable(onClick = {
-                            letterStartIndex[letter]?.let { idx ->
-                                scope.launch { listState.animateScrollToItem(idx) }
-                            }
-                        })
-                )
-            }
-        }
+        // Wave Side Indexer on the Right Edge
+        WaveSideIndex(
+            modifier = Modifier.align(Alignment.CenterEnd),
+            onCharSelected = { char ->
+                when (char) {
+                    "⭐" -> scope.launch { listState.scrollToItem(0) }
+                    "o" -> scope.launch {
+                        if (filteredApps.isNotEmpty()) {
+                            listState.scrollToItem(filteredApps.size - 1)
+                        }
+                    }
+                    else -> {
+                        letterStartIndex[char]?.let { targetIndex ->
+                            scope.launch { listState.scrollToItem(targetIndex) }
+                        }
+                    }
+                }
+            },
+            onDragEnd = {}
+        )
     }
 
+    // Long-Press Menu Dialog
     appForMenu?.let { app ->
         AppLongPressMenu(
             app = app,
@@ -183,16 +212,35 @@ private fun AppRow(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(app.label, fontSize = 18.sp, modifier = Modifier.weight(1f))
+        app.icon?.let { iconDrawable ->
+            Image(
+                bitmap = iconDrawable.toBitmap(width = 44, height = 44).asImageBitmap(),
+                contentDescription = app.label,
+                modifier = Modifier.size(36.dp)
+            )
+            Spacer(modifier = Modifier.width(18.dp))
+        } ?: Spacer(modifier = Modifier.width(54.dp))
+
+        Text(
+            text = app.label,
+            fontSize = 18.sp,
+            color = Color.White,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f)
+        )
+
         if (isFavorite) {
-            Text("★", fontSize = 14.sp)
+            Text(
+                text = "★",
+                fontSize = 14.sp,
+                color = Color(0xFF4DD0E1)
+            )
         }
     }
 }
 
 /**
- * Robust Action Row using Surface touch targets to guarantee reliable clicks
- * across full screen width.
+ * Action Row using Surface touch targets for full-width click reliability.
  */
 @Composable
 private fun DrawerActionRow(
@@ -208,20 +256,20 @@ private fun DrawerActionRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
-                modifier = Modifier.size(22.dp)
+                tint = Color.White.copy(alpha = 0.8f),
+                modifier = Modifier.size(24.dp)
             )
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(18.dp))
             Text(
                 text = label,
                 fontSize = 18.sp,
-                color = MaterialTheme.colorScheme.onBackground
+                color = Color.White
             )
         }
     }
@@ -238,18 +286,37 @@ private fun AppLongPressMenu(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(app.label) },
+        title = { Text(text = app.label, color = Color.White) },
         text = {
             Column {
-                TextButton(onClick = onToggleFavorite) {
-                    Text(if (isFavorite) "Remove from favorites" else "Add to favorites")
+                TextButton(
+                    onClick = onToggleFavorite,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                        color = Color(0xFF4DD0E1)
+                    )
                 }
-                TextButton(onClick = onAppInfo) { Text("App info") }
-                TextButton(onClick = onUninstall) { Text("Uninstall") }
+                TextButton(
+                    onClick = onAppInfo,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(text = "App info", color = Color.White)
+                }
+                TextButton(
+                    onClick = onUninstall,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(text = "Uninstall", color = Color(0xFFEF4444))
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
+            TextButton(onClick = onDismiss) {
+                Text(text = "Cancel", color = Color.Gray)
+            }
+        },
+        containerColor = Color(0xFF1E1E1E)
     )
 }
