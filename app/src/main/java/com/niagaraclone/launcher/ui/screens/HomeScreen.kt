@@ -10,9 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -29,13 +27,9 @@ import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.*
-import kotlinx.coroutines.launch
 
 private val DEFAULT_INDEX_ITEMS = listOf("⭐") + ('A'..'Z').map { it.toString() } + listOf("o")
 
-/**
- * Primary Composable signature used by MainActivity.
- */
 @Composable
 fun HomeScreen(
     viewModel: LauncherViewModel,
@@ -48,47 +42,32 @@ fun HomeScreen(
 
     HomeScreenContent(
         apps = apps,
-        favoritePackages = favoritePackages,
-        onToggleFavorite = { pkg -> viewModel.toggleFavorite(pkg) },
-        onOpenSettings = onOpenSettings,
-        onOpenRecentApps = onOpenRecentApps
+        favoritePackages = favoritePackages
     )
 }
 
-/**
- * Underlying Content Composable rendering all UI components & widgets.
- */
 @Composable
 fun HomeScreenContent(
     apps: List<AppModel>,
-    favoritePackages: Set<String>,
-    onToggleFavorite: (String) -> Unit,
-    onOpenSettings: () -> Unit = {},
-    onOpenRecentApps: () -> Unit = {}
+    favoritePackages: Set<String>
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
 
+    // Filter ONLY favorite apps for Home Screen
     val favorites = remember(apps, favoritePackages) {
         apps.filter { favoritePackages.contains(it.packageName) }
-    }
-
-    val indexItems = DEFAULT_INDEX_ITEMS
-
-    val alphabetMap = remember(apps, indexItems) {
-        indexItems.associateWith { char ->
-            apps.indexOfFirst { it.label.startsWith(char, ignoreCase = true) }
-        }.filter { it.value != -1 }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(end = 40.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(end = 40.dp),
             contentPadding = PaddingValues(top = 56.dp, bottom = 96.dp, start = 20.dp)
         ) {
-            // 1. Two-Tone Stylized Big Clock (Matching Screenshot)
+            // 1. Two-Tone Stylized Big Clock
             item {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -115,7 +94,7 @@ fun HomeScreenContent(
             item {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 20.dp)
+                    modifier = Modifier.padding(bottom = 16.dp)
                 ) {
                     Text(
                         text = "Mon 3 Aug",
@@ -138,18 +117,18 @@ fun HomeScreenContent(
                 }
             }
 
-            // 3. Custom Widget Area Slot (Placeholder for Samsung Calendar Widget)
+            // 3. Clean Widget Area Slot (No placeholder tagline)
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp)
+                        .padding(vertical = 4.dp)
                 ) {
-                    Text("Calendar / Agenda Widget Area", color = Color.White.copy(alpha = 0.4f), fontSize = 13.sp)
+                    // Host for Android System/Samsung Widgets will render here directly
                 }
             }
 
-            // 4. Pinned Favorites App List with Icons
+            // 4. Favorites List ONLY
             items(favorites, key = { "fav_${it.packageName}" }) { app ->
                 FavoriteAppRow(
                     app = app,
@@ -159,63 +138,9 @@ fun HomeScreenContent(
                     }
                 )
             }
-
-            // 5. Full App List (Alphabetical)
-            items(apps, key = { it.packageName }) { app ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                            intent?.let { context.startActivity(it) }
-                        }
-                        .padding(vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    app.icon?.let { iconDrawable ->
-                        Image(
-                            bitmap = iconDrawable.toBitmap(width = 40, height = 40).asImageBitmap(),
-                            contentDescription = app.label,
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                    }
-                    Text(text = app.label, color = Color.White, fontSize = 18.sp)
-                }
-            }
-
-            // 6. Tail Actions
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenRecentApps() }
-                        .padding(vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.History, contentDescription = null, tint = Color.White.copy(alpha = 0.7f))
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Text(text = "Recently Installed Apps", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp)
-                }
-            }
-
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenSettings() }
-                        .padding(vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White.copy(alpha = 0.7f))
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Text(text = "Cascadia Settings", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp)
-                }
-            }
         }
 
-        // Floating Action Button
+        // 5. Floating Action Button (Phone)
         FloatingActionButton(
             onClick = {
                 val intent = context.packageManager.getLaunchIntentForPackage("com.samsung.android.dialer")
@@ -232,24 +157,10 @@ fun HomeScreenContent(
             Icon(Icons.Default.Phone, contentDescription = "Phone", tint = Color.Black)
         }
 
-        // Wave Side Indexer
+        // 6. Wave Side Indexer (Right Edge)
         WaveSideIndex(
             modifier = Modifier.align(Alignment.CenterEnd),
-            onCharSelected = { char ->
-                when (char) {
-                    "⭐" -> coroutineScope.launch { listState.scrollToItem(0) }
-                    "o" -> coroutineScope.launch {
-                        listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
-                    }
-                    else -> {
-                        alphabetMap[char]?.let { targetIndex ->
-                            coroutineScope.launch {
-                                listState.scrollToItem(targetIndex + 2)
-                            }
-                        }
-                    }
-                }
-            },
+            onCharSelected = { },
             onDragEnd = {}
         )
     }
