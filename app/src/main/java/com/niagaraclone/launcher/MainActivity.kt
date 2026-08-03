@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -35,8 +36,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Ensures wallpaper extends behind system status bar and gesture navigation bar
+        // 1. Ensures wallpaper extends behind system status bar and gesture navigation bar
         WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // 2. Tells Android WindowManager to render system wallpaper directly behind this activity window
+        window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
 
         setContent {
             val theme by viewModel.theme.collectAsState()
