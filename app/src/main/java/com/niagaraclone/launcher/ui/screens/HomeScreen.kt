@@ -42,7 +42,6 @@ import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
-import kotlinx.coroutines.launch
 
 private val AppModel.firstLetter: Char
     get() = label.firstOrNull()?.uppercaseChar() ?: '#'
@@ -55,7 +54,6 @@ fun HomeScreen(
     onOpenSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
     val apps by viewModel.apps.collectAsState()
@@ -97,15 +95,23 @@ fun HomeScreen(
         map
     }
 
+    // --- SMOOTH LAUNCHED EFFECT SCROLL SYNC ---
+    LaunchedEffect(activeLetter, isDrawerExpanded) {
+        val letter = activeLetter ?: return@LaunchedEffect
+        if (letter == "⭐") {
+            listState.scrollToItem(0)
+        } else if (isDrawerExpanded) {
+            val targetIdx = letterIndexMap[letter] ?: 0
+            listState.scrollToItem(targetIdx)
+        }
+    }
+
     val jumpToLetter: (String) -> Unit = { letter ->
         activeLetter = letter
         if (letter == "⭐") {
             isDrawerExpanded = false
-            scope.launch { listState.scrollToItem(0) }
         } else {
             isDrawerExpanded = true
-            val targetIdx = letterIndexMap[letter] ?: 0
-            scope.launch { listState.scrollToItem(targetIdx) }
         }
     }
 
