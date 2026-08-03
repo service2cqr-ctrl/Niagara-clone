@@ -8,8 +8,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,8 +18,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Schedule
@@ -70,7 +70,7 @@ fun HomeScreen(
 
     // --- STATE MANAGEMENT ---
     var isDrawerExpanded by remember { mutableStateOf(false) }
-    var isIndexerVisible by remember { mutableStateOf(false) }
+    var isIndexerVisible by remember { mutableStateOf(true) }
     var activeLetter by remember { mutableStateOf<String?>(null) }
 
     var weatherEnabled by remember { mutableStateOf(true) }
@@ -85,7 +85,7 @@ fun HomeScreen(
         apps.groupBy { it.firstLetter }.toSortedMap()
     }
 
-    // Map each letter section to its index in LazyColumn
+    // Map each letter & 'o' section to its index in LazyColumn
     val letterIndexMap = remember(groupedApps) {
         val map = mutableMapOf<String, Int>()
         var currentIndex = 0
@@ -93,10 +93,10 @@ fun HomeScreen(
             map[letter.toString()] = currentIndex
             currentIndex += 1 + appList.size // 1 header item + app items
         }
+        map["o"] = currentIndex // 'o' points to the bottom footer item
         map
     }
 
-    // Function to scroll LazyColumn to matching letter section
     val jumpToLetter: (String) -> Unit = { letter ->
         activeLetter = letter
         if (letter == "⭐") {
@@ -117,36 +117,7 @@ fun HomeScreen(
                 isEditingWidget = false
             }
     ) {
-        // --- 1. INSTANT TOUCH EDGE OVERLAYS (LEFT & RIGHT STRIPS) ---
-        Row(modifier = Modifier.fillMaxSize()) {
-            // Left Edge Overlay
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(48.dp)
-                    .pointerInput(Unit) {
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            isIndexerVisible = true
-                        }
-                    }
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            // Right Edge Overlay
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(48.dp)
-                    .pointerInput(Unit) {
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            isIndexerVisible = true
-                        }
-                    }
-            )
-        }
-
-        // --- 2. MAIN CONTENT AREA ---
+        // --- MAIN CONTENT AREA ---
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -227,7 +198,7 @@ fun HomeScreen(
                 }
             }
 
-            // LIST (HOME FAVORITES vs EXPANDED A-Z DRAWER)
+            // LIST (HOME FAVORITES vs EXPANDED A-Z DRAWER WITH 'o' FOOTER)
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth(),
@@ -268,11 +239,40 @@ fun HomeScreen(
                             )
                         }
                     }
+
+                    // --- FOOTER ITEM FOR 'o' ---
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 20.dp, bottom = 48.dp)
+                        ) {
+                            Text(
+                                text = "Cascadia Launcher",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+
+                            DrawerFooterRow(
+                                icon = Icons.Default.History,
+                                title = "Recently installed",
+                                onClick = { /* Opens recent apps/install history */ }
+                            )
+
+                            DrawerFooterRow(
+                                icon = Icons.Default.Settings,
+                                title = "Cascadia settings",
+                                onClick = onOpenSettings
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // --- 3. WAVE SIDE INDEXER ---
+        // --- WAVE SIDE INDEXER ---
         if (isIndexerVisible) {
             WaveSideIndex(
                 activeChar = activeLetter,
@@ -280,23 +280,18 @@ fun HomeScreen(
                     jumpToLetter(char)
                 },
                 onDragEnd = { lastChar ->
-                    // SMART PERSISTENCE:
-                    // If finger lifts at ⭐ -> Hide indexer & collapse back to Home Screen
-                    // If finger lifts on A-Z -> Keep App Drawer expanded & keep indexer pinned
                     if (lastChar == "⭐") {
                         isDrawerExpanded = false
-                        isIndexerVisible = false
                         activeLetter = null
                     } else {
                         isDrawerExpanded = true
-                        isIndexerVisible = true
                     }
                 },
                 modifier = Modifier.align(Alignment.CenterEnd)
             )
         }
 
-        // --- 4. FLOATING ACTION BUTTON ---
+        // --- FLOATING ACTION BUTTON ---
         FloatingActionButton(
             onClick = {
                 val intent = Intent(Intent.ACTION_DIAL)
@@ -313,7 +308,7 @@ fun HomeScreen(
             Icon(imageVector = Icons.Default.Phone, contentDescription = "Phone")
         }
 
-        // --- 5. BOTTOM SHEET MENU ---
+        // --- BOTTOM SHEET MENU ---
         if (isWidgetMenuOpen) {
             ModalBottomSheet(
                 onDismissRequest = { isWidgetMenuOpen = false },
@@ -393,7 +388,7 @@ fun HomeScreen(
             }
         }
 
-        // --- 6. APP LONG PRESS MENU ---
+        // --- APP LONG PRESS MENU ---
         appForMenu?.let { app ->
             AppLongPressMenu(
                 app = app,
@@ -423,6 +418,35 @@ fun HomeScreen(
 }
 
 // --- HELPER COMPONENTS ---
+
+@Composable
+private fun DrawerFooterRow(
+    icon: ImageVector,
+    title: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.85f),
+            modifier = Modifier.size(28.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            text = title,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.White
+        )
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
