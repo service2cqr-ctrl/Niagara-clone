@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -42,6 +43,11 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.components.WaveSideIndex
+import kotlinx.coroutines.launch
+
+private val AppModel.firstLetter: Char
+    get() = label.firstOrNull()?.uppercaseChar() ?: '#'
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -51,6 +57,9 @@ fun HomeScreen(
     onOpenSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+
     val apps by viewModel.apps.collectAsState(initial = emptyList())
     val favoritePackages by viewModel.favoritePackages.collectAsState(initial = emptySet())
 
@@ -59,8 +68,13 @@ fun HomeScreen(
 
     var isWidgetMenuOpen by remember { mutableStateOf(false) }
     var isEditingWidget by remember { mutableStateOf(false) }
-    var customWidgetAdded by remember { mutableStateOf(false) } // State tracking widget presence
+    var customWidgetAdded by remember { mutableStateOf(false) }
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
+
+    // --- STATE LOGIC FOR DRAWER & INDEXER ---
+    var isDrawerExpanded by remember { mutableStateOf(false) }
+    var isLeftHanded by remember { mutableStateOf(false) }
+    var isIndexerVisible by remember { mutableStateOf(false) }
 
     var weatherEnabled by remember { mutableStateOf(true) }
     var showMediaWidget by remember { mutableStateOf(true) }
@@ -68,6 +82,11 @@ fun HomeScreen(
 
     val favorites = remember(apps, favoritePackages) {
         apps.filter { favoritePackages.contains(it.packageName) }
+    }
+
+    // Group apps alphabetically for the drawer view
+    val groupedApps = remember(apps) {
+        apps.groupBy { it.firstLetter }.toSortedMap()
     }
 
     Box(
@@ -80,25 +99,41 @@ fun HomeScreen(
     ) {
         // --- 1. LEFT & RIGHT EDGE GESTURE STRIPS ---
         Row(modifier = Modifier.fillMaxSize()) {
+            // Left Edge Touch Zone
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .width(48.dp)
                     .pointerInput(Unit) {
-                        detectVerticalDragGestures { _, dragAmount ->
-                            if (dragAmount > 8f) onOpenAppDrawer()
-                        }
+                        detectVerticalDragGestures(
+                            onDragStart = {
+                                isLeftHanded = true
+                                isIndexerVisible = true
+                            },
+                            onVerticalDrag = { _, _ -> },
+                            onDragEnd = {
+                                if (!isDrawerExpanded) isIndexerVisible = false
+                            }
+                        )
                     }
             )
             Spacer(modifier = Modifier.weight(1f))
+            // Right Edge Touch Zone
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .width(48.dp)
                     .pointerInput(Unit) {
-                        detectVerticalDragGestures { _, dragAmount ->
-                            if (dragAmount > 8f) onOpenAppDrawer()
-                        }
+                        detectVerticalDragGestures(
+                            onDragStart = {
+                                isLeftHanded = false
+                                isIndexerVisible = true
+                            },
+                            onVerticalDrag = { _, _ -> },
+                            onDragEnd = {
+                                if (!isDrawerExpanded) isIndexerVisible = false
+                            }
+                        )
                     }
             )
         }
@@ -108,9 +143,13 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .offset(y = homeLayoutOffsetY)
-                .padding(start = 24.dp, end = 24.dp, top = 48.dp)
+                .padding(
+                    start = if (isLeftHanded && isIndexerVisible) 48.dp else 24.dp,
+                    end = if (!isLeftHanded && isIndexerVisible) 48.dp else 24.dp,
+                    top = 48.dp
+                )
         ) {
-            // TOP MOVE CONTROL BAR (EDIT MODE - ALWAYS SHOWN IN MOVE MODE)
+            // TOP MOVE CONTROL BAR (EDIT MODE)
             if (isEditingWidget) {
                 AdjustmentControlBar(
                     onReset = { homeLayoutOffsetY = 0.dp },
@@ -171,13 +210,12 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .height(widgetHeight)
                 ) {
-                    // Custom AppWidgetHost View renders here when added
+                    // Custom AppWidgetHost View renders here
                 }
-
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // BOTTOM RESIZE CONTROL BAR (EDIT MODE - ONLY IF CUSTOM WIDGET IS PRESENT)
+            // BOTTOM RESIZE CONTROL BAR (EDIT MODE)
             if (isEditingWidget && customWidgetAdded) {
                 AdjustmentControlBar(
                     onReset = { widgetHeight = 180.dp },
@@ -188,25 +226,74 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // PINNED FAVORITES LIST
+            // MAIN LIST (PINNED FAVORITES IN HOME STATE vs A-Z DRAWER IN EXPANDED STATE)
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(favorites) { app ->
-                    FavoriteAppRow(
-                        app = app,
-                        onClick = {
-                            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                            intent?.let { context.startActivity(it) }
-                        },
-                        onLongClick = { appForMenu = app }
-                    )
+                if (!isDrawerExpanded) {
+                    // --- HOME STATE (AT ⭐): SHOW PINNED FAVORITES ONLY ---
+                    items(favorites) { app ->
+                        FavoriteAppRow(
+                            app = app,
+                            onClick = {
+                                val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                                intent?.let { context.startActivity(it) }
+                            },
+                            onLongClick = { appForMenu = app }
+                        )
+                    }
+                } else {
+                    // --- DRAWER STATE (PAST ⭐): SHOW FULL A-Z LIST WITH SECTION HEADERS ---
+                    groupedApps.forEach { (letter, appGroup) ->
+                        item {
+                            Text(
+                                text = letter.toString(),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF4DD0E1),
+                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                            )
+                        }
+                        items(appGroup) { app ->
+                            FavoriteAppRow(
+                                app = app,
+                                onClick = {
+                                    val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                                    intent?.let { context.startActivity(it) }
+                                },
+                                onLongClick = { appForMenu = app }
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // --- 3. BOTTOM RIGHT FLOATING ACTION BUTTON ---
+        // --- 3. WAVE SIDE INDEXER (WITH STAR TRANSITION LOGIC) ---
+        if (isIndexerVisible) {
+            WaveSideIndex(
+                isLeftHanded = isLeftHanded,
+                onCharSelected = { char ->
+                    if (char == "☆" || char == "⭐") {
+                        // RE-COLLAPSE TO HOME VIEW WHEN AT STAR
+                        isDrawerExpanded = false
+                    } else {
+                        // EXPAND TO FULL A-Z DRAWER WHEN SCRUBBING PAST STAR
+                        isDrawerExpanded = true
+                    }
+                },
+                onDragEnd = {
+                    if (!isDrawerExpanded) {
+                        isIndexerVisible = false
+                    }
+                },
+                modifier = Modifier.align(if (isLeftHanded) Alignment.CenterStart else Alignment.CenterEnd)
+            )
+        }
+
+        // --- 4. BOTTOM RIGHT FLOATING ACTION BUTTON ---
         FloatingActionButton(
             onClick = {
                 val intent = Intent(Intent.ACTION_DIAL)
@@ -223,7 +310,7 @@ fun HomeScreen(
             Icon(imageVector = Icons.Default.Phone, contentDescription = "Phone")
         }
 
-        // --- 4. NIAGARA WIDGET BOTTOM SHEET MENU ---
+        // --- 5. NIAGARA WIDGET BOTTOM SHEET MENU ---
         if (isWidgetMenuOpen) {
             ModalBottomSheet(
                 onDismissRequest = { isWidgetMenuOpen = false },
@@ -303,7 +390,7 @@ fun HomeScreen(
             }
         }
 
-        // --- 5. FAVORITE APP LONG PRESS MENU ---
+        // --- 6. FAVORITE APP LONG PRESS MENU ---
         appForMenu?.let { app ->
             AppLongPressMenu(
                 app = app,
@@ -398,7 +485,6 @@ private fun AdjustmentControlBar(
                 )
             }
 
-            // Thinner horizontal line (~2mm thickness)
             Box(
                 modifier = Modifier
                     .width(120.dp)
