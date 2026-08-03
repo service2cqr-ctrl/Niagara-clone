@@ -30,9 +30,9 @@ fun WaveSideIndex(
     modifier: Modifier = Modifier,
     activeChar: String? = null,
     isIndexerVisible: Boolean = false,
-    onTouchStart: () -> Unit,
-    onCharSelected: (String) -> Unit = {}, // Added default value here,
-    onDragEnd: (String) -> Unit
+    onTouchStart: () -> Unit = {}, // Added default value here,,
+    onCharSelected: (String) -> Unit = {},
+    onDragEnd: (String) -> Unit = {}
 ) {
     val haptics = LocalHapticFeedback.current
     var touchY by remember { mutableStateOf<Float?>(null) }
