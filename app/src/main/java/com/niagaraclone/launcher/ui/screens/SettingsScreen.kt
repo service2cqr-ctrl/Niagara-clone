@@ -1,141 +1,651 @@
 package com.niagaraclone.launcher.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.niagaraclone.launcher.data.AppTheme
-import com.niagaraclone.launcher.data.SettingsRepository
-import kotlinx.coroutines.launch
+import androidx.compose.ui.unit.sp
+import com.niagaraclone.launcher.ui.LauncherViewModel
 
+private enum class SettingsPage {
+    MAIN,
+    PRODUCTIVITY,
+    THEMES,
+    PRO,
+    ADVANCED,
+    BACKUP_RESTORE
+}
+
+/**
+ * Main Settings Navigation Screen matching the exact categories, sub-items,
+ * and dialog flows demonstrated in the UI recording.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    repository: SettingsRepository,
-    onBack: () -> Unit
+    viewModel: LauncherViewModel,
+    onDismiss: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
+    var currentPage by remember { mutableStateOf(SettingsPage.MAIN) }
 
-    val currentTheme by repository.theme.collectAsState(initial = AppTheme.SYSTEM)
-    val currentAccent by repository.accentColor.collectAsState(initial = 0xFF3B82F6.toInt())
-    val currentIconPack by repository.iconPackPackage.collectAsState(initial = null)
-
-    var iconPackInput by remember(currentIconPack) { mutableStateOf(currentIconPack ?: "") }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Niagara Settings") },
-                navigationIcon = {
-                    Text(
-                        text = "← Back",
-                        modifier = Modifier
-                            .clickable { onBack() }
-                            .padding(16.dp),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color(0xFF0D0D0D) // Deep black background matching recording
+    ) {
+        when (currentPage) {
+            SettingsPage.MAIN -> MainSettingsContent(
+                onNavigate = { currentPage = it },
+                onDismiss = onDismiss
+            )
+            SettingsPage.PRODUCTIVITY -> ProductivitySettingsContent(
+                onBack = { currentPage = SettingsPage.MAIN }
+            )
+            SettingsPage.THEMES -> ThemesSettingsContent(
+                onBack = { currentPage = SettingsPage.MAIN }
+            )
+            SettingsPage.PRO -> CascadiaProContent(
+                onBack = { currentPage = SettingsPage.MAIN }
+            )
+            SettingsPage.ADVANCED -> AdvancedSettingsContent(
+                onNavigateToBackup = { currentPage = SettingsPage.BACKUP_RESTORE },
+                onBack = { currentPage = SettingsPage.MAIN }
+            )
+            SettingsPage.BACKUP_RESTORE -> BackupRestoreContent(
+                onBack = { currentPage = SettingsPage.ADVANCED }
             )
         }
-    ) { paddingValues ->
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 1. MAIN SETTINGS HOME
+// -----------------------------------------------------------------------------
+@Composable
+private fun MainSettingsContent(
+    onNavigate: (SettingsPage) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 32.dp)
+    ) {
+        // App Logo / Title Banner
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
+                .fillMaxWidth()
+                .padding(bottom = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Theme", style = MaterialTheme.typography.titleMedium)
-            Row(modifier = Modifier.padding(vertical = 8.dp)) {
-                AppTheme.entries.forEach { theme ->
-                    Button(
-                        onClick = {
-                            scope.launch { repository.setTheme(theme) }
-                        },
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Text(theme.name)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text("Accent Color", style = MaterialTheme.typography.titleMedium)
-            Row(modifier = Modifier.padding(vertical = 8.dp)) {
-                val colorOptions = listOf(
-                    Color(0xFF3B82F6), // Niagara Blue
-                    Color(0xFF10B981), // Emerald
-                    Color(0xFFEF4444), // Crimson
-                    Color(0xFF8B5CF6)  // Purple
-                )
-                colorOptions.forEach { itemColor ->
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                repository.setAccentColor(itemColor.toArgb())
-                            }
-                        },
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Text("●", color = itemColor)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text("Icon Pack Package", style = MaterialTheme.typography.titleMedium)
-            OutlinedTextField(
-                value = iconPackInput,
-                onValueChange = { iconPackInput = it },
-                label = { Text("Package Name") },
-                modifier = Modifier.fillMaxWidth()
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = Color(0xFF4DD0E1),
+                modifier = Modifier.size(64.dp)
             )
-            Row(modifier = Modifier.padding(top = 8.dp)) {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            repository.setIconPack(iconPackInput.ifBlank { null })
-                        }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Cascadia settings",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
+
+        SettingsCategoryItem(
+            icon = Icons.Outlined.StarBorder,
+            title = "Productivity",
+            subtitle = "Stay efficient and organized",
+            onClick = { onNavigate(SettingsPage.PRODUCTIVITY) }
+        )
+
+        SettingsCategoryItem(
+            icon = Icons.Outlined.Palette,
+            title = "Themes",
+            subtitle = "Give your home screen your personal touch",
+            onClick = { onNavigate(SettingsPage.THEMES) }
+        )
+
+        SettingsCategoryItem(
+            icon = Icons.Outlined.AutoAwesome,
+            title = "Cascadia Pro",
+            subtitle = null,
+            onClick = { onNavigate(SettingsPage.PRO) }
+        )
+
+        SettingsCategoryItem(
+            icon = Icons.Outlined.HelpOutline,
+            title = "Help & Feedback",
+            subtitle = null,
+            onClick = { /* Help link */ }
+        )
+
+        SettingsCategoryItem(
+            icon = Icons.Outlined.Public,
+            title = "Community",
+            subtitle = null,
+            onClick = { /* Community link */ }
+        )
+
+        SettingsCategoryItem(
+            icon = Icons.Outlined.MoreHoriz,
+            title = "Advanced",
+            subtitle = null,
+            onClick = { onNavigate(SettingsPage.ADVANCED) }
+        )
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 2. PRODUCTIVITY PAGE
+// -----------------------------------------------------------------------------
+@Composable
+private fun ProductivitySettingsContent(onBack: () -> Unit) {
+    val context = LocalContext.current
+    var showCalendarDialog by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
+    ) {
+        SubPageHeader(title = "Productivity", onBack = onBack)
+
+        SectionHeader("Instant Access")
+        ToggleSettingRow("Quick Replies", "Reply right from your home screen", true)
+        
+        ClickableSettingRow(
+            icon = Icons.Outlined.CalendarMonth,
+            title = "Calendar Agenda",
+            subtitle = "Open your calendar agenda by tapping the date",
+            onClick = { showCalendarDialog = true }
+        )
+        ToggleSettingRow("Calendar Preview", "See upcoming events on your home screen", true)
+        ToggleSettingRow("Weather Forecast", "See the full forecast by tapping the current weather", true)
+        ToggleSettingRow("Media Player", "Control music and videos from your home screen", true)
+        ClickableSettingRow(
+            icon = Icons.Outlined.MusicNote,
+            title = "Music Apps",
+            subtitle = "Show music apps when connecting headphones or speakers",
+            onClick = { }
+        )
+
+        SectionHeader("Digital Wellbeing")
+        ToggleSettingRow("Usage Breaker", "Get reminders to take breaks", false)
+        ToggleSettingRow("Notification Summary", "Bundle notifications to reduce distractions", false)
+
+        SectionHeader("App Organization")
+        ClickableSettingRow(
+            icon = Icons.Outlined.VisibilityOff,
+            title = "Hide Apps",
+            subtitle = "Hide apps from your app list",
+            onClick = { }
+        )
+        ClickableSettingRow(
+            icon = Icons.Outlined.Folder,
+            title = "Folders & Pop-ups",
+            subtitle = "Group apps to keep your app list tidy",
+            onClick = { }
+        )
+        ToggleSettingRow("Suggest Often-Used Apps", "Directly access often-used apps from your favorites", false)
+        ToggleSettingRow("Sort All Apps List By Usage", "Prioritize most-used apps for each letter", true)
+
+        SectionHeader("Smart Search")
+        ClickableSettingRow(
+            icon = Icons.Outlined.Search,
+            title = "Smart Search",
+            subtitle = "Apps, contacts, and web in one place",
+            onClick = { }
+        )
+
+        SectionHeader("Shortcuts & Gestures")
+        ToggleSettingRow("Cascadia Button", "Run quick actions from your home screen", true)
+        ToggleSettingRow("Quick Lock", "Double-tap the alphabet to lock your phone", true)
+
+        SectionHeader("Advanced")
+        ClickableSettingRow(
+            icon = Icons.Outlined.AddBox,
+            title = "Add Custom Widget",
+            subtitle = null,
+            onClick = { }
+        )
+        ClickableSettingRow(
+            icon = Icons.Outlined.SwapVert,
+            title = "Move Widget",
+            subtitle = null,
+            onClick = { }
+        )
+        ToggleSettingRow("Show Battery Percentage", null, true)
+        ToggleSettingRow("Allow Home Screen Rotation", "When device is rotated", true)
+        ToggleSettingRow("Allow Haptic Feedback", "Follow system", true)
+    }
+
+    if (showCalendarDialog) {
+        AlertDialog(
+            onDismissRequest = { showCalendarDialog = false },
+            title = { Text("Calendar Agenda", color = Color.White) },
+            text = {
+                Column {
+                    Text("Check your plans and upcoming events by tapping the date", color = Color.Gray, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ToggleSettingRow("Show date", null, false)
+                    TextButton(onClick = { }) {
+                        Icon(Icons.Outlined.FilterList, contentDescription = null, tint = Color(0xFF4DD0E1))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Filter events", color = Color(0xFF4DD0E1))
                     }
-                ) {
-                    Text("Save Icon Pack")
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(
-                    onClick = {
-                        iconPackInput = ""
-                        scope.launch {
-                            repository.setIconPack(null)
-                        }
-                    }
-                ) {
-                    Text("Reset")
+            },
+            confirmButton = {
+                TextButton(onClick = { showCalendarDialog = false }) {
+                    Text("Done", color = Color(0xFF4DD0E1))
                 }
+            },
+            containerColor = Color(0xFF1E1E1E)
+        )
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 3. THEMES PAGE
+// -----------------------------------------------------------------------------
+@Composable
+private fun ThemesSettingsContent(onBack: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
+    ) {
+        SubPageHeader(title = "Themes", onBack = onBack)
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.AddCircleOutline,
+            title = "Create Theme",
+            subtitle = "Build a new theme from scratch",
+            onClick = { }
+        )
+        ClickableSettingRow(
+            icon = Icons.Outlined.Edit,
+            title = "Edit Current Theme",
+            subtitle = "Fine-tune your setup",
+            onClick = { }
+        )
+        ClickableSettingRow(
+            icon = Icons.Outlined.Folder,
+            title = "My Themes",
+            subtitle = "Your custom creations and imported themes",
+            onClick = { }
+        )
+        ClickableSettingRow(
+            icon = Icons.Outlined.Brush,
+            title = "Ready-Made Themes",
+            subtitle = "Pick from handcrafted themes with just one tap",
+            onClick = { }
+        )
+        ClickableSettingRow(
+            icon = Icons.Outlined.FavoriteBorder,
+            title = "Community Themes",
+            subtitle = "Discover themes made by our community",
+            onClick = { }
+        )
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 4. PRO MEMBERSHIP PAGE
+// -----------------------------------------------------------------------------
+@Composable
+private fun CascadiaProContent(onBack: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.AutoAwesome,
+            contentDescription = null,
+            tint = Color(0xFF4DD0E1),
+            modifier = Modifier.size(80.dp)
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "Member since",
+            color = Color.Gray,
+            fontSize = 14.sp
+        )
+        Text(
+            text = "21 Nov 2023",
+            color = Color.White,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "Thank you for your support.",
+            color = Color.Gray,
+            fontSize = 14.sp,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        TextButton(onClick = { }) {
+            Text("Discover features", color = Color.White, fontSize = 16.sp)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        TextButton(onClick = { }) {
+            Text("Manage membership", color = Color.Gray, fontSize = 16.sp)
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+        OutlinedButton(onClick = onBack) {
+            Text("Back", color = Color.White)
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 5. ADVANCED PAGE
+// -----------------------------------------------------------------------------
+@Composable
+private fun AdvancedSettingsContent(
+    onNavigateToBackup: () -> Unit,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
+    ) {
+        SubPageHeader(title = "Advanced", onBack = onBack)
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.Info,
+            title = "App info",
+            subtitle = "Version 1.16.18",
+            onClick = {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                }
+                context.startActivity(intent)
             }
+        )
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.Save,
+            title = "Backup & Restore (Beta)",
+            subtitle = null,
+            onClick = onNavigateToBackup
+        )
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.Description,
+            title = "Changelog",
+            subtitle = null,
+            onClick = { }
+        )
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.Home,
+            title = "Change default launcher",
+            subtitle = null,
+            onClick = {
+                val intent = Intent(Settings.ACTION_HOME_SETTINGS)
+                context.startActivity(intent)
+            }
+        )
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.Delete,
+            title = "Uninstall launcher",
+            subtitle = null,
+            onClick = {
+                val intent = Intent(Intent.ACTION_DELETE).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                }
+                context.startActivity(intent)
+            }
+        )
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.RestartAlt,
+            title = "Restart launcher",
+            subtitle = "Have you tried turning it off and on again?",
+            onClick = { }
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(text = "Privacy policy", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp).clickable { })
+        Text(text = "Terms of Service", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp).clickable { })
+        Text(text = "Privacy Settings", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp).clickable { })
+        Text(text = "Open source licences", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp).clickable { })
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 6. BACKUP & RESTORE PAGE
+// -----------------------------------------------------------------------------
+@Composable
+private fun BackupRestoreContent(onBack: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
+    ) {
+        SubPageHeader(title = "Backup & Restore (Beta)", onBack = onBack)
+
+        Text(
+            text = "Back up your home screen setup and restore it on any device.",
+            color = Color.Gray,
+            fontSize = 14.sp
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        FeatureBenefitRow(
+            icon = Icons.Outlined.Sync,
+            title = "Effortlessly switch devices",
+            description = "Apply your home screen setup to your new device in seconds."
+        )
+
+        FeatureBenefitRow(
+            icon = Icons.Outlined.Security,
+            title = "Keep your setup",
+            description = "Favorites, icons, pop-up folders, settings and more are kept safe."
+        )
+
+        FeatureBenefitRow(
+            icon = Icons.Outlined.Close,
+            title = "Not included",
+            description = "We cannot back up externally set wallpapers and shortcuts.",
+            isNegative = true
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+        Text("Actions", color = Color(0xFF4DD0E1), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.FileUpload,
+            title = "Create backup",
+            subtitle = null,
+            onClick = { }
+        )
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.RestartAlt,
+            title = "Restore backup",
+            subtitle = null,
+            onClick = { }
+        )
+    }
+}
+
+// -----------------------------------------------------------------------------
+// REUSABLE UI COMPONENTS
+// -----------------------------------------------------------------------------
+@Composable
+private fun SubPageHeader(title: String, onBack: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 24.dp)
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        color = Color(0xFF4DD0E1),
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 24.dp, bottom = 12.dp)
+    )
+}
+
+@Composable
+private fun SettingsCategoryItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.width(20.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Medium)
+            if (subtitle != null) {
+                Text(text = subtitle, fontSize = 13.sp, color = Color.Gray)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToggleSettingRow(
+    title: String,
+    subtitle: String?,
+    initialValue: Boolean
+) {
+    var checked by remember { mutableStateOf(initialValue) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { checked = !checked }
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, fontSize = 16.sp, color = Color.White)
+            if (subtitle != null) {
+                Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
+            }
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = { checked = it },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.Black,
+                checkedTrackColor = Color(0xFF4DD0E1)
+            )
+        )
+    }
+}
+
+@Composable
+private fun ClickableSettingRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, fontSize = 16.sp, color = Color.White)
+            if (subtitle != null) {
+                Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeatureBenefitRow(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    isNegative: Boolean = false
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.small,
+            color = if (isNegative) Color(0xFF331111) else Color(0xFF113333),
+            modifier = Modifier.size(36.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isNegative) Color(0xFFEF4444) else Color(0xFF4DD0E1),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Column {
+            Text(text = title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(text = description, color = Color.Gray, fontSize = 13.sp)
         }
     }
 }
