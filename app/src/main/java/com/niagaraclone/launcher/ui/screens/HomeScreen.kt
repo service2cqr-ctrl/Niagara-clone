@@ -295,7 +295,7 @@ fun HomeScreen(
             modifier = Modifier.align(Alignment.CenterEnd)
         )
 
-        // --- 3. FLOATING ACTION BUTTON (ONLY VISIBLE IN HOME STATE) ---
+        // --- 3. FLOATING ACTION BUTTON (50.dp Margins from Bottom & Right, Hidden in Drawer) ---
         if (!isDrawerExpanded) {
             FloatingActionButton(
                 onClick = {
@@ -641,4 +641,16 @@ private fun AppLongPressMenu(
                 TextButton(onClick = onAppInfo, modifier = Modifier.fillMaxWidth()) {
                     Text(text = "App info", color = Color.White)
                 }
-                TextButton(onClick = on
+                TextButton(onClick = onUninstall, modifier = Modifier.fillMaxWidth()) {
+                    Text(text = "Uninstall", color = Color(0xFFEF4444))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "Cancel", color = Color.Gray)
+            }
+        },
+        containerColor = Color(0xFF1E1E1E)
+    )
+}
