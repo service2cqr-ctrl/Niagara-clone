@@ -83,8 +83,7 @@ fun HomeScreen(
         apps.groupBy { it.firstLetter }.toSortedMap()
     }
 
-    // --- ACCURATE UNIFIED INDEX MAP ---
-    // ⭐ starts at 0. A-Z and 'o' continue sequentially in the same list.
+    // --- UNIFIED INDEX MAP ---
     val letterIndexMap = remember(favorites, groupedApps) {
         val map = mutableMapOf<String, Int>()
         map["⭐"] = 0
@@ -94,15 +93,19 @@ fun HomeScreen(
             map[letter.toString()] = currentIndex
             currentIndex += 1 + appList.size
         }
-        map["o"] = currentIndex // Points directly to footer item at the end
+        map["o"] = currentIndex
         map
     }
 
     // --- REAL-TIME SCROLL LISTENER ---
-    LaunchedEffect(activeLetter) {
+    LaunchedEffect(activeLetter, isDrawerExpanded) {
         val letter = activeLetter ?: return@LaunchedEffect
-        val targetIdx = letterIndexMap[letter] ?: 0
-        listState.scrollToItem(targetIdx)
+        if (letter == "⭐") {
+            listState.scrollToItem(0)
+        } else if (isDrawerExpanded) {
+            val targetIdx = letterIndexMap[letter] ?: 0
+            listState.scrollToItem(targetIdx)
+        }
     }
 
     Box(
@@ -194,13 +197,13 @@ fun HomeScreen(
                 }
             }
 
-            // --- UNIFIED CONTINUOUS LIST ---
+            // --- LAZYCOLUMN LIST ---
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // 1. FAVORITES SECTION (AT ⭐)
+                // 1. PINNED FAVORITES (ALWAYS VISIBLE AT TOP)
                 items(favorites) { app ->
                     FavoriteAppRow(
                         app = app,
@@ -212,55 +215,57 @@ fun HomeScreen(
                     )
                 }
 
-                // 2. A-Z APP DRAWER SECTION
-                groupedApps.forEach { (letter, appGroup) ->
+                // 2. FULL A-Z APP DRAWER & FOOTER (ONLY VISIBLE WHEN DRAWER IS EXPANDED)
+                if (isDrawerExpanded) {
+                    groupedApps.forEach { (letter, appGroup) ->
+                        item {
+                            Text(
+                                text = letter.toString(),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF4DD0E1),
+                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                            )
+                        }
+                        items(appGroup) { app ->
+                            FavoriteAppRow(
+                                app = app,
+                                onClick = {
+                                    val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                                    intent?.let { context.startActivity(it) }
+                                },
+                                onLongClick = { appForMenu = app }
+                            )
+                        }
+                    }
+
+                    // FOOTER ITEM FOR 'o'
                     item {
-                        Text(
-                            text = letter.toString(),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF4DD0E1),
-                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
-                        )
-                    }
-                    items(appGroup) { app ->
-                        FavoriteAppRow(
-                            app = app,
-                            onClick = {
-                                val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                                intent?.let { context.startActivity(it) }
-                            },
-                            onLongClick = { appForMenu = app }
-                        )
-                    }
-                }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 20.dp, bottom = 80.dp)
+                        ) {
+                            Text(
+                                text = "Cascadia Launcher",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
 
-                // 3. FOOTER ITEM FOR 'o'
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 20.dp, bottom = 80.dp)
-                    ) {
-                        Text(
-                            text = "Cascadia Launcher",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        )
+                            DrawerFooterRow(
+                                icon = Icons.Default.History,
+                                title = "Recently installed",
+                                onClick = { /* Opens recent apps/install history */ }
+                            )
 
-                        DrawerFooterRow(
-                            icon = Icons.Default.History,
-                            title = "Recently installed",
-                            onClick = { /* Opens recent apps/install history */ }
-                        )
-
-                        DrawerFooterRow(
-                            icon = Icons.Default.Settings,
-                            title = "Cascadia settings",
-                            onClick = onOpenSettings
-                        )
+                            DrawerFooterRow(
+                                icon = Icons.Default.Settings,
+                                title = "Cascadia settings",
+                                onClick = onOpenSettings
+                            )
+                        }
                     }
                 }
             }
