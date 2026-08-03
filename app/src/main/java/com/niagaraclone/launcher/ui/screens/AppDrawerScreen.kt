@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -98,15 +97,16 @@ fun AppDrawerScreen(
                     )
                 }
 
-                // Special bottom action items matching Niagara's list end
-                item {
+                // Explicit keys assigned to ensure touch target accuracy
+                item(key = "action_recently_installed") {
                     DrawerActionRow(
                         icon = Icons.Outlined.History,
                         label = "Recently Installed Apps",
                         onClick = { /* Optional: show recently installed list */ }
                     )
                 }
-                item {
+
+                item(key = "action_cascadia_settings") {
                     DrawerActionRow(
                         icon = Icons.Outlined.Settings,
                         label = "Cascadia Settings",
@@ -190,31 +190,40 @@ private fun AppRow(
     }
 }
 
+/**
+ * Robust Action Row using Surface touch targets to guarantee reliable clicks
+ * across full screen width.
+ */
 @Composable
 private fun DrawerActionRow(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.Transparent
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
-            modifier = Modifier.size(22.dp)
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Text(
-            text = label,
-            fontSize = 18.sp,
-            color = MaterialTheme.colorScheme.onBackground
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Text(
+                text = label,
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
     }
 }
 
