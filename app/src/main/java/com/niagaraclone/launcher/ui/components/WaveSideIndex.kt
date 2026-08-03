@@ -29,6 +29,8 @@ val INDEX_ITEMS = listOf("⭐") + ('A'..'Z').map { it.toString() } + listOf("o")
 fun WaveSideIndex(
     modifier: Modifier = Modifier,
     activeChar: String? = null,
+    isIndexerVisible: Boolean = false,
+    onTouchStart: () -> Unit,
     onCharSelected: (String) -> Unit,
     onDragEnd: (String) -> Unit
 ) {
@@ -45,7 +47,7 @@ fun WaveSideIndex(
                 bottom = 50.dp,
                 end = 24.dp
             )
-            .width(48.dp) // Wide touch zone for instant edge touch response
+            .width(48.dp) // Edge touch zone
             .layout { measurable, constraints ->
                 totalHeight = constraints.maxHeight.toFloat()
                 val placeable = measurable.measure(constraints)
@@ -55,9 +57,10 @@ fun WaveSideIndex(
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    // 1. INSTANT TOUCH DOWN ACTION
+                    // 1. TOUCH DOWN (Triggers drawer & indexer immediately)
                     val down = awaitFirstDown(requireUnconsumed = false)
                     touchY = down.position.y
+                    onTouchStart()
                     
                     val initialFraction = (down.position.y / totalHeight).coerceIn(0f, 1f)
                     val initialIndex = (initialFraction * (INDEX_ITEMS.size - 1)).toInt()
@@ -68,7 +71,7 @@ fun WaveSideIndex(
                         onCharSelected(INDEX_ITEMS[initialIndex])
                     }
 
-                    // 2. CONTINUOUS SCRUBBING
+                    // 2. UNBROKEN CONTINUOUS DRAG
                     do {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull() ?: break
@@ -86,54 +89,57 @@ fun WaveSideIndex(
                         }
                     } while (event.changes.any { it.pressed })
 
-                    // 3. FINGER LIFT PERSISTENCE
+                    // 3. FINGER LIFT
                     val finalChar = if (lastSelectedIndex in INDEX_ITEMS.indices) {
                         INDEX_ITEMS[lastSelectedIndex]
                     } else {
                         "⭐"
                     }
                     touchY = null
+                    lastSelectedIndex = -1
                     onDragEnd(finalChar)
                 }
             },
         contentAlignment = Alignment.CenterEnd
     ) {
-        Column(
-            modifier = Modifier.fillMaxHeight(),
-            verticalArrangement = Arrangement.SpaceEvenly,
-            horizontalAlignment = Alignment.End
-        ) {
-            INDEX_ITEMS.forEachIndexed { index, char ->
-                val itemY = (index.toFloat() / INDEX_ITEMS.size) * totalHeight
-                val currentTouchY = touchY
+        if (isIndexerVisible || touchY != null) {
+            Column(
+                modifier = Modifier.fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceEvenly,
+                horizontalAlignment = Alignment.End
+            ) {
+                INDEX_ITEMS.forEachIndexed { index, char ->
+                    val itemY = (index.toFloat() / INDEX_ITEMS.size) * totalHeight
+                    val currentTouchY = touchY
 
-                val distance = if (currentTouchY != null) abs(currentTouchY - itemY) else Float.MAX_VALUE
-                val gaussianFactor = exp(-((distance * distance) / (2 * 4200f)))
-                val horizontalOffset = -gaussianFactor * 32f
+                    val distance = if (currentTouchY != null) abs(currentTouchY - itemY) else Float.MAX_VALUE
+                    val gaussianFactor = exp(-((distance * distance) / (2 * 4200f)))
+                    val horizontalOffset = -gaussianFactor * 32f
 
-                val animatedOffset by animateFloatAsState(
-                    targetValue = horizontalOffset,
-                    animationSpec = spring(stiffness = 500f, dampingRatio = 0.6f),
-                    label = "wave_offset"
-                )
+                    val animatedOffset by animateFloatAsState(
+                        targetValue = horizontalOffset,
+                        animationSpec = spring(stiffness = 500f, dampingRatio = 0.6f),
+                        label = "wave_offset"
+                    )
 
-                val isSelected = distance < 28f || char == activeChar
+                    val isSelected = distance < 28f || char == activeChar
 
-                Text(
-                    text = char,
-                    style = TextStyle(
-                        shadow = Shadow(
-                            color = Color.Black.copy(alpha = 0.5f),
-                            blurRadius = 4f
-                        )
-                    ),
-                    color = if (isSelected) Color(0xFF4DD0E1) else Color.White.copy(alpha = 0.85f),
-                    fontSize = if (isSelected) 18.sp else 13.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    modifier = Modifier.graphicsLayer {
-                        translationX = animatedOffset
-                    }
-                )
+                    Text(
+                        text = char,
+                        style = TextStyle(
+                            shadow = Shadow(
+                                color = Color.Black.copy(alpha = 0.5f),
+                                blurRadius = 4f
+                            )
+                        ),
+                        color = if (isSelected) Color(0xFF4DD0E1) else Color.White.copy(alpha = 0.85f),
+                        fontSize = if (isSelected) 18.sp else 13.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        modifier = Modifier.graphicsLayer {
+                            translationX = animatedOffset
+                        }
+                    )
+                }
             }
         }
     }
