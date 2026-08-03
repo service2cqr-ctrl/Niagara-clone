@@ -72,7 +72,8 @@ class MainActivity : ComponentActivity() {
                             )
                             Page.APP_DRAWER -> AppDrawerScreen(
                                 viewModel = viewModel,
-                                onDismiss = { page = Page.HOME }
+                                onDismiss = { page = Page.HOME },
+                                onOpenSettings = { page = Page.SETTINGS }
                             )
                             Page.WIDGETS -> WidgetsScreen()
                             Page.SETTINGS -> SettingsScreen(
