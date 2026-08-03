@@ -3,6 +3,9 @@ package com.niagaraclone.launcher.ui.screens
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -11,20 +14,20 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +36,11 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.components.WaveSideIndex
+import kotlinx.coroutines.launch
+
+private val AppModel.firstLetter: String
+    get() = label.firstOrNull()?.uppercaseChar()?.toString() ?: "#"
 
 @Composable
 fun HomeScreen(
@@ -47,7 +55,7 @@ fun HomeScreen(
         viewModel = viewModel,
         apps = apps,
         favoritePackages = favoritePackages,
-        onOpenAppDrawer = onOpenAppDrawer
+        onOpenSettings = onOpenSettings
     )
 }
 
@@ -57,14 +65,41 @@ fun HomeScreenContent(
     viewModel: LauncherViewModel,
     apps: List<AppModel>,
     favoritePackages: Set<String>,
-    onOpenAppDrawer: () -> Unit
+    onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
-    var appForMenu by remember { mutableStateOf<AppModel?>(null) }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
-    // Filter ONLY favorite apps for the Home Screen
+    var appForMenu by remember { mutableStateOf<AppModel?>(null) }
+    
+    // Dynamic alignment for Wave Side Index (Left vs Right)
+    var indexerAlignment by remember { mutableStateOf(Alignment.CenterEnd) }
+
+    // Split favorites vs full alphabetical app list
     val favorites = remember(apps, favoritePackages) {
         apps.filter { favoritePackages.contains(it.packageName) }
+    }
+
+    // Map each letter to its exact LazyColumn position
+    val letterStartIndex = remember(apps, favorites) {
+        val map = mutableMapOf<String, Int>()
+        // Items offset: 0=Clock, 1=Date/Battery, 2=Widget, then favorites items
+        val favoritesOffset = 3 + favorites.size
+        apps.forEachIndexed { index, app ->
+            val letter = app.firstLetter
+            if (!map.containsKey(letter)) {
+                map[letter] = favoritesOffset + index
+            }
+        }
+        map
+    }
+
+    // Indexer visibility: Shows when scrolled into the A-Z list
+    val isScrolledIntoDrawer by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex >= (3 + favorites.size)
+        }
     }
 
     Box(
@@ -72,13 +107,18 @@ fun HomeScreenContent(
             .fillMaxSize()
             .background(Color.Transparent)
     ) {
-        // Main Home Screen Content
+        // Continuous Unified Sheet (Home + App Drawer)
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 56.dp, bottom = 96.dp, start = 20.dp, end = 20.dp)
+            contentPadding = PaddingValues(top = 56.dp, bottom = 96.dp, start = 20.dp, end = 40.dp)
         ) {
-            // 1. Two-Tone Stylized Clock
-            item {
+            // ==========================================
+            // 1. HOME SCREEN SECTION
+            // ==========================================
+
+            // Clock
+            item(key = "home_clock") {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 2.dp)
@@ -100,47 +140,28 @@ fun HomeScreenContent(
                 }
             }
 
-            // 2. Date + Battery + Weather Info Line
-            item {
+            // Info Line
+            item(key = "home_info") {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 16.dp)
                 ) {
-                    Text(
-                        text = "Mon 3 Aug",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Text("Mon 3 Aug", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "48%",
-                        color = Color.White.copy(alpha = 0.9f),
-                        fontSize = 18.sp
-                    )
+                    Text("48%", color = Color.White.copy(alpha = 0.9f), fontSize = 18.sp)
                     Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "💧 31°",
-                        color = Color.White.copy(alpha = 0.9f),
-                        fontSize = 18.sp
-                    )
+                    Text("💧 31°", color = Color.White.copy(alpha = 0.9f), fontSize = 18.sp)
                 }
             }
 
-            // 3. Custom Widget Slot Area
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                ) {
-                    // Widget views render here
-                }
+            // Widget Slot
+            item(key = "home_widget") {
+                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
             }
 
-            // 4. Favorites List ONLY
-            items(favorites, key = { "fav_${it.packageName}" }) { app ->
-                FavoriteAppRow(
+            // Pinned Favorites
+            itemsIndexed(favorites, key = { _, app -> "fav_${app.packageName}" }) { _, app ->
+                AppRow(
                     app = app,
                     onClick = {
                         val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
@@ -149,13 +170,45 @@ fun HomeScreenContent(
                     onLongClick = { appForMenu = app }
                 )
             }
+
+            // ==========================================
+            // 2. CONTINUOUS APP DRAWER SECTION
+            // ==========================================
+
+            itemsIndexed(apps, key = { _, app -> app.packageName }) { _, app ->
+                AppRow(
+                    app = app,
+                    onClick = {
+                        val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                        intent?.let { context.startActivity(it) }
+                    },
+                    onLongClick = { appForMenu = app }
+                )
+            }
+
+            item(key = "action_recent") {
+                Spacer(modifier = Modifier.height(24.dp))
+                DrawerActionRow(
+                    icon = Icons.Outlined.History,
+                    label = "Recently Installed Apps",
+                    onClick = {}
+                )
+            }
+
+            item(key = "action_settings") {
+                DrawerActionRow(
+                    icon = Icons.Outlined.Settings,
+                    label = "Cascadia Settings",
+                    onClick = onOpenSettings
+                )
+            }
         }
 
         // ==========================================
-        // OVERLAY ACTIVE EDGE TOUCH ZONES FOR APP DRAWER
+        // DUAL EDGE TOUCH STRIPS (DRAG & SCRUB)
         // ==========================================
 
-        // Left Edge Touch Strip
+        // Left Edge Touch Zone
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
@@ -163,14 +216,17 @@ fun HomeScreenContent(
                 .width(48.dp)
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = { onOpenAppDrawer() },
-                        onDrag = { _, _ -> }
+                        onDragStart = {
+                            indexerAlignment = Alignment.CenterStart
+                            scope.launch { listState.scrollToItem(3 + favorites.size) }
+                        },
+                        onDrag = { _, _ -> },
+                        onDragEnd = { indexerAlignment = Alignment.CenterEnd }
                     )
                 }
-                .clickable { onOpenAppDrawer() }
         )
 
-        // Right Edge Touch Strip
+        // Right Edge Touch Zone
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
@@ -178,11 +234,13 @@ fun HomeScreenContent(
                 .width(48.dp)
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = { onOpenAppDrawer() },
+                        onDragStart = {
+                            indexerAlignment = Alignment.CenterEnd
+                            scope.launch { listState.scrollToItem(3 + favorites.size) }
+                        },
                         onDrag = { _, _ -> }
                     )
                 }
-                .clickable { onOpenAppDrawer() }
         )
 
         // Floating Action Button (Phone)
@@ -200,6 +258,39 @@ fun HomeScreenContent(
                 .size(56.dp)
         ) {
             Icon(Icons.Default.Phone, contentDescription = "Phone", tint = Color.Black)
+        }
+
+        // Active Wave Side Indexer
+        AnimatedVisibility(
+            visible = isScrolledIntoDrawer,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(indexerAlignment)
+        ) {
+            WaveSideIndex(
+                onCharSelected = { char ->
+                    when (char) {
+                        "⭐" -> {
+                            // Star Icon: Scroll back to Home View & Hide Indexer
+                            scope.launch { listState.animateScrollToItem(0) }
+                        }
+                        "o" -> {
+                            scope.launch {
+                                listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                            }
+                        }
+                        else -> {
+                            letterStartIndex[char]?.let { targetIndex ->
+                                scope.launch { listState.scrollToItem(targetIndex) }
+                            }
+                        }
+                    }
+                },
+                onDragEnd = {
+                    // Always snap back to the right edge after releasing
+                    indexerAlignment = Alignment.CenterEnd
+                }
+            )
         }
     }
 
@@ -233,7 +324,7 @@ fun HomeScreenContent(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FavoriteAppRow(
+private fun AppRow(
     app: AppModel,
     onClick: () -> Unit,
     onLongClick: () -> Unit
@@ -264,6 +355,33 @@ private fun FavoriteAppRow(
 }
 
 @Composable
+private fun DrawerActionRow(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.Transparent
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.8f),
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(18.dp))
+            Text(text = label, fontSize = 18.sp, color = Color.White)
+        }
+    }
+}
+
+@Composable
 private fun AppLongPressMenu(
     app: AppModel,
     isFavorite: Boolean,
@@ -277,25 +395,16 @@ private fun AppLongPressMenu(
         title = { Text(text = app.label, color = Color.White) },
         text = {
             Column {
-                TextButton(
-                    onClick = onToggleFavorite,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                TextButton(onClick = onToggleFavorite, modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = if (isFavorite) "Remove from favorites" else "Add to favorites",
                         color = Color(0xFF4DD0E1)
                     )
                 }
-                TextButton(
-                    onClick = onAppInfo,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                TextButton(onClick = onAppInfo, modifier = Modifier.fillMaxWidth()) {
                     Text(text = "App info", color = Color.White)
                 }
-                TextButton(
-                    onClick = onUninstall,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                TextButton(onClick = onUninstall, modifier = Modifier.fillMaxWidth()) {
                     Text(text = "Uninstall", color = Color(0xFFEF4444))
                 }
             }
