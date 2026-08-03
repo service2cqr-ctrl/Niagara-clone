@@ -43,9 +43,9 @@ fun WaveSideIndex(
             .padding(
                 top = 170.dp,
                 bottom = 50.dp,
-                end = 30.dp
+                end = 24.dp
             )
-            .width(36.dp)
+            .width(48.dp) // Wide touch zone for instant edge touch response
             .layout { measurable, constraints ->
                 totalHeight = constraints.maxHeight.toFloat()
                 val placeable = measurable.measure(constraints)
@@ -55,7 +55,7 @@ fun WaveSideIndex(
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    // 1. INSTANT TOUCH DOWN (Responds on first touch down event)
+                    // 1. INSTANT TOUCH DOWN ACTION
                     val down = awaitFirstDown(requireUnconsumed = false)
                     touchY = down.position.y
                     
@@ -68,7 +68,7 @@ fun WaveSideIndex(
                         onCharSelected(INDEX_ITEMS[initialIndex])
                     }
 
-                    // 2. SCRUBBING MOVE LISTENERS
+                    // 2. CONTINUOUS SCRUBBING LISTENERS
                     do {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull() ?: break
@@ -86,7 +86,7 @@ fun WaveSideIndex(
                         }
                     } while (event.changes.any { it.pressed })
 
-                    // 3. FINGER LIFT (Reports final character for smart persistence)
+                    // 3. FINGER LIFT PERSISTENCE REPORT
                     val finalChar = if (lastSelectedIndex in INDEX_ITEMS.indices) {
                         INDEX_ITEMS[lastSelectedIndex]
                     } else {
