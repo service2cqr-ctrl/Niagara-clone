@@ -24,10 +24,12 @@ val INDEX_ITEMS = listOf("⭐") + ('A'..'Z').map { it.toString() } + listOf("o")
 
 /**
  * Niagara-style wave side index component for quick alphabet jump scrolling.
+ * Supports both right-handed and left-handed edge curve projections.
  */
 @Composable
 fun WaveSideIndex(
     modifier: Modifier = Modifier,
+    isLeftHanded: Boolean = false,
     onCharSelected: (String) -> Unit,
     onDragEnd: () -> Unit
 ) {
@@ -82,12 +84,12 @@ fun WaveSideIndex(
                     placeable.place(0, 0)
                 }
             },
-        contentAlignment = Alignment.CenterEnd
+        contentAlignment = if (isLeftHanded) Alignment.CenterStart else Alignment.CenterEnd
     ) {
         Column(
             modifier = Modifier.fillMaxHeight(),
             verticalArrangement = Arrangement.SpaceEvenly,
-            horizontalAlignment = Alignment.End
+            horizontalAlignment = if (isLeftHanded) Alignment.Start else Alignment.End
         ) {
             INDEX_ITEMS.forEachIndexed { index, char ->
                 val itemY = (index.toFloat() / INDEX_ITEMS.size) * totalHeight
@@ -107,8 +109,11 @@ fun WaveSideIndex(
                     1f
                 }
 
+                // Invert offset direction if left-handed
+                val targetXOffset = if (isLeftHanded) waveOffset else -waveOffset
+
                 val animatedXOffset by animateFloatAsState(
-                    targetValue = -waveOffset,
+                    targetValue = targetXOffset,
                     animationSpec = spring(stiffness = 800f),
                     label = "waveOffset"
                 )
@@ -124,7 +129,7 @@ fun WaveSideIndex(
                     fontSize = if (char == "⭐" || char == "o") 11.sp else 10.sp,
                     fontWeight = if (index == lastSelectedIndex) FontWeight.Bold else FontWeight.Normal,
                     modifier = Modifier
-                        .padding(end = 12.dp)
+                        .padding(start = if (isLeftHanded) 12.dp else 0.dp, end = if (isLeftHanded) 0.dp else 12.dp)
                         .graphicsLayer {
                             translationX = animatedXOffset.dp.toPx()
                             scaleX = animatedScale
