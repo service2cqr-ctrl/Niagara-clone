@@ -8,9 +8,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -76,8 +76,8 @@ class MainActivity : ComponentActivity() {
                             )
                             Page.WIDGETS -> WidgetsScreen()
                             Page.SETTINGS -> SettingsScreen(
-                                repository = viewModel.repository,
-                                onBack = { page = Page.HOME }
+                                viewModel = viewModel,
+                                onDismiss = { page = Page.HOME }
                             )
                         }
                     }
