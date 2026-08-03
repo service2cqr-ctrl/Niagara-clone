@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Phone
@@ -93,7 +92,7 @@ fun HomeScreen(
             map[letter.toString()] = currentIndex
             currentIndex += 1 + appList.size // 1 header item + app items
         }
-        map["o"] = currentIndex // 'o' points to the bottom footer item
+        map["o"] = currentIndex // 'o' points to the very end footer item
         map
     }
 
@@ -198,7 +197,7 @@ fun HomeScreen(
                 }
             }
 
-            // LIST (HOME FAVORITES vs EXPANDED A-Z DRAWER WITH 'o' FOOTER)
+            // LIST (HOME FAVORITES vs EXPANDED A-Z DRAWER WITH 'o' OPTIONS)
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth(),
@@ -240,7 +239,7 @@ fun HomeScreen(
                         }
                     }
 
-                    // --- FOOTER ITEM FOR 'o' ---
+                    // --- FOOTER ITEM FOR 'o' (MATCHES SCREENSHOT EXACTLY) ---
                     item {
                         Column(
                             modifier = Modifier
