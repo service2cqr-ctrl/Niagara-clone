@@ -83,36 +83,26 @@ fun HomeScreen(
         apps.groupBy { it.firstLetter }.toSortedMap()
     }
 
-    // Map each letter & 'o' section to its index in LazyColumn
-    val letterIndexMap = remember(groupedApps) {
+    // --- ACCURATE UNIFIED INDEX MAP ---
+    // ⭐ starts at 0. A-Z and 'o' continue sequentially in the same list.
+    val letterIndexMap = remember(favorites, groupedApps) {
         val map = mutableMapOf<String, Int>()
-        var currentIndex = 0
+        map["⭐"] = 0
+        
+        var currentIndex = favorites.size
         groupedApps.forEach { (letter, appList) ->
             map[letter.toString()] = currentIndex
             currentIndex += 1 + appList.size
         }
-        map["o"] = currentIndex
+        map["o"] = currentIndex // Points directly to footer item at the end
         map
     }
 
-    // --- SMOOTH LAUNCHED EFFECT SCROLL SYNC ---
-    LaunchedEffect(activeLetter, isDrawerExpanded) {
+    // --- REAL-TIME SCROLL LISTENER ---
+    LaunchedEffect(activeLetter) {
         val letter = activeLetter ?: return@LaunchedEffect
-        if (letter == "⭐") {
-            listState.scrollToItem(0)
-        } else if (isDrawerExpanded) {
-            val targetIdx = letterIndexMap[letter] ?: 0
-            listState.scrollToItem(targetIdx)
-        }
-    }
-
-    val jumpToLetter: (String) -> Unit = { letter ->
-        activeLetter = letter
-        if (letter == "⭐") {
-            isDrawerExpanded = false
-        } else {
-            isDrawerExpanded = true
-        }
+        val targetIdx = letterIndexMap[letter] ?: 0
+        listState.scrollToItem(targetIdx)
     }
 
     Box(
@@ -140,7 +130,7 @@ fun HomeScreen(
                 )
             }
 
-            // CLOCK & HEADER (HIDDEN WHEN IN DRAWER STATE)
+            // CLOCK & HEADER (HIDDEN WHEN SCRUBBING IN DRAWER STATE)
             if (!isDrawerExpanded) {
                 Column(
                     modifier = Modifier
@@ -204,15 +194,36 @@ fun HomeScreen(
                 }
             }
 
-            // LIST (HOME FAVORITES vs EXPANDED A-Z DRAWER WITH 'o' FOOTER)
+            // --- UNIFIED CONTINUOUS LIST ---
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                if (!isDrawerExpanded) {
-                    // HOME STATE (AT ⭐) - PINNED FAVORITES ONLY
-                    items(favorites) { app ->
+                // 1. FAVORITES SECTION (AT ⭐)
+                items(favorites) { app ->
+                    FavoriteAppRow(
+                        app = app,
+                        onClick = {
+                            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                            intent?.let { context.startActivity(it) }
+                        },
+                        onLongClick = { appForMenu = app }
+                    )
+                }
+
+                // 2. A-Z APP DRAWER SECTION
+                groupedApps.forEach { (letter, appGroup) ->
+                    item {
+                        Text(
+                            text = letter.toString(),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF4DD0E1),
+                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                        )
+                    }
+                    items(appGroup) { app ->
                         FavoriteAppRow(
                             app = app,
                             onClick = {
@@ -222,57 +233,34 @@ fun HomeScreen(
                             onLongClick = { appForMenu = app }
                         )
                     }
-                } else {
-                    // DRAWER STATE (PAST ⭐) - FULL A-Z LIST
-                    groupedApps.forEach { (letter, appGroup) ->
-                        item {
-                            Text(
-                                text = letter.toString(),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF4DD0E1),
-                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
-                            )
-                        }
-                        items(appGroup) { app ->
-                            FavoriteAppRow(
-                                app = app,
-                                onClick = {
-                                    val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                                    intent?.let { context.startActivity(it) }
-                                },
-                                onLongClick = { appForMenu = app }
-                            )
-                        }
-                    }
+                }
 
-                    // FOOTER ITEM FOR 'o'
-                    item {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 20.dp, bottom = 48.dp)
-                        ) {
-                            Text(
-                                text = "Cascadia Launcher",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(bottom = 12.dp)
-                            )
+                // 3. FOOTER ITEM FOR 'o'
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 20.dp, bottom = 80.dp)
+                    ) {
+                        Text(
+                            text = "Cascadia Launcher",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
 
-                            DrawerFooterRow(
-                                icon = Icons.Default.History,
-                                title = "Recently installed",
-                                onClick = { /* Opens recent apps/install history */ }
-                            )
+                        DrawerFooterRow(
+                            icon = Icons.Default.History,
+                            title = "Recently installed",
+                            onClick = { /* Opens recent apps/install history */ }
+                        )
 
-                            DrawerFooterRow(
-                                icon = Icons.Default.Settings,
-                                title = "Cascadia settings",
-                                onClick = onOpenSettings
-                            )
-                        }
+                        DrawerFooterRow(
+                            icon = Icons.Default.Settings,
+                            title = "Cascadia settings",
+                            onClick = onOpenSettings
+                        )
                     }
                 }
             }
@@ -286,7 +274,12 @@ fun HomeScreen(
                 isDrawerExpanded = true
             },
             onCharSelected = { char ->
-                jumpToLetter(char)
+                activeLetter = char
+                if (char == "⭐") {
+                    isDrawerExpanded = false
+                } else {
+                    isDrawerExpanded = true
+                }
             },
             onDragEnd = { lastChar ->
                 if (lastChar == "⭐") {
@@ -301,7 +294,7 @@ fun HomeScreen(
             modifier = Modifier.align(Alignment.CenterEnd)
         )
 
-        // --- 3. FLOATING ACTION BUTTON (50.dp Margins from Bottom & Right, Hidden in Drawer) ---
+        // --- 3. FLOATING ACTION BUTTON (50.dp Margins, Hidden in Drawer) ---
         if (!isDrawerExpanded) {
             FloatingActionButton(
                 onClick = {
