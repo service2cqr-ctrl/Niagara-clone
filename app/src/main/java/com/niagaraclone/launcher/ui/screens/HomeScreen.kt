@@ -9,7 +9,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -42,6 +41,8 @@ import kotlinx.coroutines.launch
 private val AppModel.firstLetter: String
     get() = label.firstOrNull()?.uppercaseChar()?.toString() ?: "#"
 
+private val alphabetList = listOf("⭐") + ('A'..'Z').map { it.toString() } + listOf("o")
+
 @Composable
 fun HomeScreen(
     viewModel: LauncherViewModel,
@@ -73,18 +74,18 @@ fun HomeScreenContent(
 
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
     
-    // Dynamic alignment for Wave Side Index (Left vs Right)
+    // Wave Side Index alignment & orientation states
     var indexerAlignment by remember { mutableStateOf(Alignment.CenterEnd) }
+    var isLeftHanded by remember { mutableStateOf(false) }
 
     // Split favorites vs full alphabetical app list
     val favorites = remember(apps, favoritePackages) {
         apps.filter { favoritePackages.contains(it.packageName) }
     }
 
-    // Map each letter to its exact LazyColumn position
+    // Map each letter to its exact LazyColumn item index
     val letterStartIndex = remember(apps, favorites) {
         val map = mutableMapOf<String, Int>()
-        // Items offset: 0=Clock, 1=Date/Battery, 2=Widget, then favorites items
         val favoritesOffset = 3 + favorites.size
         apps.forEachIndexed { index, app ->
             val letter = app.firstLetter
@@ -95,10 +96,26 @@ fun HomeScreenContent(
         map
     }
 
-    // Indexer visibility: Shows when scrolled into the A-Z list
+    // Indexer visibility: Visible when scrolled into A-Z drawer
     val isScrolledIntoDrawer by remember {
         derivedStateOf {
             listState.firstVisibleItemIndex >= (3 + favorites.size)
+        }
+    }
+
+    // Helper to calculate target character from touch Y position
+    fun jumpToPositionFromY(y: Float, totalHeight: Float) {
+        if (totalHeight <= 0) return
+        val fraction = (y / totalHeight).coerceIn(0f, 1f)
+        val charIndex = (fraction * (alphabetList.size - 1)).toInt()
+        val targetChar = alphabetList[charIndex]
+
+        when (targetChar) {
+            "⭐" -> scope.launch { listState.scrollToItem(0) }
+            "o" -> scope.launch { listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1) }
+            else -> letterStartIndex[targetChar]?.let { targetIndex ->
+                scope.launch { listState.scrollToItem(targetIndex) }
+            }
         }
     }
 
@@ -107,7 +124,7 @@ fun HomeScreenContent(
             .fillMaxSize()
             .background(Color.Transparent)
     ) {
-        // Continuous Unified Sheet (Home + App Drawer)
+        // Continuous Unified Sheet
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -154,12 +171,12 @@ fun HomeScreenContent(
                 }
             }
 
-            // Widget Slot
+            // Widget Slot Container
             item(key = "home_widget") {
                 Box(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
             }
 
-            // Pinned Favorites
+            // Favorites List
             itemsIndexed(favorites, key = { _, app -> "fav_${app.packageName}" }) { _, app ->
                 AppRow(
                     app = app,
@@ -172,7 +189,7 @@ fun HomeScreenContent(
             }
 
             // ==========================================
-            // 2. CONTINUOUS APP DRAWER SECTION
+            // 2. APP DRAWER SECTION (No Search Bar)
             // ==========================================
 
             itemsIndexed(apps, key = { _, app -> app.packageName }) { _, app ->
@@ -205,7 +222,7 @@ fun HomeScreenContent(
         }
 
         // ==========================================
-        // DUAL EDGE TOUCH STRIPS (DRAG & SCRUB)
+        // REAL-TIME EDGE SCRUB TOUCH STRIPS
         // ==========================================
 
         // Left Edge Touch Zone
@@ -216,12 +233,18 @@ fun HomeScreenContent(
                 .width(48.dp)
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = {
+                        onDragStart = { offset ->
                             indexerAlignment = Alignment.CenterStart
-                            scope.launch { listState.scrollToItem(3 + favorites.size) }
+                            isLeftHanded = true
+                            jumpToPositionFromY(offset.y, size.height.toFloat())
                         },
-                        onDrag = { _, _ -> },
-                        onDragEnd = { indexerAlignment = Alignment.CenterEnd }
+                        onDrag = { change, _ ->
+                            jumpToPositionFromY(change.position.y, size.height.toFloat())
+                        },
+                        onDragEnd = {
+                            indexerAlignment = Alignment.CenterEnd
+                            isLeftHanded = false
+                        }
                     )
                 }
         )
@@ -234,11 +257,18 @@ fun HomeScreenContent(
                 .width(48.dp)
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = {
+                        onDragStart = { offset ->
                             indexerAlignment = Alignment.CenterEnd
-                            scope.launch { listState.scrollToItem(3 + favorites.size) }
+                            isLeftHanded = false
+                            jumpToPositionFromY(offset.y, size.height.toFloat())
                         },
-                        onDrag = { _, _ -> }
+                        onDrag = { change, _ ->
+                            jumpToPositionFromY(change.position.y, size.height.toFloat())
+                        },
+                        onDragEnd = {
+                            indexerAlignment = Alignment.CenterEnd
+                            isLeftHanded = false
+                        }
                     )
                 }
         )
@@ -268,27 +298,19 @@ fun HomeScreenContent(
             modifier = Modifier.align(indexerAlignment)
         ) {
             WaveSideIndex(
+                isLeftHanded = isLeftHanded,
                 onCharSelected = { char ->
                     when (char) {
-                        "⭐" -> {
-                            // Star Icon: Scroll back to Home View & Hide Indexer
-                            scope.launch { listState.animateScrollToItem(0) }
-                        }
-                        "o" -> {
-                            scope.launch {
-                                listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
-                            }
-                        }
-                        else -> {
-                            letterStartIndex[char]?.let { targetIndex ->
-                                scope.launch { listState.scrollToItem(targetIndex) }
-                            }
+                        "⭐" -> scope.launch { listState.animateScrollToItem(0) }
+                        "o" -> scope.launch { listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1) }
+                        else -> letterStartIndex[char]?.let { targetIndex ->
+                            scope.launch { listState.scrollToItem(targetIndex) }
                         }
                     }
                 },
                 onDragEnd = {
-                    // Always snap back to the right edge after releasing
                     indexerAlignment = Alignment.CenterEnd
+                    isLeftHanded = false
                 }
             )
         }
