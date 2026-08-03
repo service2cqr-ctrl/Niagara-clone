@@ -8,8 +8,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -41,6 +42,7 @@ import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
+import kotlinx.coroutines.launch
 
 private val AppModel.firstLetter: Char
     get() = label.firstOrNull()?.uppercaseChar() ?: '#'
@@ -53,6 +55,7 @@ fun HomeScreen(
     onOpenSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
     val apps by viewModel.apps.collectAsState()
@@ -65,8 +68,10 @@ fun HomeScreen(
     var customWidgetAdded by remember { mutableStateOf(false) }
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
 
+    // --- STATE MANAGEMENT ---
     var isDrawerExpanded by remember { mutableStateOf(false) }
     var isIndexerVisible by remember { mutableStateOf(false) }
+    var activeLetter by remember { mutableStateOf<String?>(null) }
 
     var weatherEnabled by remember { mutableStateOf(true) }
     var showMediaWidget by remember { mutableStateOf(true) }
@@ -80,6 +85,30 @@ fun HomeScreen(
         apps.groupBy { it.firstLetter }.toSortedMap()
     }
 
+    // Map each letter section to its index in LazyColumn
+    val letterIndexMap = remember(groupedApps) {
+        val map = mutableMapOf<String, Int>()
+        var currentIndex = 0
+        groupedApps.forEach { (letter, appList) ->
+            map[letter.toString()] = currentIndex
+            currentIndex += 1 + appList.size // 1 header item + app items
+        }
+        map
+    }
+
+    // Function to scroll LazyColumn to matching letter section
+    val jumpToLetter: (String) -> Unit = { letter ->
+        activeLetter = letter
+        if (letter == "⭐") {
+            isDrawerExpanded = false
+            scope.launch { listState.scrollToItem(0) }
+        } else {
+            isDrawerExpanded = true
+            val targetIdx = letterIndexMap[letter] ?: 0
+            scope.launch { listState.scrollToItem(targetIdx) }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -88,44 +117,36 @@ fun HomeScreen(
                 isEditingWidget = false
             }
     ) {
-        // --- 1. DUAL-EDGE TOUCH OVERLAYS ---
+        // --- 1. INSTANT TOUCH EDGE OVERLAYS (LEFT & RIGHT STRIPS) ---
         Row(modifier = Modifier.fillMaxSize()) {
+            // Left Edge Overlay
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .width(48.dp)
                     .pointerInput(Unit) {
-                        detectVerticalDragGestures(
-                            onDragStart = {
-                                isIndexerVisible = true
-                            },
-                            onVerticalDrag = { _, _ -> },
-                            onDragEnd = {
-                                if (!isDrawerExpanded) isIndexerVisible = false
-                            }
-                        )
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            isIndexerVisible = true
+                        }
                     }
             )
             Spacer(modifier = Modifier.weight(1f))
+            // Right Edge Overlay
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .width(48.dp)
                     .pointerInput(Unit) {
-                        detectVerticalDragGestures(
-                            onDragStart = {
-                                isIndexerVisible = true
-                            },
-                            onVerticalDrag = { _, _ -> },
-                            onDragEnd = {
-                                if (!isDrawerExpanded) isIndexerVisible = false
-                            }
-                        )
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            isIndexerVisible = true
+                        }
                     }
             )
         }
 
-        // --- 2. MAIN CONTENT SHEET ---
+        // --- 2. MAIN CONTENT AREA ---
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -142,7 +163,7 @@ fun HomeScreen(
                 )
             }
 
-            // HIDE CLOCK & HEADER WHEN IN DRAWER STATE
+            // CLOCK & HEADER (HIDDEN WHEN IN DRAWER STATE)
             if (!isDrawerExpanded) {
                 Column(
                     modifier = Modifier
@@ -206,13 +227,14 @@ fun HomeScreen(
                 }
             }
 
-            // MAIN LIST
+            // LIST (HOME FAVORITES vs EXPANDED A-Z DRAWER)
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (!isDrawerExpanded) {
+                    // HOME STATE (AT ⭐)
                     items(favorites) { app ->
                         FavoriteAppRow(
                             app = app,
@@ -224,6 +246,7 @@ fun HomeScreen(
                         )
                     }
                 } else {
+                    // DRAWER STATE (PAST ⭐)
                     groupedApps.forEach { (letter, appGroup) ->
                         item {
                             Text(
@@ -249,19 +272,24 @@ fun HomeScreen(
             }
         }
 
-        // --- 3. WAVE SIDE INDEXER (RIGHT ALIGNED) ---
+        // --- 3. WAVE SIDE INDEXER ---
         if (isIndexerVisible) {
             WaveSideIndex(
+                activeChar = activeLetter,
                 onCharSelected = { char ->
-                    if (char == "⭐") {
+                    jumpToLetter(char)
+                },
+                onDragEnd = { lastChar ->
+                    // SMART PERSISTENCE:
+                    // If finger lifts at ⭐ -> Hide indexer & collapse back to Home Screen
+                    // If finger lifts on A-Z -> Keep App Drawer expanded & keep indexer pinned
+                    if (lastChar == "⭐") {
                         isDrawerExpanded = false
+                        isIndexerVisible = false
+                        activeLetter = null
                     } else {
                         isDrawerExpanded = true
-                    }
-                },
-                onDragEnd = {
-                    if (!isDrawerExpanded) {
-                        isIndexerVisible = false
+                        isIndexerVisible = true
                     }
                 },
                 modifier = Modifier.align(Alignment.CenterEnd)
@@ -393,6 +421,8 @@ fun HomeScreen(
         }
     }
 }
+
+// --- HELPER COMPONENTS ---
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
