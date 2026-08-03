@@ -31,7 +31,7 @@ fun WaveSideIndex(
     activeChar: String? = null,
     isIndexerVisible: Boolean = false,
     onTouchStart: () -> Unit,
-    onCharSelected: (String) -> Unit,
+    onCharSelected: (String) -> Unit = {}, // Added default value here,
     onDragEnd: (String) -> Unit
 ) {
     val haptics = LocalHapticFeedback.current
