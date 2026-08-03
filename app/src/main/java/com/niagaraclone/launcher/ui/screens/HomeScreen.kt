@@ -3,9 +3,6 @@ package com.niagaraclone.launcher.ui.screens
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -44,7 +41,6 @@ import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
-import kotlinx.coroutines.launch
 
 private val AppModel.firstLetter: Char
     get() = label.firstOrNull()?.uppercaseChar() ?: '#'
@@ -57,23 +53,19 @@ fun HomeScreen(
     onOpenSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
-    val apps by viewModel.apps.collectAsState(initial = emptyList())
-    val favoritePackages by viewModel.favoritePackages.collectAsState(initial = emptySet())
-
-    var homeLayoutOffsetY by remember { mutableStateOf(0.dp) }
-    var widgetHeight by remember { mutableStateOf(180.dp) }
+    val apps by viewModel.apps.collectAsState()
+    val favoritePackages by viewModel.favoritePackages.collectAsState()
+    val homeLayoutOffsetY by viewModel.homeOffsetY.collectAsState()
+    val widgetHeight by viewModel.widgetHeight.collectAsState()
 
     var isWidgetMenuOpen by remember { mutableStateOf(false) }
     var isEditingWidget by remember { mutableStateOf(false) }
     var customWidgetAdded by remember { mutableStateOf(false) }
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
 
-    // --- STATE LOGIC FOR DRAWER & INDEXER ---
     var isDrawerExpanded by remember { mutableStateOf(false) }
-    var isLeftHanded by remember { mutableStateOf(false) }
     var isIndexerVisible by remember { mutableStateOf(false) }
 
     var weatherEnabled by remember { mutableStateOf(true) }
@@ -84,7 +76,6 @@ fun HomeScreen(
         apps.filter { favoritePackages.contains(it.packageName) }
     }
 
-    // Group apps alphabetically for the drawer view
     val groupedApps = remember(apps) {
         apps.groupBy { it.firstLetter }.toSortedMap()
     }
@@ -97,9 +88,8 @@ fun HomeScreen(
                 isEditingWidget = false
             }
     ) {
-        // --- 1. LEFT & RIGHT EDGE GESTURE STRIPS ---
+        // --- 1. DUAL-EDGE TOUCH OVERLAYS ---
         Row(modifier = Modifier.fillMaxSize()) {
-            // Left Edge Touch Zone
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
@@ -107,7 +97,6 @@ fun HomeScreen(
                     .pointerInput(Unit) {
                         detectVerticalDragGestures(
                             onDragStart = {
-                                isLeftHanded = true
                                 isIndexerVisible = true
                             },
                             onVerticalDrag = { _, _ -> },
@@ -118,7 +107,6 @@ fun HomeScreen(
                     }
             )
             Spacer(modifier = Modifier.weight(1f))
-            // Right Edge Touch Zone
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
@@ -126,7 +114,6 @@ fun HomeScreen(
                     .pointerInput(Unit) {
                         detectVerticalDragGestures(
                             onDragStart = {
-                                isLeftHanded = false
                                 isIndexerVisible = true
                             },
                             onVerticalDrag = { _, _ -> },
@@ -138,102 +125,94 @@ fun HomeScreen(
             )
         }
 
-        // --- 2. MAIN HOME SCREEN LAYOUT ---
+        // --- 2. MAIN CONTENT SHEET ---
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .offset(y = homeLayoutOffsetY)
-                .padding(
-                    start = if (isLeftHanded && isIndexerVisible) 48.dp else 24.dp,
-                    end = if (!isLeftHanded && isIndexerVisible) 48.dp else 24.dp,
-                    top = 48.dp
-                )
+                .offset(y = homeLayoutOffsetY.dp)
+                .padding(start = 24.dp, end = 48.dp, top = 48.dp)
         ) {
-            // TOP MOVE CONTROL BAR (EDIT MODE)
             if (isEditingWidget) {
                 AdjustmentControlBar(
-                    onReset = { homeLayoutOffsetY = 0.dp },
+                    onReset = { viewModel.updateHomeOffsetY(0f) },
                     onDrag = { deltaY ->
-                        homeLayoutOffsetY = (homeLayoutOffsetY + deltaY.dp).coerceIn((-100).dp, 200.dp)
+                        val newOffset = (homeLayoutOffsetY + deltaY).coerceIn(-100f, 200f)
+                        viewModel.updateHomeOffsetY(newOffset)
                     }
                 )
             }
 
-            // CLOCK & INFO HEADER BLOCK
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .combinedClickable(
-                        onClick = {},
-                        onLongClick = { isWidgetMenuOpen = true }
-                    )
-            ) {
-                // Two-tone Digital Clock
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "09",
-                        color = Color(0xFF4DD0E1),
-                        fontSize = 72.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "31",
-                        color = Color.White,
-                        fontSize = 72.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Date, Battery & Weather Status Line
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(text = "Mon 3 Aug", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
-                    if (showBattery) {
-                        Text(text = "⚡ 39%", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
-                    }
-                    if (weatherEnabled) {
-                        Text(text = "💧 30°", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // CUSTOM WIDGET CONTAINER SLOT
-            if (customWidgetAdded) {
-                Box(
+            // HIDE CLOCK & HEADER WHEN IN DRAWER STATE
+            if (!isDrawerExpanded) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(widgetHeight)
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = { isWidgetMenuOpen = true }
+                        )
                 ) {
-                    // Custom AppWidgetHost View renders here
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            // BOTTOM RESIZE CONTROL BAR (EDIT MODE)
-            if (isEditingWidget && customWidgetAdded) {
-                AdjustmentControlBar(
-                    onReset = { widgetHeight = 180.dp },
-                    onDrag = { deltaY ->
-                        widgetHeight = (widgetHeight + deltaY.dp).coerceIn(80.dp, 400.dp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "09",
+                            color = Color(0xFF4DD0E1),
+                            fontSize = 72.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "31",
+                            color = Color.White,
+                            fontSize = 72.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-                )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(text = "Mon 3 Aug", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                        if (showBattery) {
+                            Text(text = "⚡ 39%", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                        }
+                        if (weatherEnabled) {
+                            Text(text = "💧 30°", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
+
+                if (customWidgetAdded) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(widgetHeight.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                if (isEditingWidget && customWidgetAdded) {
+                    AdjustmentControlBar(
+                        onReset = { viewModel.updateWidgetHeight(180f) },
+                        onDrag = { deltaY ->
+                            val newHeight = (widgetHeight + deltaY).coerceIn(80f, 400f)
+                            viewModel.updateWidgetHeight(newHeight)
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
 
-            // MAIN LIST (PINNED FAVORITES IN HOME STATE vs A-Z DRAWER IN EXPANDED STATE)
+            // MAIN LIST
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (!isDrawerExpanded) {
-                    // --- HOME STATE (AT ⭐): SHOW PINNED FAVORITES ONLY ---
                     items(favorites) { app ->
                         FavoriteAppRow(
                             app = app,
@@ -245,7 +224,6 @@ fun HomeScreen(
                         )
                     }
                 } else {
-                    // --- DRAWER STATE (PAST ⭐): SHOW FULL A-Z LIST WITH SECTION HEADERS ---
                     groupedApps.forEach { (letter, appGroup) ->
                         item {
                             Text(
@@ -271,16 +249,13 @@ fun HomeScreen(
             }
         }
 
-        // --- 3. WAVE SIDE INDEXER (WITH STAR TRANSITION LOGIC) ---
+        // --- 3. WAVE SIDE INDEXER (RIGHT ALIGNED) ---
         if (isIndexerVisible) {
             WaveSideIndex(
-                isLeftHanded = isLeftHanded,
                 onCharSelected = { char ->
-                    if (char == "☆" || char == "⭐") {
-                        // RE-COLLAPSE TO HOME VIEW WHEN AT STAR
+                    if (char == "⭐") {
                         isDrawerExpanded = false
                     } else {
-                        // EXPAND TO FULL A-Z DRAWER WHEN SCRUBBING PAST STAR
                         isDrawerExpanded = true
                     }
                 },
@@ -289,11 +264,11 @@ fun HomeScreen(
                         isIndexerVisible = false
                     }
                 },
-                modifier = Modifier.align(if (isLeftHanded) Alignment.CenterStart else Alignment.CenterEnd)
+                modifier = Modifier.align(Alignment.CenterEnd)
             )
         }
 
-        // --- 4. BOTTOM RIGHT FLOATING ACTION BUTTON ---
+        // --- 4. FLOATING ACTION BUTTON ---
         FloatingActionButton(
             onClick = {
                 val intent = Intent(Intent.ACTION_DIAL)
@@ -310,7 +285,7 @@ fun HomeScreen(
             Icon(imageVector = Icons.Default.Phone, contentDescription = "Phone")
         }
 
-        // --- 5. NIAGARA WIDGET BOTTOM SHEET MENU ---
+        // --- 5. BOTTOM SHEET MENU ---
         if (isWidgetMenuOpen) {
             ModalBottomSheet(
                 onDismissRequest = { isWidgetMenuOpen = false },
@@ -390,7 +365,7 @@ fun HomeScreen(
             }
         }
 
-        // --- 6. FAVORITE APP LONG PRESS MENU ---
+        // --- 6. APP LONG PRESS MENU ---
         appForMenu?.let { app ->
             AppLongPressMenu(
                 app = app,
@@ -418,8 +393,6 @@ fun HomeScreen(
         }
     }
 }
-
-// --- HELPER COMPONENTS ---
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
