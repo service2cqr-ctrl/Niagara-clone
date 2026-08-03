@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.core.view.WindowCompat
 import com.niagaraclone.launcher.gestures.GestureHost
 import com.niagaraclone.launcher.gestures.SwipeDirection
 import com.niagaraclone.launcher.ui.LauncherViewModel
@@ -33,6 +34,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Ensures wallpaper extends behind system status bar and gesture navigation bar
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
         setContent {
             val theme by viewModel.theme.collectAsState()
             val accentArgb by viewModel.accentColorArgb.collectAsState()
