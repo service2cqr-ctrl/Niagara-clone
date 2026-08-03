@@ -68,7 +68,8 @@ class MainActivity : ComponentActivity() {
                         when (current) {
                             Page.HOME -> HomeScreen(
                                 viewModel = viewModel,
-                                onOpenAppDrawer = { page = Page.APP_DRAWER }
+                                onOpenAppDrawer = { page = Page.APP_DRAWER },
+                                onOpenSettings = { page = Page.SETTINGS }
                             )
                             Page.APP_DRAWER -> AppDrawerScreen(
                                 viewModel = viewModel,
