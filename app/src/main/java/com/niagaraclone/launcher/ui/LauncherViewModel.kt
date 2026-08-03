@@ -108,4 +108,49 @@ class LauncherViewModel(
     }
 
     /**
-     * Toggles
+     * Toggles an app in or out of the favorites list.
+     */
+    fun toggleFavorite(packageName: String) {
+        viewModelScope.launch {
+            val currentFavs = favoritePackages.value.toMutableSet()
+            if (currentFavs.contains(packageName)) {
+                currentFavs.remove(packageName)
+            } else {
+                currentFavs.add(packageName)
+            }
+            repository.setFavorites(currentFavs.toList())
+        }
+    }
+
+    /**
+     * Updates and persists the Home Screen vertical layout position offset.
+     */
+    fun updateHomeOffsetY(offsetY: Float) {
+        viewModelScope.launch {
+            repository.setHomeOffsetY(offsetY)
+        }
+    }
+
+    /**
+     * Updates and persists the custom widget slot container height.
+     */
+    fun updateWidgetHeight(height: Float) {
+        viewModelScope.launch {
+            repository.setWidgetHeight(height)
+        }
+    }
+
+    /**
+     * ViewModel Factory required for MainActivity viewModels delegate
+     */
+    class Factory(private val context: Context) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            if (modelClass.isAssignableFrom(LauncherViewModel::class.java)) {
+                val repository = SettingsRepository(context.applicationContext)
+                return LauncherViewModel(repository, context.applicationContext) as T
+            }
+            throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+        }
+    }
+}
