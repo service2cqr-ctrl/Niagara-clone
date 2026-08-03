@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Phone
@@ -69,7 +70,7 @@ fun HomeScreen(
 
     // --- STATE MANAGEMENT ---
     var isDrawerExpanded by remember { mutableStateOf(false) }
-    var isIndexerVisible by remember { mutableStateOf(true) }
+    var isIndexerVisible by remember { mutableStateOf(false) }
     var activeLetter by remember { mutableStateOf<String?>(null) }
 
     var weatherEnabled by remember { mutableStateOf(true) }
@@ -90,9 +91,9 @@ fun HomeScreen(
         var currentIndex = 0
         groupedApps.forEach { (letter, appList) ->
             map[letter.toString()] = currentIndex
-            currentIndex += 1 + appList.size // 1 header item + app items
+            currentIndex += 1 + appList.size
         }
-        map["o"] = currentIndex // 'o' points to the very end footer item
+        map["o"] = currentIndex
         map
     }
 
@@ -116,7 +117,7 @@ fun HomeScreen(
                 isEditingWidget = false
             }
     ) {
-        // --- MAIN CONTENT AREA ---
+        // --- 1. MAIN CONTENT AREA ---
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -197,14 +198,14 @@ fun HomeScreen(
                 }
             }
 
-            // LIST (HOME FAVORITES vs EXPANDED A-Z DRAWER WITH 'o' OPTIONS)
+            // LIST (HOME FAVORITES vs EXPANDED A-Z DRAWER WITH 'o' FOOTER)
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (!isDrawerExpanded) {
-                    // HOME STATE (AT ⭐)
+                    // HOME STATE (AT ⭐) - PINNED FAVORITES ONLY
                     items(favorites) { app ->
                         FavoriteAppRow(
                             app = app,
@@ -216,7 +217,7 @@ fun HomeScreen(
                         )
                     }
                 } else {
-                    // DRAWER STATE (PAST ⭐)
+                    // DRAWER STATE (PAST ⭐) - FULL A-Z LIST
                     groupedApps.forEach { (letter, appGroup) ->
                         item {
                             Text(
@@ -239,7 +240,7 @@ fun HomeScreen(
                         }
                     }
 
-                    // --- FOOTER ITEM FOR 'o' (MATCHES SCREENSHOT EXACTLY) ---
+                    // FOOTER ITEM FOR 'o'
                     item {
                         Column(
                             modifier = Modifier
@@ -271,26 +272,30 @@ fun HomeScreen(
             }
         }
 
-        // --- WAVE SIDE INDEXER ---
-        if (isIndexerVisible) {
-            WaveSideIndex(
-                activeChar = activeLetter,
-                onCharSelected = { char ->
-                    jumpToLetter(char)
-                },
-                onDragEnd = { lastChar ->
-                    if (lastChar == "⭐") {
-                        isDrawerExpanded = false
-                        activeLetter = null
-                    } else {
-                        isDrawerExpanded = true
-                    }
-                },
-                modifier = Modifier.align(Alignment.CenterEnd)
-            )
-        }
+        // --- 2. WAVE SIDE INDEXER (ALWAYS TOUCH-READY ON RIGHT EDGE) ---
+        WaveSideIndex(
+            isIndexerVisible = isIndexerVisible,
+            onTouchStart = {
+                isIndexerVisible = true
+                isDrawerExpanded = true
+            },
+            onCharSelected = { char ->
+                jumpToLetter(char)
+            },
+            onDragEnd = { lastChar ->
+                if (lastChar == "⭐") {
+                    isDrawerExpanded = false
+                    isIndexerVisible = false
+                    activeLetter = null
+                } else {
+                    isDrawerExpanded = true
+                    isIndexerVisible = true
+                }
+            },
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
 
-        // --- FLOATING ACTION BUTTON ---
+        // --- 3. FLOATING ACTION BUTTON ---
         FloatingActionButton(
             onClick = {
                 val intent = Intent(Intent.ACTION_DIAL)
@@ -307,7 +312,7 @@ fun HomeScreen(
             Icon(imageVector = Icons.Default.Phone, contentDescription = "Phone")
         }
 
-        // --- BOTTOM SHEET MENU ---
+        // --- 4. WIDGET BOTTOM SHEET MENU ---
         if (isWidgetMenuOpen) {
             ModalBottomSheet(
                 onDismissRequest = { isWidgetMenuOpen = false },
@@ -387,7 +392,7 @@ fun HomeScreen(
             }
         }
 
-        // --- APP LONG PRESS MENU ---
+        // --- 5. APP LONG PRESS MENU ---
         appForMenu?.let { app ->
             AppLongPressMenu(
                 app = app,
