@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,10 +13,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,13 +33,14 @@ private val AppModel.firstLetter: Char
 
 /**
  * The full A-Z app list. Features a right-edge letter index, search bar filtering,
- * and long-press dialog management.
+ * long-press dialog management, and launcher settings action triggers.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppDrawerScreen(
     viewModel: LauncherViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
     val allApps by viewModel.apps.collectAsState(initial = emptyList())
@@ -89,6 +95,22 @@ fun AppDrawerScreen(
                             intent?.let { context.startActivity(it) }
                         },
                         onLongClick = { appForMenu = app }
+                    )
+                }
+
+                // Special bottom action items matching Niagara's list end
+                item {
+                    DrawerActionRow(
+                        icon = Icons.Outlined.History,
+                        label = "Recently Installed Apps",
+                        onClick = { /* Optional: show recently installed list */ }
+                    )
+                }
+                item {
+                    DrawerActionRow(
+                        icon = Icons.Outlined.Settings,
+                        label = "Cascadia Settings",
+                        onClick = onOpenSettings
                     )
                 }
             }
@@ -165,6 +187,34 @@ private fun AppRow(
         if (isFavorite) {
             Text("★", fontSize = 14.sp)
         }
+    }
+}
+
+@Composable
+private fun DrawerActionRow(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            text = label,
+            fontSize = 18.sp,
+            color = MaterialTheme.colorScheme.onBackground
+        )
     }
 }
 
