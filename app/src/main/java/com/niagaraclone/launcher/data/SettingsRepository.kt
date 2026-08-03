@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -28,6 +29,8 @@ class SettingsRepository(private val context: Context) {
         val KEY_DOUBLE_TAP_APP = stringPreferencesKey("double_tap_app")
         val KEY_WALLPAPER_ZOOM = stringPreferencesKey("wallpaper_zoom")
         val KEY_FONT_FAMILY = stringPreferencesKey("font_family")
+        val KEY_HOME_OFFSET_Y = floatPreferencesKey("home_offset_y")
+        val KEY_WIDGET_HEIGHT = floatPreferencesKey("widget_height")
     }
 
     val theme: Flow<AppTheme> = context.dataStore.data.map { prefs ->
@@ -53,6 +56,14 @@ class SettingsRepository(private val context: Context) {
         prefs[KEY_ICON_PACK]
     }
 
+    val homeOffsetY: Flow<Float> = context.dataStore.data.map { prefs ->
+        prefs[KEY_HOME_OFFSET_Y] ?: 0f
+    }
+
+    val widgetHeight: Flow<Float> = context.dataStore.data.map { prefs ->
+        prefs[KEY_WIDGET_HEIGHT] ?: 180f
+    }
+
     suspend fun setTheme(theme: AppTheme) {
         context.dataStore.edit { prefs -> prefs[KEY_THEME] = theme.name }
     }
@@ -73,6 +84,14 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             if (packageName == null) prefs.remove(KEY_ICON_PACK) else prefs[KEY_ICON_PACK] = packageName
         }
+    }
+
+    suspend fun setHomeOffsetY(offsetY: Float) {
+        context.dataStore.edit { prefs -> prefs[KEY_HOME_OFFSET_Y] = offsetY }
+    }
+
+    suspend fun setWidgetHeight(height: Float) {
+        context.dataStore.edit { prefs -> prefs[KEY_WIDGET_HEIGHT] = height }
     }
 
     suspend fun snapshot(): Map<Preferences.Key<*>, Any> {
