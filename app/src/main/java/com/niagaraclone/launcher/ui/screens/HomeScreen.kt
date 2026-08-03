@@ -1,6 +1,7 @@
 package com.niagaraclone.launcher.ui.screens
 
 import android.content.Intent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,9 +20,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.*
@@ -82,44 +86,81 @@ fun HomeScreenContent(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().padding(end = 40.dp),
-            contentPadding = PaddingValues(top = 48.dp, bottom = 96.dp, start = 20.dp)
+            contentPadding = PaddingValues(top = 56.dp, bottom = 96.dp, start = 20.dp)
         ) {
-            // 1. Digital Clock & Weather Line
+            // 1. Two-Tone Stylized Big Clock (Matching Screenshot)
             item {
-                Column(modifier = Modifier.padding(bottom = 20.dp)) {
-                    Text(text = "06:27", color = Color(0xFF4DD0E1), fontSize = 64.sp)
-                    Text(text = "⚡ 52%   💧 25°", color = Color.White, fontSize = 16.sp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 2.dp)
+                ) {
+                    Text(
+                        text = "11",
+                        fontSize = 72.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF4DD0E1), // Cyan/Teal
+                        letterSpacing = (-2).sp
+                    )
+                    Text(
+                        text = "15",
+                        fontSize = 72.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        letterSpacing = (-2).sp
+                    )
                 }
             }
 
-            // 2. Custom Embedded Widget Slot
+            // 2. Date + Battery + Weather Info Line
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 20.dp)
+                ) {
+                    Text(
+                        text = "Mon 3 Aug",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "48%",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 18.sp
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "💧 31°",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 18.sp
+                    )
+                }
+            }
+
+            // 3. Custom Widget Area Slot (Placeholder for Samsung Calendar Widget)
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 12.dp)
+                        .padding(vertical = 8.dp)
                 ) {
-                    Text("Calendar / Agenda Widget Area", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
+                    Text("Calendar / Agenda Widget Area", color = Color.White.copy(alpha = 0.4f), fontSize = 13.sp)
                 }
             }
 
-            // 3. Favorites App List
+            // 4. Pinned Favorites App List with Icons
             items(favorites, key = { "fav_${it.packageName}" }) { app ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                            intent?.let { context.startActivity(it) }
-                        }
-                        .padding(vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = app.label, color = Color.White, fontSize = 20.sp)
-                }
+                FavoriteAppRow(
+                    app = app,
+                    onClick = {
+                        val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                        intent?.let { context.startActivity(it) }
+                    }
+                )
             }
 
-            // 4. Full App List (Alphabetical)
+            // 5. Full App List (Alphabetical)
             items(apps, key = { it.packageName }) { app ->
                 Row(
                     modifier = Modifier
@@ -131,11 +172,19 @@ fun HomeScreenContent(
                         .padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    app.icon?.let { iconDrawable ->
+                        Image(
+                            bitmap = iconDrawable.toBitmap(width = 40, height = 40).asImageBitmap(),
+                            contentDescription = app.label,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                    }
                     Text(text = app.label, color = Color.White, fontSize = 18.sp)
                 }
             }
 
-            // 5. Launcher Options Tail Section
+            // 6. Tail Actions
             item {
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(
@@ -168,15 +217,19 @@ fun HomeScreenContent(
 
         // Floating Action Button
         FloatingActionButton(
-            onClick = { /* Open Phone or Search */ },
+            onClick = {
+                val intent = context.packageManager.getLaunchIntentForPackage("com.samsung.android.dialer")
+                    ?: context.packageManager.getLaunchIntentForPackage("com.google.android.dialer")
+                intent?.let { context.startActivity(it) }
+            },
             containerColor = Color(0xFF4DD0E1),
             shape = CircleShape,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 32.dp, end = 64.dp)
+                .padding(bottom = 32.dp, end = 24.dp)
                 .size(56.dp)
         ) {
-            Icon(Icons.Default.Phone, contentDescription = "Action", tint = Color.Black)
+            Icon(Icons.Default.Phone, contentDescription = "Phone", tint = Color.Black)
         }
 
         // Wave Side Indexer
@@ -198,6 +251,36 @@ fun HomeScreenContent(
                 }
             },
             onDragEnd = {}
+        )
+    }
+}
+
+@Composable
+private fun FavoriteAppRow(
+    app: AppModel,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        app.icon?.let { iconDrawable ->
+            Image(
+                bitmap = iconDrawable.toBitmap(width = 44, height = 44).asImageBitmap(),
+                contentDescription = app.label,
+                modifier = Modifier.size(36.dp)
+            )
+            Spacer(modifier = Modifier.width(18.dp))
+        } ?: Spacer(modifier = Modifier.width(54.dp))
+
+        Text(
+            text = app.label,
+            color = Color.White,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Medium
         )
     }
 }
