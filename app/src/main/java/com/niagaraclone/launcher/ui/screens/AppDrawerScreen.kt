@@ -36,10 +36,6 @@ import kotlinx.coroutines.launch
 private val AppModel.firstLetter: String
     get() = label.firstOrNull()?.uppercaseChar()?.toString() ?: "#"
 
-/**
- * The full A-Z app list drawer featuring search filtering, custom Wave Side Indexer,
- * long-press dialog management, app icons, and bottom launcher settings action triggers.
- */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppDrawerScreen(
@@ -64,7 +60,6 @@ fun AppDrawerScreen(
         }
     }
 
-    // Map each alphabet letter to its exact index in filteredApps
     val letterStartIndex = remember(filteredApps) {
         val map = mutableMapOf<String, Int>()
         filteredApps.forEachIndexed { index, app ->
@@ -107,7 +102,7 @@ fun AppDrawerScreen(
                 )
             )
 
-            // Main A-Z App List
+            // Full A-Z App List
             LazyColumn(
                 state = listState,
                 modifier = Modifier.weight(1f),
@@ -128,7 +123,6 @@ fun AppDrawerScreen(
                     )
                 }
 
-                // Explicit keys for bottom action rows
                 item(key = "action_recently_installed") {
                     DrawerActionRow(
                         icon = Icons.Outlined.History,
@@ -147,15 +141,20 @@ fun AppDrawerScreen(
             }
         }
 
-        // Wave Side Indexer on the Right Edge
+        // Wave Side Indexer (Right Edge)
         WaveSideIndex(
             modifier = Modifier.align(Alignment.CenterEnd),
             onCharSelected = { char ->
                 when (char) {
-                    "⭐" -> scope.launch { listState.scrollToItem(0) }
-                    "o" -> scope.launch {
-                        if (filteredApps.isNotEmpty()) {
-                            listState.scrollToItem(filteredApps.size - 1)
+                    "⭐" -> {
+                        // Tapping/Stopping on Star returns to Home Screen
+                        onDismiss()
+                    }
+                    "o" -> {
+                        scope.launch {
+                            if (filteredApps.isNotEmpty()) {
+                                listState.scrollToItem(filteredApps.size - 1)
+                            }
                         }
                     }
                     else -> {
@@ -169,7 +168,7 @@ fun AppDrawerScreen(
         )
     }
 
-    // Long-Press Menu Dialog
+    // App Long-Press Menu
     appForMenu?.let { app ->
         AppLongPressMenu(
             app = app,
@@ -239,9 +238,6 @@ private fun AppRow(
     }
 }
 
-/**
- * Action Row using Surface touch targets for full-width click reliability.
- */
 @Composable
 private fun DrawerActionRow(
     icon: ImageVector,
