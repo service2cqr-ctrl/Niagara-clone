@@ -272,7 +272,7 @@ fun HomeScreen(
             }
         }
 
-        // --- 2. WAVE SIDE INDEXER (ALWAYS TOUCH-READY ON RIGHT EDGE) ---
+        // --- 2. WAVE SIDE INDEXER ---
         WaveSideIndex(
             isIndexerVisible = isIndexerVisible,
             onTouchStart = {
@@ -295,21 +295,23 @@ fun HomeScreen(
             modifier = Modifier.align(Alignment.CenterEnd)
         )
 
-        // --- 3. FLOATING ACTION BUTTON ---
-        FloatingActionButton(
-            onClick = {
-                val intent = Intent(Intent.ACTION_DIAL)
-                context.startActivity(intent)
-            },
-            containerColor = Color(0xFF4DD0E1),
-            contentColor = Color.Black,
-            shape = CircleShape,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(24.dp)
-                .size(56.dp)
-        ) {
-            Icon(imageVector = Icons.Default.Phone, contentDescription = "Phone")
+        // --- 3. FLOATING ACTION BUTTON (ONLY VISIBLE IN HOME STATE) ---
+        if (!isDrawerExpanded) {
+            FloatingActionButton(
+                onClick = {
+                    val intent = Intent(Intent.ACTION_DIAL)
+                    context.startActivity(intent)
+                },
+                containerColor = Color(0xFF4DD0E1),
+                contentColor = Color.Black,
+                shape = CircleShape,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp)
+                    .size(56.dp)
+            ) {
+                Icon(imageVector = Icons.Default.Phone, contentDescription = "Phone")
+            }
         }
 
         // --- 4. WIDGET BOTTOM SHEET MENU ---
@@ -639,16 +641,4 @@ private fun AppLongPressMenu(
                 TextButton(onClick = onAppInfo, modifier = Modifier.fillMaxWidth()) {
                     Text(text = "App info", color = Color.White)
                 }
-                TextButton(onClick = onUninstall, modifier = Modifier.fillMaxWidth()) {
-                    Text(text = "Uninstall", color = Color(0xFFEF4444))
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = "Cancel", color = Color.Gray)
-            }
-        },
-        containerColor = Color(0xFF1E1E1E)
-    )
-}
+                TextButton(onClick = on
