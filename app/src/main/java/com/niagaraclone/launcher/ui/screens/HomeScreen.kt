@@ -9,17 +9,24 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.UnfoldMore
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,323 +37,300 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
-import com.niagaraclone.launcher.ui.components.WaveSideIndex
-import kotlinx.coroutines.launch
 
-private val AppModel.firstLetter: String
-    get() = label.firstOrNull()?.uppercaseChar()?.toString() ?: "#"
-
-private val alphabetList = listOf("⭐") + ('A'..'Z').map { it.toString() } + listOf("o")
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: LauncherViewModel,
     onOpenAppDrawer: () -> Unit = {},
     onOpenSettings: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val apps by viewModel.apps.collectAsState(initial = emptyList())
     val favoritePackages by viewModel.favoritePackages.collectAsState(initial = emptySet())
 
-    HomeScreenContent(
-        viewModel = viewModel,
-        apps = apps,
-        favoritePackages = favoritePackages,
-        onOpenSettings = onOpenSettings
-    )
-}
+    var homeLayoutOffsetY by remember { mutableStateOf(0.dp) }
+    var widgetHeight by remember { mutableStateOf(180.dp) }
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun HomeScreenContent(
-    viewModel: LauncherViewModel,
-    apps: List<AppModel>,
-    favoritePackages: Set<String>,
-    onOpenSettings: () -> Unit
-) {
-    val context = LocalContext.current
-    val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-
+    var isWidgetMenuOpen by remember { mutableStateOf(false) }
+    var isEditingWidget by remember { mutableStateOf(false) }
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
-    
-    // Wave Side Index alignment & orientation states
-    var indexerAlignment by remember { mutableStateOf(Alignment.CenterEnd) }
-    var isLeftHanded by remember { mutableStateOf(false) }
 
-    // Split favorites vs full alphabetical app list
+    var weatherEnabled by remember { mutableStateOf(true) }
+    var showMediaWidget by remember { mutableStateOf(true) }
+    var showBattery by remember { mutableStateOf(true) }
+
     val favorites = remember(apps, favoritePackages) {
         apps.filter { favoritePackages.contains(it.packageName) }
-    }
-
-    // Map each letter to its exact LazyColumn item index
-    val letterStartIndex = remember(apps, favorites) {
-        val map = mutableMapOf<String, Int>()
-        val favoritesOffset = 3 + favorites.size
-        apps.forEachIndexed { index, app ->
-            val letter = app.firstLetter
-            if (!map.containsKey(letter)) {
-                map[letter] = favoritesOffset + index
-            }
-        }
-        map
-    }
-
-    // Indexer visibility: Visible when scrolled into A-Z drawer
-    val isScrolledIntoDrawer by remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex >= (3 + favorites.size)
-        }
-    }
-
-    // Helper to calculate target character from touch Y position
-    fun jumpToPositionFromY(y: Float, totalHeight: Float) {
-        if (totalHeight <= 0) return
-        val fraction = (y / totalHeight).coerceIn(0f, 1f)
-        val charIndex = (fraction * (alphabetList.size - 1)).toInt()
-        val targetChar = alphabetList[charIndex]
-
-        when (targetChar) {
-            "⭐" -> scope.launch { listState.scrollToItem(0) }
-            "o" -> scope.launch { listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1) }
-            else -> letterStartIndex[targetChar]?.let { targetIndex ->
-                scope.launch { listState.scrollToItem(targetIndex) }
-            }
-        }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent)
+            .clickable(enabled = isEditingWidget) {
+                isEditingWidget = false
+            }
     ) {
-        // Continuous Unified Sheet
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 56.dp, bottom = 96.dp, start = 20.dp, end = 40.dp)
+        // --- 1. LEFT & RIGHT EDGE GESTURE STRIPS ---
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(48.dp)
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures { change, dragAmount ->
+                            if (dragAmount > 8f) onOpenAppDrawer()
+                        }
+                    }
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(48.dp)
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures { change, dragAmount ->
+                            if (dragAmount > 8f) onOpenAppDrawer()
+                        }
+                    }
+            )
+        }
+
+        // --- 2. MAIN HOME SCREEN LAYOUT ---
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .offset(y = homeLayoutOffsetY)
+                .padding(start = 24.dp, end = 24.dp, top = 48.dp)
         ) {
-            // ==========================================
-            // 1. HOME SCREEN SECTION
-            // ==========================================
+            // TOP MOVE CONTROL BAR (EDIT MODE)
+            if (isEditingWidget) {
+                AdjustmentControlBar(
+                    onReset = { homeLayoutOffsetY = 0.dp },
+                    onDrag = { deltaY ->
+                        homeLayoutOffsetY = (homeLayoutOffsetY + deltaY.dp).coerceIn((-100).dp, 200.dp)
+                    }
+                )
+            }
 
-            // Clock
-            item(key = "home_clock") {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 2.dp)
-                ) {
+            // CLOCK & INFO HEADER BLOCK
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = { isWidgetMenuOpen = true }
+                    )
+            ) {
+                // Two-tone Digital Clock
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "11",
-                        fontSize = 72.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        text = "09",
                         color = Color(0xFF4DD0E1),
-                        letterSpacing = (-2).sp
+                        fontSize = 72.sp,
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "15",
-                        fontSize = 72.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        text = "31",
                         color = Color.White,
-                        letterSpacing = (-2).sp
+                        fontSize = 72.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
-            }
 
-            // Info Line
-            item(key = "home_info") {
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Date, Battery & Weather Status Line
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Mon 3 Aug", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("48%", color = Color.White.copy(alpha = 0.9f), fontSize = 18.sp)
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("💧 31°", color = Color.White.copy(alpha = 0.9f), fontSize = 18.sp)
+                    Text(text = "Mon 3 Aug", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                    if (showBattery) {
+                        Text(text = "⚡ 39%", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                    }
+                    if (weatherEnabled) {
+                        Text(text = "💧 30°", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                    }
                 }
             }
 
-            // Widget Slot Container
-            item(key = "home_widget") {
-                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // CUSTOM WIDGET CONTAINER SLOT
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(widgetHeight)
+            ) {
+                // Placeholder Widget area (Renders custom widgets cleanly)
             }
 
-            // Favorites List
-            itemsIndexed(favorites, key = { _, app -> "fav_${app.packageName}" }) { _, app ->
-                AppRow(
-                    app = app,
-                    onClick = {
-                        val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                        intent?.let { context.startActivity(it) }
-                    },
-                    onLongClick = { appForMenu = app }
+            // BOTTOM RESIZE CONTROL BAR (EDIT MODE)
+            if (isEditingWidget) {
+                AdjustmentControlBar(
+                    onReset = { widgetHeight = 180.dp },
+                    onDrag = { deltaY ->
+                        widgetHeight = (widgetHeight + deltaY.dp).coerceIn(80.dp, 400.dp)
+                    }
                 )
             }
 
-            // ==========================================
-            // 2. APP DRAWER SECTION (No Search Bar)
-            // ==========================================
+            Spacer(modifier = Modifier.height(16.dp))
 
-            itemsIndexed(apps, key = { _, app -> app.packageName }) { _, app ->
-                AppRow(
-                    app = app,
-                    onClick = {
-                        val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                        intent?.let { context.startActivity(it) }
-                    },
-                    onLongClick = { appForMenu = app }
-                )
-            }
-
-            item(key = "action_recent") {
-                Spacer(modifier = Modifier.height(24.dp))
-                DrawerActionRow(
-                    icon = Icons.Outlined.History,
-                    label = "Recently Installed Apps",
-                    onClick = {}
-                )
-            }
-
-            item(key = "action_settings") {
-                DrawerActionRow(
-                    icon = Icons.Outlined.Settings,
-                    label = "Cascadia Settings",
-                    onClick = onOpenSettings
-                )
+            // PINNED FAVORITES LIST
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(favorites) { app ->
+                    FavoriteAppRow(
+                        app = app,
+                        onClick = {
+                            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                            intent?.let { context.startActivity(it) }
+                        },
+                        onLongClick = { appForMenu = app }
+                    )
+                }
             }
         }
 
-        // ==========================================
-        // REAL-TIME EDGE SCRUB TOUCH STRIPS
-        // ==========================================
-
-        // Left Edge Touch Zone
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .fillMaxHeight()
-                .width(48.dp)
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            indexerAlignment = Alignment.CenterStart
-                            isLeftHanded = true
-                            jumpToPositionFromY(offset.y, size.height.toFloat())
-                        },
-                        onDrag = { change, _ ->
-                            jumpToPositionFromY(change.position.y, size.height.toFloat())
-                        },
-                        onDragEnd = {
-                            indexerAlignment = Alignment.CenterEnd
-                            isLeftHanded = false
-                        }
-                    )
-                }
-        )
-
-        // Right Edge Touch Zone
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .fillMaxHeight()
-                .width(48.dp)
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            indexerAlignment = Alignment.CenterEnd
-                            isLeftHanded = false
-                            jumpToPositionFromY(offset.y, size.height.toFloat())
-                        },
-                        onDrag = { change, _ ->
-                            jumpToPositionFromY(change.position.y, size.height.toFloat())
-                        },
-                        onDragEnd = {
-                            indexerAlignment = Alignment.CenterEnd
-                            isLeftHanded = false
-                        }
-                    )
-                }
-        )
-
-        // Floating Action Button (Phone)
+        // --- 3. BOTTOM RIGHT FLOATING ACTION BUTTON ---
         FloatingActionButton(
             onClick = {
-                val intent = context.packageManager.getLaunchIntentForPackage("com.samsung.android.dialer")
-                    ?: context.packageManager.getLaunchIntentForPackage("com.google.android.dialer")
-                intent?.let { context.startActivity(it) }
+                val intent = Intent(Intent.ACTION_DIAL)
+                context.startActivity(intent)
             },
             containerColor = Color(0xFF4DD0E1),
+            contentColor = Color.Black,
             shape = CircleShape,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 32.dp, end = 24.dp)
+                .padding(24.dp)
                 .size(56.dp)
         ) {
-            Icon(Icons.Default.Phone, contentDescription = "Phone", tint = Color.Black)
+            Icon(imageVector = Icons.Default.Phone, contentDescription = "Phone")
         }
 
-        // Active Wave Side Indexer
-        AnimatedVisibility(
-            visible = isScrolledIntoDrawer,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(indexerAlignment)
-        ) {
-            WaveSideIndex(
-                isLeftHanded = isLeftHanded,
-                onCharSelected = { char ->
-                    when (char) {
-                        "⭐" -> scope.launch { listState.animateScrollToItem(0) }
-                        "o" -> scope.launch { listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1) }
-                        else -> letterStartIndex[char]?.let { targetIndex ->
-                            scope.launch { listState.scrollToItem(targetIndex) }
+        // --- 4. NIAGARA WIDGET BOTTOM SHEET MENU ---
+        if (isWidgetMenuOpen) {
+            ModalBottomSheet(
+                onDismissRequest = { isWidgetMenuOpen = false },
+                containerColor = Color(0xFF181818),
+                contentColor = Color.White,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        text = "Niagara widget",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    BottomSheetRow(
+                        icon = Icons.Outlined.Schedule,
+                        title = "Clock style",
+                        onClick = { isWidgetMenuOpen = false }
+                    )
+
+                    BottomSheetRow(
+                        icon = Icons.Outlined.CalendarToday,
+                        title = "Calendar",
+                        subtitle = "Show upcoming events, Show date",
+                        onClick = { isWidgetMenuOpen = false }
+                    )
+
+                    BottomSheetSwitchRow(
+                        icon = Icons.Outlined.WbSunny,
+                        title = "Weather",
+                        subtitle = "Location, Temperature units",
+                        checked = weatherEnabled,
+                        onCheckedChange = { weatherEnabled = it }
+                    )
+
+                    BottomSheetRow(
+                        icon = Icons.Default.Add,
+                        title = "Add Custom Widget",
+                        onClick = { isWidgetMenuOpen = false }
+                    )
+
+                    BottomSheetRow(
+                        icon = Icons.Default.UnfoldMore,
+                        title = "Move Widget",
+                        onClick = {
+                            isWidgetMenuOpen = false
+                            isEditingWidget = true
                         }
-                    }
+                    )
+
+                    BottomSheetSwitchRow(
+                        icon = null,
+                        title = "Show media widget",
+                        subtitle = "While playing music",
+                        checked = showMediaWidget,
+                        onCheckedChange = { showMediaWidget = it }
+                    )
+
+                    BottomSheetSwitchRow(
+                        icon = null,
+                        title = "Show Battery Percentage",
+                        checked = showBattery,
+                        onCheckedChange = { showBattery = it }
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+        }
+
+        // --- 5. FAVORITE APP LONG PRESS MENU ---
+        appForMenu?.let { app ->
+            AppLongPressMenu(
+                app = app,
+                isFavorite = favoritePackages.contains(app.packageName),
+                onDismiss = { appForMenu = null },
+                onToggleFavorite = {
+                    viewModel.toggleFavorite(app.packageName)
+                    appForMenu = null
                 },
-                onDragEnd = {
-                    indexerAlignment = Alignment.CenterEnd
-                    isLeftHanded = false
+                onAppInfo = {
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", app.packageName, null)
+                    }
+                    context.startActivity(intent)
+                    appForMenu = null
+                },
+                onUninstall = {
+                    val intent = Intent(Intent.ACTION_DELETE).apply {
+                        data = Uri.fromParts("package", app.packageName, null)
+                    }
+                    context.startActivity(intent)
+                    appForMenu = null
                 }
             )
         }
     }
-
-    // App Long-Press Menu
-    appForMenu?.let { app ->
-        AppLongPressMenu(
-            app = app,
-            isFavorite = favoritePackages.contains(app.packageName),
-            onDismiss = { appForMenu = null },
-            onToggleFavorite = {
-                viewModel.toggleFavorite(app.packageName)
-                appForMenu = null
-            },
-            onAppInfo = {
-                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                    data = Uri.fromParts("package", app.packageName, null)
-                }
-                context.startActivity(intent)
-                appForMenu = null
-            },
-            onUninstall = {
-                val intent = Intent(Intent.ACTION_DELETE).apply {
-                    data = Uri.fromParts("package", app.packageName, null)
-                }
-                context.startActivity(intent)
-                appForMenu = null
-            }
-        )
-    }
 }
+
+// --- HELPER COMPONENTS ---
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AppRow(
+private fun FavoriteAppRow(
     app: AppModel,
     onClick: () -> Unit,
     onLongClick: () -> Unit
@@ -355,51 +339,156 @@ private fun AppRow(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(vertical = 12.dp),
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         app.icon?.let { iconDrawable ->
             Image(
                 bitmap = iconDrawable.toBitmap(width = 44, height = 44).asImageBitmap(),
                 contentDescription = app.label,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(32.dp)
             )
-            Spacer(modifier = Modifier.width(18.dp))
-        } ?: Spacer(modifier = Modifier.width(54.dp))
+            Spacer(modifier = Modifier.width(16.dp))
+        } ?: Spacer(modifier = Modifier.width(48.dp))
 
         Text(
             text = app.label,
             color = Color.White,
-            fontSize = 20.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.Medium
         )
     }
 }
 
 @Composable
-private fun DrawerActionRow(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit
+private fun AdjustmentControlBar(
+    onReset: () -> Unit,
+    onDrag: (Float) -> Unit
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        color = Color.Transparent
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(36.dp)
+            .background(Color.Black.copy(alpha = 0.85f), shape = RoundedCornerShape(18.dp))
+            .pointerInput(Unit) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    onDrag(dragAmount.y / 2f)
+                }
+            }
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            IconButton(onClick = onReset, modifier = Modifier.size(28.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Reset",
+                    tint = Color.White
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .width(120.dp)
+                    .height(2.dp)
+                    .background(Color.White.copy(alpha = 0.5f))
+            )
+
             Icon(
-                imageVector = icon,
+                imageVector = Icons.Default.UnfoldMore,
+                contentDescription = "Move",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun BottomSheetRow(
+    icon: ImageVector?,
+    title: String,
+    subtitle: String? = null,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        icon?.let {
+            Icon(
+                imageVector = it,
                 contentDescription = null,
                 tint = Color.White.copy(alpha = 0.8f),
                 modifier = Modifier.size(24.dp)
             )
-            Spacer(modifier = Modifier.width(18.dp))
-            Text(text = label, fontSize = 18.sp, color = Color.White)
+            Spacer(modifier = Modifier.width(16.dp))
+        } ?: Spacer(modifier = Modifier.width(40.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, fontSize = 16.sp, color = Color.White)
+            subtitle?.let {
+                Text(text = it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f))
+            }
         }
+
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.4f),
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun BottomSheetSwitchRow(
+    icon: ImageVector?,
+    title: String,
+    subtitle: String? = null,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        icon?.let {
+            Icon(
+                imageVector = it,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.8f),
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+        } ?: Spacer(modifier = Modifier.width(40.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, fontSize = 16.sp, color = Color.White)
+            subtitle?.let {
+                Text(text = it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f))
+            }
+        }
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF4DD0E1)
+            )
+        )
     }
 }
 
