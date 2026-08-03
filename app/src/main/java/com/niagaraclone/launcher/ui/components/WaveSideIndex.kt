@@ -68,7 +68,7 @@ fun WaveSideIndex(
                         onCharSelected(INDEX_ITEMS[initialIndex])
                     }
 
-                    // 2. CONTINUOUS SCRUBBING LISTENERS
+                    // 2. CONTINUOUS SCRUBBING
                     do {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull() ?: break
@@ -86,7 +86,7 @@ fun WaveSideIndex(
                         }
                     } while (event.changes.any { it.pressed })
 
-                    // 3. FINGER LIFT PERSISTENCE REPORT
+                    // 3. FINGER LIFT PERSISTENCE
                     val finalChar = if (lastSelectedIndex in INDEX_ITEMS.indices) {
                         INDEX_ITEMS[lastSelectedIndex]
                     } else {
