@@ -37,7 +37,8 @@ import com.niagaraclone.launcher.ui.LauncherViewModel
 @Composable
 fun HomeScreen(
     viewModel: LauncherViewModel,
-    onOpenAppDrawer: () -> Unit = {}
+    onOpenAppDrawer: () -> Unit = {},
+    onOpenSettings: () -> Unit = {}
 ) {
     val apps by viewModel.apps.collectAsState(initial = emptyList())
     val favoritePackages by viewModel.favoritePackages.collectAsState(initial = emptySet())
@@ -70,7 +71,7 @@ fun HomeScreenContent(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent)
-            // Left & Right Edge Gesture Detection to switch to App Drawer
+            // Left & Right Edge Gesture Detection to trigger App Drawer switch
             .pointerInput(Unit) {
                 detectVerticalDragGestures { change, dragAmount ->
                     val touchX = change.position.x
@@ -145,7 +146,7 @@ fun HomeScreenContent(
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
                 ) {
-                    // System/Samsung Widget views render here
+                    // System/Samsung Widget views render here directly
                 }
             }
 
