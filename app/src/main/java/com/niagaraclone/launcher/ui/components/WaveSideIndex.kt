@@ -2,7 +2,8 @@ package com.niagaraclone.launcher.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -27,8 +28,9 @@ val INDEX_ITEMS = listOf("⭐") + ('A'..'Z').map { it.toString() } + listOf("o")
 @Composable
 fun WaveSideIndex(
     modifier: Modifier = Modifier,
+    activeChar: String? = null,
     onCharSelected: (String) -> Unit,
-    onDragEnd: () -> Unit
+    onDragEnd: (String) -> Unit
 ) {
     val haptics = LocalHapticFeedback.current
     var touchY by remember { mutableStateOf<Float?>(null) }
@@ -52,40 +54,47 @@ fun WaveSideIndex(
                 }
             }
             .pointerInput(Unit) {
-                detectVerticalDragGestures(
-                    onDragStart = { offset ->
-                        touchY = offset.y
-                        val indexFraction = (offset.y / totalHeight).coerceIn(0f, 1f)
-                        val targetIndex = (indexFraction * (INDEX_ITEMS.size - 1)).toInt()
-                        if (targetIndex in INDEX_ITEMS.indices && targetIndex != lastSelectedIndex) {
-                            lastSelectedIndex = targetIndex
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onCharSelected(INDEX_ITEMS[targetIndex])
-                        }
-                    },
-                    onVerticalDrag = { change, dragAmount ->
-                        change.consume()
-                        val currentY = (touchY ?: 0f) + dragAmount
-                        touchY = currentY
-                        val indexFraction = (currentY / totalHeight).coerceIn(0f, 1f)
-                        val targetIndex = (indexFraction * (INDEX_ITEMS.size - 1)).toInt()
-                        if (targetIndex in INDEX_ITEMS.indices && targetIndex != lastSelectedIndex) {
-                            lastSelectedIndex = targetIndex
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onCharSelected(INDEX_ITEMS[targetIndex])
-                        }
-                    },
-                    onDragEnd = {
-                        touchY = null
-                        lastSelectedIndex = -1
-                        onDragEnd()
-                    },
-                    onDragCancel = {
-                        touchY = null
-                        lastSelectedIndex = -1
-                        onDragEnd()
+                awaitEachGesture {
+                    // 1. INSTANT TOUCH DOWN (Responds on first touch down event)
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    touchY = down.position.y
+                    
+                    val initialFraction = (down.position.y / totalHeight).coerceIn(0f, 1f)
+                    val initialIndex = (initialFraction * (INDEX_ITEMS.size - 1)).toInt()
+                    
+                    if (initialIndex in INDEX_ITEMS.indices) {
+                        lastSelectedIndex = initialIndex
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onCharSelected(INDEX_ITEMS[initialIndex])
                     }
-                )
+
+                    // 2. SCRUBBING MOVE LISTENERS
+                    do {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        if (change.pressed) {
+                            change.consume()
+                            touchY = change.position.y
+                            val fraction = (change.position.y / totalHeight).coerceIn(0f, 1f)
+                            val targetIndex = (fraction * (INDEX_ITEMS.size - 1)).toInt()
+                            
+                            if (targetIndex in INDEX_ITEMS.indices && targetIndex != lastSelectedIndex) {
+                                lastSelectedIndex = targetIndex
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onCharSelected(INDEX_ITEMS[targetIndex])
+                            }
+                        }
+                    } while (event.changes.any { it.pressed })
+
+                    // 3. FINGER LIFT (Reports final character for smart persistence)
+                    val finalChar = if (lastSelectedIndex in INDEX_ITEMS.indices) {
+                        INDEX_ITEMS[lastSelectedIndex]
+                    } else {
+                        "⭐"
+                    }
+                    touchY = null
+                    onDragEnd(finalChar)
+                }
             },
         contentAlignment = Alignment.CenterEnd
     ) {
@@ -108,7 +117,7 @@ fun WaveSideIndex(
                     label = "wave_offset"
                 )
 
-                val isSelected = distance < 28f
+                val isSelected = distance < 28f || char == activeChar
 
                 Text(
                     text = char,
