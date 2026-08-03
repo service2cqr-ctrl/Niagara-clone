@@ -307,7 +307,7 @@ fun HomeScreen(
                 shape = CircleShape,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(24.dp)
+                    .padding(bottom = 50.dp, end = 50.dp)
                     .size(56.dp)
             ) {
                 Icon(imageVector = Icons.Default.Phone, contentDescription = "Phone")
