@@ -22,12 +22,11 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import kotlin.math.exp
 
-val INDEX_ITEMS = listOf("☆") + ('A'..'Z').map { it.toString() } + listOf("o")
+val INDEX_ITEMS = listOf("⭐") + ('A'..'Z').map { it.toString() } + listOf("o")
 
 @Composable
 fun WaveSideIndex(
     modifier: Modifier = Modifier,
-    isLeftHanded: Boolean = false,
     onCharSelected: (String) -> Unit,
     onDragEnd: () -> Unit
 ) {
@@ -39,14 +38,12 @@ fun WaveSideIndex(
     Box(
         modifier = modifier
             .fillMaxHeight()
-            // VERTICAL & HORIZONTAL INSETS (Bezel Padding)
             .padding(
-                top = 56.dp,
-                bottom = 56.dp,
-                start = if (isLeftHanded) 10.dp else 0.dp,
-                end = if (!isLeftHanded) 10.dp else 0.dp
+                top = 170.dp,
+                bottom = 50.dp,
+                end = 30.dp
             )
-            .width(32.dp)
+            .width(36.dp)
             .layout { measurable, constraints ->
                 totalHeight = constraints.maxHeight.toFloat()
                 val placeable = measurable.measure(constraints)
@@ -90,12 +87,12 @@ fun WaveSideIndex(
                     }
                 )
             },
-        contentAlignment = if (isLeftHanded) Alignment.CenterStart else Alignment.CenterEnd
+        contentAlignment = Alignment.CenterEnd
     ) {
         Column(
             modifier = Modifier.fillMaxHeight(),
             verticalArrangement = Arrangement.SpaceEvenly,
-            horizontalAlignment = if (isLeftHanded) Alignment.Start else Alignment.End
+            horizontalAlignment = Alignment.End
         ) {
             INDEX_ITEMS.forEachIndexed { index, char ->
                 val itemY = (index.toFloat() / INDEX_ITEMS.size) * totalHeight
@@ -103,10 +100,8 @@ fun WaveSideIndex(
 
                 val distance = if (currentTouchY != null) abs(currentTouchY - itemY) else Float.MAX_VALUE
                 val gaussianFactor = exp(-((distance * distance) / (2 * 4200f)))
-                
-                val rawOffset = gaussianFactor * 32f
-                val horizontalOffset = if (isLeftHanded) rawOffset else -rawOffset
-                
+                val horizontalOffset = -gaussianFactor * 32f
+
                 val animatedOffset by animateFloatAsState(
                     targetValue = horizontalOffset,
                     animationSpec = spring(stiffness = 500f, dampingRatio = 0.6f),
@@ -124,7 +119,7 @@ fun WaveSideIndex(
                         )
                     ),
                     color = if (isSelected) Color(0xFF4DD0E1) else Color.White.copy(alpha = 0.85f),
-                    fontSize = if (isSelected) 16.sp else 11.sp,
+                    fontSize = if (isSelected) 18.sp else 13.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     modifier = Modifier.graphicsLayer {
                         translationX = animatedOffset
