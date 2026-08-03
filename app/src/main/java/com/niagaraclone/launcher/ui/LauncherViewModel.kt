@@ -51,6 +51,21 @@ class LauncherViewModel(
             initialValue = emptySet()
         )
 
+    // Expose layout offset & widget height persistent flows
+    val homeOffsetY: StateFlow<Float> = repository.homeOffsetY
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0f
+        )
+
+    val widgetHeight: StateFlow<Float> = repository.widgetHeight
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 180f
+        )
+
     init {
         refreshApps()
     }
@@ -93,31 +108,4 @@ class LauncherViewModel(
     }
 
     /**
-     * Toggles an app in or out of the favorites list.
-     */
-    fun toggleFavorite(packageName: String) {
-        viewModelScope.launch {
-            val currentFavs = favoritePackages.value.toMutableSet()
-            if (currentFavs.contains(packageName)) {
-                currentFavs.remove(packageName)
-            } else {
-                currentFavs.add(packageName)
-            }
-            repository.setFavorites(currentFavs.toList())
-        }
-    }
-
-    /**
-     * ViewModel Factory required for MainActivity viewModels delegate
-     */
-    class Factory(private val context: Context) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(LauncherViewModel::class.java)) {
-                val repository = SettingsRepository(context.applicationContext)
-                return LauncherViewModel(repository, context.applicationContext) as T
-            }
-            throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
-        }
-    }
-}
+     * Toggles
