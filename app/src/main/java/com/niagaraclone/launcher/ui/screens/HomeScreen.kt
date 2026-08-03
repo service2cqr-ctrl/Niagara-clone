@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -60,6 +59,7 @@ fun HomeScreen(
 
     var isWidgetMenuOpen by remember { mutableStateOf(false) }
     var isEditingWidget by remember { mutableStateOf(false) }
+    var customWidgetAdded by remember { mutableStateOf(false) } // State tracking widget presence
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
 
     var weatherEnabled by remember { mutableStateOf(true) }
@@ -85,7 +85,7 @@ fun HomeScreen(
                     .fillMaxHeight()
                     .width(48.dp)
                     .pointerInput(Unit) {
-                        detectVerticalDragGestures { change, dragAmount ->
+                        detectVerticalDragGestures { _, dragAmount ->
                             if (dragAmount > 8f) onOpenAppDrawer()
                         }
                     }
@@ -96,7 +96,7 @@ fun HomeScreen(
                     .fillMaxHeight()
                     .width(48.dp)
                     .pointerInput(Unit) {
-                        detectVerticalDragGestures { change, dragAmount ->
+                        detectVerticalDragGestures { _, dragAmount ->
                             if (dragAmount > 8f) onOpenAppDrawer()
                         }
                     }
@@ -110,7 +110,7 @@ fun HomeScreen(
                 .offset(y = homeLayoutOffsetY)
                 .padding(start = 24.dp, end = 24.dp, top = 48.dp)
         ) {
-            // TOP MOVE CONTROL BAR (EDIT MODE)
+            // TOP MOVE CONTROL BAR (EDIT MODE - ALWAYS SHOWN IN MOVE MODE)
             if (isEditingWidget) {
                 AdjustmentControlBar(
                     onReset = { homeLayoutOffsetY = 0.dp },
@@ -165,25 +165,28 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // CUSTOM WIDGET CONTAINER SLOT
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(widgetHeight)
-            ) {
-                // Placeholder Widget area (Renders custom widgets cleanly)
+            if (customWidgetAdded) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(widgetHeight)
+                ) {
+                    // Custom AppWidgetHost View renders here when added
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // BOTTOM RESIZE CONTROL BAR (EDIT MODE)
-            if (isEditingWidget) {
+            // BOTTOM RESIZE CONTROL BAR (EDIT MODE - ONLY IF CUSTOM WIDGET IS PRESENT)
+            if (isEditingWidget && customWidgetAdded) {
                 AdjustmentControlBar(
                     onReset = { widgetHeight = 180.dp },
                     onDrag = { deltaY ->
                         widgetHeight = (widgetHeight + deltaY.dp).coerceIn(80.dp, 400.dp)
                     }
                 )
+                Spacer(modifier = Modifier.height(16.dp))
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
 
             // PINNED FAVORITES LIST
             LazyColumn(
@@ -265,7 +268,10 @@ fun HomeScreen(
                     BottomSheetRow(
                         icon = Icons.Default.Add,
                         title = "Add Custom Widget",
-                        onClick = { isWidgetMenuOpen = false }
+                        onClick = {
+                            customWidgetAdded = true
+                            isWidgetMenuOpen = false
+                        }
                     )
 
                     BottomSheetRow(
@@ -368,8 +374,8 @@ private fun AdjustmentControlBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(36.dp)
-            .background(Color.Black.copy(alpha = 0.85f), shape = RoundedCornerShape(18.dp))
+            .height(32.dp)
+            .background(Color.Black.copy(alpha = 0.85f), shape = RoundedCornerShape(16.dp))
             .pointerInput(Unit) {
                 detectDragGestures { change, dragAmount ->
                     change.consume()
@@ -384,7 +390,7 @@ private fun AdjustmentControlBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            IconButton(onClick = onReset, modifier = Modifier.size(28.dp)) {
+            IconButton(onClick = onReset, modifier = Modifier.size(24.dp)) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = "Reset",
@@ -392,18 +398,19 @@ private fun AdjustmentControlBar(
                 )
             }
 
+            // Thinner horizontal line (~2mm thickness)
             Box(
                 modifier = Modifier
                     .width(120.dp)
-                    .height(2.dp)
-                    .background(Color.White.copy(alpha = 0.5f))
+                    .height(2.5.dp)
+                    .background(Color.White.copy(alpha = 0.6f), shape = RoundedCornerShape(1.dp))
             )
 
             Icon(
                 imageVector = Icons.Default.UnfoldMore,
                 contentDescription = "Move",
                 tint = Color.White,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
     }
