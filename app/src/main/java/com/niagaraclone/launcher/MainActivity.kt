@@ -18,13 +18,12 @@ import androidx.compose.ui.graphics.Color
 import com.niagaraclone.launcher.gestures.GestureHost
 import com.niagaraclone.launcher.gestures.SwipeDirection
 import com.niagaraclone.launcher.ui.LauncherViewModel
-import com.niagaraclone.launcher.ui.screens.AppDrawerScreen
 import com.niagaraclone.launcher.ui.screens.HomeScreen
 import com.niagaraclone.launcher.ui.screens.SettingsScreen
 import com.niagaraclone.launcher.ui.screens.WidgetsScreen
 import com.niagaraclone.launcher.ui.theme.NiagaraCloneTheme
 
-private enum class Page { HOME, APP_DRAWER, WIDGETS, SETTINGS }
+private enum class Page { HOME, WIDGETS, SETTINGS }
 
 class MainActivity : ComponentActivity() {
 
@@ -45,17 +44,15 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     onSwipe = { direction ->
                         page = when (direction) {
-                            SwipeDirection.UP -> if (page == Page.HOME) Page.APP_DRAWER else page
                             SwipeDirection.DOWN -> {
                                 if (page == Page.HOME) {
                                     openNotificationShade(this@MainActivity)
-                                    page
-                                } else if (page == Page.APP_DRAWER) {
-                                    Page.HOME
-                                } else page
+                                }
+                                page
                             }
                             SwipeDirection.LEFT -> if (page == Page.HOME) Page.WIDGETS else page
                             SwipeDirection.RIGHT -> if (page == Page.WIDGETS) Page.HOME else page
+                            SwipeDirection.UP -> page
                         }
                     },
                     onDoubleTap = { /* Extension point for double-tap gestures */ }
@@ -68,12 +65,6 @@ class MainActivity : ComponentActivity() {
                         when (current) {
                             Page.HOME -> HomeScreen(
                                 viewModel = viewModel,
-                                onOpenAppDrawer = { page = Page.APP_DRAWER },
-                                onOpenSettings = { page = Page.SETTINGS }
-                            )
-                            Page.APP_DRAWER -> AppDrawerScreen(
-                                viewModel = viewModel,
-                                onDismiss = { page = Page.HOME },
                                 onOpenSettings = { page = Page.SETTINGS }
                             )
                             Page.WIDGETS -> WidgetsScreen()
