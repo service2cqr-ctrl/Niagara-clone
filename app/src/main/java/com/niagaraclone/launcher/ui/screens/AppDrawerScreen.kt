@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -40,12 +41,11 @@ import kotlinx.coroutines.launch
 private val AppModel.firstLetter: String
     get() = label.firstOrNull()?.uppercaseChar()?.toString() ?: "#"
 
-// Helper data class to structure section headers and app items cleanly in LazyColumn
-private sealed class DrawerListItem {
-    data class Header(val letter: String) : DrawerListItem()
-    data class AppItem(val app: AppModel) : DrawerListItem()
-    object RecentlyInstalledAction : DrawerListItem()
-    object SettingsAction : DrawerListItem()
+private sealed interface DrawerListItem {
+    data class Header(val letter: String) : DrawerListItem
+    data class AppItem(val app: AppModel) : DrawerListItem
+    object RecentlyInstalledAction : DrawerListItem
+    object SettingsAction : DrawerListItem
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -153,7 +153,7 @@ fun AppDrawerScreen(
                 ) {
                     itemsIndexed(
                         items = drawerItems,
-                        key = { index, item ->
+                        key = { _, item ->
                             when (item) {
                                 is DrawerListItem.Header -> "header_${item.letter}"
                                 is DrawerListItem.AppItem -> item.app.packageName
@@ -202,7 +202,7 @@ fun AppDrawerScreen(
                 }
 
                 // Active Section Circle Badge (Floats on left when scrolling)
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = activeVisibleLetter.isNotEmpty() && listState.isScrollInProgress,
                     enter = fadeIn(),
                     exit = fadeOut(),
