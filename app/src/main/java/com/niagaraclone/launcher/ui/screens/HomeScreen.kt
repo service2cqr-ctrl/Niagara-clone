@@ -116,94 +116,100 @@ fun HomeScreen(
                 isEditingWidget = false
             }
     ) {
-        // --- 1. MAIN CONTENT AREA ---
+        // --- 1. MAIN CONTENT AREA (0.dp OFFSET AT ROOT) ---
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .offset(y = homeLayoutOffsetY.dp)
                 .padding(start = 24.dp, end = 48.dp, top = 48.dp)
         ) {
-            if (isEditingWidget) {
-                AdjustmentControlBar(
-                    onReset = { viewModel.updateHomeOffsetY(0f) },
-                    onDrag = { deltaY ->
-                        val newOffset = (homeLayoutOffsetY + deltaY).coerceIn(-100f, 200f)
-                        viewModel.updateHomeOffsetY(newOffset)
-                    }
-                )
-            }
-
-            // CLOCK & HEADER (HIDDEN WHEN SCRUBBING IN DRAWER STATE)
+            // CLOCK & HEADER (homeLayoutOffsetY APPLIED ONLY HERE ON HOME STATE)
             if (!isDrawerExpanded) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .combinedClickable(
-                            onClick = {},
-                            onLongClick = { isWidgetMenuOpen = true }
-                        )
+                        .offset(y = homeLayoutOffsetY.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "09",
-                            color = Color(0xFF4DD0E1),
-                            fontSize = 72.sp,
-                            fontWeight = FontWeight.Bold
+                    if (isEditingWidget) {
+                        AdjustmentControlBar(
+                            onReset = { viewModel.updateHomeOffsetY(0f) },
+                            onDrag = { deltaY ->
+                                val newOffset = (homeLayoutOffsetY + deltaY).coerceIn(-100f, 200f)
+                                viewModel.updateHomeOffsetY(newOffset)
+                            }
                         )
-                        Text(
-                            text = "31",
-                            color = Color.White,
-                            fontSize = 72.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(text = "Mon 3 Aug", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
-                        if (showBattery) {
-                            Text(text = "⚡ 39%", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
-                        }
-                        if (weatherEnabled) {
-                            Text(text = "💧 30°", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                if (customWidgetAdded) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(widgetHeight.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-
-                if (isEditingWidget && customWidgetAdded) {
-                    AdjustmentControlBar(
-                        onReset = { viewModel.updateWidgetHeight(180f) },
-                        onDrag = { deltaY ->
-                            val newHeight = (widgetHeight + deltaY).coerceIn(80f, 400f)
-                            viewModel.updateWidgetHeight(newHeight)
+                            .combinedClickable(
+                                onClick = {},
+                                onLongClick = { isWidgetMenuOpen = true }
+                            )
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "09",
+                                color = Color(0xFF4DD0E1),
+                                fontSize = 72.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "31",
+                                color = Color.White,
+                                fontSize = 72.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
-                    )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(text = "Mon 3 Aug", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                            if (showBattery) {
+                                Text(text = "⚡ 39%", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                            }
+                            if (weatherEnabled) {
+                                Text(text = "💧 30°", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
+
+                    if (customWidgetAdded) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(widgetHeight.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    if (isEditingWidget && customWidgetAdded) {
+                        AdjustmentControlBar(
+                            onReset = { viewModel.updateWidgetHeight(180f) },
+                            onDrag = { deltaY ->
+                                val newHeight = (widgetHeight + deltaY).coerceIn(80f, 400f)
+                                viewModel.updateWidgetHeight(newHeight)
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
                 }
             }
 
-            // --- LAZYCOLUMN LIST ---
+            // --- LAZYCOLUMN LIST (FULL SCREEN IN DRAWER MODE) ---
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // 1. PINNED FAVORITES (ALWAYS VISIBLE AT TOP)
+                // 1. PINNED FAVORITES (ALWAYS AT INDEX 0)
                 items(favorites) { app ->
                     FavoriteAppRow(
                         app = app,
@@ -215,7 +221,7 @@ fun HomeScreen(
                     )
                 }
 
-                // 2. FULL A-Z APP DRAWER & FOOTER (ONLY VISIBLE WHEN DRAWER IS EXPANDED)
+                // 2. FULL A-Z APP DRAWER & FOOTER (VISIBLE WHEN EXPANDED)
                 if (isDrawerExpanded) {
                     groupedApps.forEach { (letter, appGroup) ->
                         item {
