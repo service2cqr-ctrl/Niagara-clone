@@ -249,7 +249,7 @@ fun HomeScreen(
                                 text = letter.toString(),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF4DD0E1),
+                                color = Color.White,
                                 modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
                             )
                         }
@@ -477,7 +477,7 @@ private fun DrawerFooterRow(
             tint = Color.White.copy(alpha = 0.85f),
             modifier = Modifier.size(28.dp)
         )
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = title,
             fontSize = 18.sp,
@@ -498,22 +498,22 @@ private fun FavoriteAppRow(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(vertical = 10.dp),
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         app.icon?.let { iconDrawable ->
             Image(
-                bitmap = iconDrawable.toBitmap(width = 44, height = 44).asImageBitmap(),
+                bitmap = iconDrawable.toBitmap(width = 40, height = 40).asImageBitmap(),
                 contentDescription = app.label,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(28.dp)
             )
             Spacer(modifier = Modifier.width(16.dp))
-        } ?: Spacer(modifier = Modifier.width(48.dp))
+        } ?: Spacer(modifier = Modifier.width(44.dp))
 
         Text(
             text = app.label,
             color = Color.White,
-            fontSize = 18.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Medium
         )
     }
