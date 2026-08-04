@@ -3,6 +3,7 @@ package com.niagaraclone.launcher.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -32,6 +33,10 @@ class SettingsRepository(private val context: Context) {
         val KEY_HOME_OFFSET_Y = floatPreferencesKey("home_offset_y")
         val KEY_WIDGET_HEIGHT = floatPreferencesKey("widget_height")
         val KEY_WIDGET_IDS = stringPreferencesKey("widget_ids_list")
+
+        // Media Widget Persistence Keys
+        val KEY_SHOW_MEDIA_WIDGET = booleanPreferencesKey("show_media_widget")
+        val KEY_MEDIA_WIDGET_THEME = stringPreferencesKey("media_widget_theme")
     }
 
     val theme: Flow<AppTheme> = context.dataStore.data.map { prefs ->
@@ -72,6 +77,15 @@ class SettingsRepository(private val context: Context) {
         else raw.split(",").mapNotNull { it.toIntOrNull() }
     }
 
+    // --- MEDIA WIDGET FLOWS ---
+    val showMediaWidget: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SHOW_MEDIA_WIDGET] ?: true
+    }
+
+    val mediaWidgetThemeName: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_MEDIA_WIDGET_THEME] ?: "FROSTED_GLASS"
+    }
+
     suspend fun setTheme(theme: AppTheme) {
         context.dataStore.edit { prefs -> prefs[KEY_THEME] = theme.name }
     }
@@ -100,6 +114,15 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setWidgetHeight(height: Float) {
         context.dataStore.edit { prefs -> prefs[KEY_WIDGET_HEIGHT] = height }
+    }
+
+    // --- MEDIA WIDGET SETTERS ---
+    suspend fun setShowMediaWidget(show: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_SHOW_MEDIA_WIDGET] = show }
+    }
+
+    suspend fun setMediaWidgetThemeName(themeName: String) {
+        context.dataStore.edit { prefs -> prefs[KEY_MEDIA_WIDGET_THEME] = themeName }
     }
 
     // --- WIDGET STACK HELPER METHODS ---
