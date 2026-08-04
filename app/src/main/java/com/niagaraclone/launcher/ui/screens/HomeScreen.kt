@@ -83,6 +83,10 @@ fun HomeScreen(
     val widgetHeight by viewModel.widgetHeight.collectAsState()
     val widgetIds by viewModel.widgetIds.collectAsState()
 
+    // Persistent Media Widget Preferences from ViewModel
+    val showMediaWidget by viewModel.showMediaWidget.collectAsState()
+    val mediaWidgetTheme by viewModel.mediaWidgetTheme.collectAsState()
+
     // Real-time media playback state from NotificationListenerService
     val mediaState by MediaNotificationListener.mediaState.collectAsState()
 
@@ -104,7 +108,6 @@ fun HomeScreen(
     var activeLetter by remember { mutableStateOf<String?>(null) }
 
     var weatherEnabled by remember { mutableStateOf(true) }
-    var showMediaWidget by remember { mutableStateOf(true) }
     var showBattery by remember { mutableStateOf(true) }
 
     val favorites = remember(apps, favoritePackages) {
@@ -154,10 +157,9 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(start = 24.dp, end = 48.dp, top = 48.dp)
         ) {
-            // CLOCK & HEADER (CUSTOM HEIGHT OFFSET APPLIED SAFELY VIA SPACER)
+            // CLOCK & HEADER
             if (!isDrawerExpanded) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // Dynamic Spacer pushes Clock AND Favorites down together cleanly
                     if (homeLayoutOffsetY > 0f) {
                         Spacer(modifier = Modifier.height(homeLayoutOffsetY.dp))
                     }
@@ -222,7 +224,7 @@ fun HomeScreen(
                                 trackTitle = media.title,
                                 artistName = media.artist,
                                 isPlaying = media.isPlaying,
-                                isDarkMode = true,
+                                widgetTheme = mediaWidgetTheme,
                                 onPlayPauseToggle = {
                                     val controller = MediaNotificationListener.activeController
                                     if (media.isPlaying) {
@@ -280,7 +282,7 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // 1. PINNED FAVORITES (ALWAYS AT INDEX 0)
+                // 1. PINNED FAVORITES
                 items(favorites) { app ->
                     FavoriteAppRow(
                         app = app,
@@ -292,7 +294,7 @@ fun HomeScreen(
                     )
                 }
 
-                // 2. FULL A-Z APP DRAWER & FOOTER (VISIBLE WHEN EXPANDED)
+                // 2. FULL A-Z APP DRAWER & FOOTER
                 if (isDrawerExpanded) {
                     groupedApps.forEach { (letter, appGroup) ->
                         item {
@@ -316,7 +318,6 @@ fun HomeScreen(
                         }
                     }
 
-                    // FOOTER ITEM FOR 'o'
                     item {
                         Column(
                             modifier = Modifier
@@ -376,7 +377,7 @@ fun HomeScreen(
             modifier = Modifier.align(Alignment.CenterEnd)
         )
 
-        // --- 3. FLOATING ACTION BUTTON (50.dp Margins, Hidden in Drawer) ---
+        // --- 3. FLOATING ACTION BUTTON ---
         if (!isDrawerExpanded) {
             FloatingActionButton(
                 onClick = {
@@ -448,7 +449,6 @@ fun HomeScreen(
                         )
                     }
 
-                    // --- MOVE WIDGET IS ALWAYS VISIBLE ---
                     BottomSheetRow(
                         icon = Icons.Default.UnfoldMore,
                         title = "Move Widget",
@@ -464,7 +464,7 @@ fun HomeScreen(
                         subtitle = "While playing music",
                         checked = showMediaWidget,
                         onCheckedChange = { checked ->
-                            showMediaWidget = checked
+                            viewModel.setShowMediaWidget(checked)
                             if (checked && !isNotificationListenerGranted(context)) {
                                 showPermissionDialog = true
                             }
