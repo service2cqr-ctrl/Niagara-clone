@@ -116,19 +116,20 @@ fun HomeScreen(
                 isEditingWidget = false
             }
     ) {
-        // --- 1. MAIN CONTENT AREA (0.dp OFFSET AT ROOT) ---
+        // --- 1. MAIN CONTENT AREA ---
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(start = 24.dp, end = 48.dp, top = 48.dp)
         ) {
-            // CLOCK & HEADER (homeLayoutOffsetY APPLIED ONLY HERE ON HOME STATE)
+            // CLOCK & HEADER (CUSTOM HEIGHT OFFSET APPLIED SAFELY VIA SPACER)
             if (!isDrawerExpanded) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .offset(y = homeLayoutOffsetY.dp)
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Dynamic Spacer pushes Clock AND Favorites down together cleanly
+                    if (homeLayoutOffsetY > 0f) {
+                        Spacer(modifier = Modifier.height(homeLayoutOffsetY.dp))
+                    }
+
                     if (isEditingWidget) {
                         AdjustmentControlBar(
                             onReset = { viewModel.updateHomeOffsetY(0f) },
@@ -203,7 +204,7 @@ fun HomeScreen(
                 }
             }
 
-            // --- LAZYCOLUMN LIST (FULL SCREEN IN DRAWER MODE) ---
+            // --- LAZYCOLUMN LIST ---
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth(),
