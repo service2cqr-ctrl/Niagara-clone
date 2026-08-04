@@ -31,6 +31,7 @@ class SettingsRepository(private val context: Context) {
         val KEY_FONT_FAMILY = stringPreferencesKey("font_family")
         val KEY_HOME_OFFSET_Y = floatPreferencesKey("home_offset_y")
         val KEY_WIDGET_HEIGHT = floatPreferencesKey("widget_height")
+        val KEY_WIDGET_IDS = stringPreferencesKey("widget_ids_list")
     }
 
     val theme: Flow<AppTheme> = context.dataStore.data.map { prefs ->
@@ -64,6 +65,13 @@ class SettingsRepository(private val context: Context) {
         prefs[KEY_WIDGET_HEIGHT] ?: 180f
     }
 
+    // --- WIDGET STACK FLOW ---
+    val widgetIds: Flow<List<Int>> = context.dataStore.data.map { prefs ->
+        val raw = prefs[KEY_WIDGET_IDS] ?: ""
+        if (raw.isBlank()) emptyList()
+        else raw.split(",").mapNotNull { it.toIntOrNull() }
+    }
+
     suspend fun setTheme(theme: AppTheme) {
         context.dataStore.edit { prefs -> prefs[KEY_THEME] = theme.name }
     }
@@ -92,6 +100,41 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setWidgetHeight(height: Float) {
         context.dataStore.edit { prefs -> prefs[KEY_WIDGET_HEIGHT] = height }
+    }
+
+    // --- WIDGET STACK HELPER METHODS ---
+    suspend fun addWidgetId(widgetId: Int) {
+        context.dataStore.edit { prefs ->
+            val currentList = prefs[KEY_WIDGET_IDS]
+                ?.split(",")
+                ?.mapNotNull { it.toIntOrNull() }
+                ?.toMutableList() ?: mutableListOf()
+
+            // Enforce max 4 widgets in stack limit
+            if (currentList.size < 4 && !currentList.contains(widgetId)) {
+                currentList.add(widgetId)
+                prefs[KEY_WIDGET_IDS] = currentList.joinToString(",")
+            }
+        }
+    }
+
+    suspend fun removeWidgetId(widgetId: Int) {
+        context.dataStore.edit { prefs ->
+            val currentList = prefs[KEY_WIDGET_IDS]
+                ?.split(",")
+                ?.mapNotNull { it.toIntOrNull() }
+                ?.toMutableList() ?: mutableListOf()
+
+            if (currentList.remove(widgetId)) {
+                prefs[KEY_WIDGET_IDS] = currentList.joinToString(",")
+            }
+        }
+    }
+
+    suspend fun reorderWidgetIds(newList: List<Int>) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_WIDGET_IDS] = newList.take(4).joinToString(",")
+        }
     }
 
     suspend fun snapshot(): Map<Preferences.Key<*>, Any> {
