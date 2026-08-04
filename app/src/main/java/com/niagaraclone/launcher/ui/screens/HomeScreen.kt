@@ -2,6 +2,7 @@ package com.niagaraclone.launcher.ui.screens
 
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -51,6 +52,17 @@ import com.niagaraclone.launcher.ui.components.WidgetStackView
 private val AppModel.firstLetter: Char
     get() = label.firstOrNull()?.uppercaseChar() ?: '#'
 
+private fun isNotificationListenerGranted(context: Context): Boolean {
+    val packageName = context.packageName
+    val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+    return flat != null && flat.contains(packageName)
+}
+
+private fun openNotificationAccessSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+    context.startActivity(intent)
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
@@ -77,6 +89,7 @@ fun HomeScreen(
     var isWidgetMenuOpen by remember { mutableStateOf(false) }
     var isEditingWidget by remember { mutableStateOf(false) }
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
 
     // Synchronize external edit trigger from Settings
     LaunchedEffect(isEditingWidgetExternal) {
@@ -450,7 +463,12 @@ fun HomeScreen(
                         title = "Show media widget",
                         subtitle = "While playing music",
                         checked = showMediaWidget,
-                        onCheckedChange = { showMediaWidget = it }
+                        onCheckedChange = { checked ->
+                            showMediaWidget = checked
+                            if (checked && !isNotificationListenerGranted(context)) {
+                                showPermissionDialog = true
+                            }
+                        }
                     )
 
                     BottomSheetSwitchRow(
@@ -465,7 +483,37 @@ fun HomeScreen(
             }
         }
 
-        // --- 5. APP LONG PRESS MENU ---
+        // --- 5. PERMISSION DIALOG ---
+        if (showPermissionDialog) {
+            AlertDialog(
+                onDismissRequest = { showPermissionDialog = false },
+                title = { Text(text = "Notification Access Needed", color = Color.White) },
+                text = {
+                    Text(
+                        text = "To display live track info and album art, Cascadia Launcher requires Notification Access in system settings.",
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showPermissionDialog = false
+                            openNotificationAccessSettings(context)
+                        }
+                    ) {
+                        Text(text = "Open Settings", color = Color(0xFF4DD0E1))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showPermissionDialog = false }) {
+                        Text(text = "Cancel", color = Color.Gray)
+                    }
+                },
+                containerColor = Color(0xFF1E1E1E)
+            )
+        }
+
+        // --- 6. APP LONG PRESS MENU ---
         appForMenu?.let { app ->
             AppLongPressMenu(
                 app = app,
