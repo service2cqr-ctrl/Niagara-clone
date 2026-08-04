@@ -1,12 +1,17 @@
 package com.niagaraclone.launcher
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -33,13 +38,58 @@ class MainActivity : ComponentActivity() {
         LauncherViewModel.Factory(this)
     }
 
+    private lateinit var appWidgetManager: AppWidgetManager
+    private lateinit var appWidgetHost: AppWidgetHost
+
+    private var pendingWidgetId: Int = -1
+
+    companion object {
+        const val APPWIDGET_HOST_ID = 1024
+    }
+
+    // 1. Result Launcher for Selecting an AppWidget
+    private val selectWidgetLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val widgetId = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1) ?: -1
+            if (widgetId != -1) {
+                configureWidget(widgetId)
+            }
+        } else {
+            if (pendingWidgetId != -1) {
+                appWidgetHost.deleteAppWidgetId(pendingWidgetId)
+                pendingWidgetId = -1
+            }
+        }
+    }
+
+    // 2. Result Launcher for Configuring an AppWidget (if widget requires configuration activity)
+    private val configureWidgetLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val widgetId = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingWidgetId) ?: pendingWidgetId
+            if (widgetId != -1) {
+                viewModel.addWidgetId(widgetId)
+            }
+        } else if (pendingWidgetId != -1) {
+            appWidgetHost.deleteAppWidgetId(pendingWidgetId)
+        }
+        pendingWidgetId = -1
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize AppWidget system services
+        appWidgetManager = AppWidgetManager.getInstance(this)
+        appWidgetHost = AppWidgetHost(this, APPWIDGET_HOST_ID)
         
-        // 1. Ensures wallpaper extends behind system status bar and gesture navigation bar
+        // Ensures wallpaper extends behind system status bar and gesture navigation bar
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        // 2. Tells Android WindowManager to render system wallpaper directly behind this activity window
+        // Render system wallpaper directly behind activity window
         window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
 
         setContent {
@@ -74,6 +124,9 @@ class MainActivity : ComponentActivity() {
                         when (current) {
                             Page.HOME -> HomeScreen(
                                 viewModel = viewModel,
+                                appWidgetHost = appWidgetHost,
+                                appWidgetManager = appWidgetManager,
+                                onAddWidgetClick = { launchWidgetPicker() },
                                 onOpenSettings = { page = Page.SETTINGS }
                             )
                             Page.WIDGETS -> WidgetsScreen()
@@ -88,9 +141,49 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        appWidgetHost.startListening()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        appWidgetHost.stopListening()
+    }
+
     override fun onResume() {
         super.onResume()
         viewModel.refreshApps()
+    }
+
+    /**
+     * Allocates a new widget ID and opens the system widget picker list.
+     */
+    private fun launchWidgetPicker() {
+        val newWidgetId = appWidgetHost.allocateAppWidgetId()
+        pendingWidgetId = newWidgetId
+
+        val pickIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, newWidgetId)
+        }
+        selectWidgetLauncher.launch(pickIntent)
+    }
+
+    /**
+     * Checks if selected widget needs configuration or directly adds it to ViewModel stack.
+     */
+    private fun configureWidget(widgetId: Int) {
+        val widgetInfo = appWidgetManager.getAppWidgetInfo(widgetId)
+        if (widgetInfo?.configure != null) {
+            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
+                component = widgetInfo.configure
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+            }
+            configureWidgetLauncher.launch(intent)
+        } else {
+            viewModel.addWidgetId(widgetId)
+            pendingWidgetId = -1
+        }
     }
 }
 
