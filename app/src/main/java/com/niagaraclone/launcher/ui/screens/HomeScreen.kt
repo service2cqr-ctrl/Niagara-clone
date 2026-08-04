@@ -1,5 +1,7 @@
 package com.niagaraclone.launcher.ui.screens
 
+import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -42,6 +44,7 @@ import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
+import com.niagaraclone.launcher.ui.components.WidgetStackView
 
 private val AppModel.firstLetter: Char
     get() = label.firstOrNull()?.uppercaseChar() ?: '#'
@@ -50,6 +53,9 @@ private val AppModel.firstLetter: Char
 @Composable
 fun HomeScreen(
     viewModel: LauncherViewModel,
+    appWidgetHost: AppWidgetHost,
+    appWidgetManager: AppWidgetManager,
+    onAddWidgetClick: () -> Unit = {},
     onOpenAppDrawer: () -> Unit = {},
     onOpenSettings: () -> Unit = {}
 ) {
@@ -60,10 +66,10 @@ fun HomeScreen(
     val favoritePackages by viewModel.favoritePackages.collectAsState()
     val homeLayoutOffsetY by viewModel.homeOffsetY.collectAsState()
     val widgetHeight by viewModel.widgetHeight.collectAsState()
+    val widgetIds by viewModel.widgetIds.collectAsState()
 
     var isWidgetMenuOpen by remember { mutableStateOf(false) }
     var isEditingWidget by remember { mutableStateOf(false) }
-    var customWidgetAdded by remember { mutableStateOf(false) }
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
 
     // --- STATE MANAGEMENT ---
@@ -182,16 +188,21 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    if (customWidgetAdded) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(widgetHeight.dp)
+                    // --- NATIVE APPWIDGET STACK ---
+                    if (widgetIds.isNotEmpty()) {
+                        WidgetStackView(
+                            widgetIds = widgetIds,
+                            widgetHeightDp = widgetHeight,
+                            appWidgetHost = appWidgetHost,
+                            appWidgetManager = appWidgetManager,
+                            onRemoveWidget = { id -> viewModel.removeWidgetId(id) },
+                            onAddWidgetClick = onAddWidgetClick,
+                            modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
-                    if (isEditingWidget && customWidgetAdded) {
+                    if (isEditingWidget && widgetIds.isNotEmpty()) {
                         AdjustmentControlBar(
                             onReset = { viewModel.updateWidgetHeight(180f) },
                             onDrag = { deltaY ->
@@ -367,23 +378,27 @@ fun HomeScreen(
                         onCheckedChange = { weatherEnabled = it }
                     )
 
-                    BottomSheetRow(
-                        icon = Icons.Default.Add,
-                        title = "Add Custom Widget",
-                        onClick = {
-                            customWidgetAdded = true
-                            isWidgetMenuOpen = false
-                        }
-                    )
+                    if (widgetIds.size < 4) {
+                        BottomSheetRow(
+                            icon = Icons.Default.Add,
+                            title = if (widgetIds.isEmpty()) "Add Custom Widget" else "Add Widget to Stack (${widgetIds.size}/4)",
+                            onClick = {
+                                isWidgetMenuOpen = false
+                                onAddWidgetClick()
+                            }
+                        )
+                    }
 
-                    BottomSheetRow(
-                        icon = Icons.Default.UnfoldMore,
-                        title = "Move Widget",
-                        onClick = {
-                            isWidgetMenuOpen = false
-                            isEditingWidget = true
-                        }
-                    )
+                    if (widgetIds.isNotEmpty()) {
+                        BottomSheetRow(
+                            icon = Icons.Default.UnfoldMore,
+                            title = "Move Widget",
+                            onClick = {
+                                isWidgetMenuOpen = false
+                                isEditingWidget = true
+                            }
+                        )
+                    }
 
                     BottomSheetSwitchRow(
                         icon = null,
