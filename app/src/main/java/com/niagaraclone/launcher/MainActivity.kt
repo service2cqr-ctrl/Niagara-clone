@@ -98,6 +98,7 @@ class MainActivity : ComponentActivity() {
 
             NiagaraCloneTheme(appTheme = theme, accentColor = Color(accentArgb)) {
                 var page by remember { mutableStateOf(Page.HOME) }
+                var triggerWidgetMoveEdit by remember { mutableStateOf(false) }
 
                 GestureHost(
                     modifier = Modifier.fillMaxSize(),
@@ -126,13 +127,22 @@ class MainActivity : ComponentActivity() {
                                 viewModel = viewModel,
                                 appWidgetHost = appWidgetHost,
                                 appWidgetManager = appWidgetManager,
+                                isEditingWidgetExternal = triggerWidgetMoveEdit,
                                 onAddWidgetClick = { launchWidgetPicker() },
-                                onOpenSettings = { page = Page.SETTINGS }
+                                onOpenSettings = { 
+                                    triggerWidgetMoveEdit = false
+                                    page = Page.SETTINGS 
+                                }
                             )
                             Page.WIDGETS -> WidgetsScreen()
                             Page.SETTINGS -> SettingsScreen(
                                 viewModel = viewModel,
-                                onDismiss = { page = Page.HOME }
+                                onDismiss = { page = Page.HOME },
+                                onAddWidgetClick = { launchWidgetPicker() },
+                                onMoveWidgetClick = {
+                                    triggerWidgetMoveEdit = true
+                                    page = Page.HOME
+                                }
                             )
                         }
                     }
