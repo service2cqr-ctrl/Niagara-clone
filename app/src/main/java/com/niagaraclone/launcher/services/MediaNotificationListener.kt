@@ -35,11 +35,27 @@ class MediaNotificationListener : NotificationListenerService() {
         sessionManager = getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
         val component = ComponentName(this, MediaNotificationListener::class.java)
 
-        sessionManager.addOnActiveSessionsChangedListener({ controllers ->
-            updateActiveSession(controllers)
-        }, component)
+        try {
+            sessionManager.addOnActiveSessionsChangedListener({ controllers ->
+                updateActiveSession(controllers)
+            }, component)
 
-        updateActiveSession(sessionManager.getActiveSessions(component))
+            updateActiveSession(sessionManager.getActiveSessions(component))
+        } catch (e: SecurityException) {
+            // Triggers if listener permission is not granted yet
+            e.printStackTrace()
+        }
+    }
+
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        // Called automatically by Android OS when Notification Access is granted
+        val component = ComponentName(this, MediaNotificationListener::class.java)
+        try {
+            updateActiveSession(sessionManager.getActiveSessions(component))
+        } catch (e: SecurityException) {
+            e.printStackTrace()
+        }
     }
 
     private fun updateActiveSession(controllers: List<MediaController>?) {
