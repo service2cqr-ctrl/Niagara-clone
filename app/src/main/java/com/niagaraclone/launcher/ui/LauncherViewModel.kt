@@ -66,6 +66,14 @@ class LauncherViewModel(
             initialValue = 180f
         )
 
+    // --- EXPOSE WIDGET STACK STATE ---
+    val widgetIds: StateFlow<List<Int>> = repository.widgetIds
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     init {
         refreshApps()
     }
@@ -137,6 +145,35 @@ class LauncherViewModel(
     fun updateWidgetHeight(height: Float) {
         viewModelScope.launch {
             repository.setWidgetHeight(height)
+        }
+    }
+
+    // --- WIDGET STACK MANAGEMENT METHODS ---
+
+    /**
+     * Adds a newly bound AppWidget ID to the active stack (up to 4 max).
+     */
+    fun addWidgetId(widgetId: Int) {
+        viewModelScope.launch {
+            repository.addWidgetId(widgetId)
+        }
+    }
+
+    /**
+     * Removes an AppWidget ID from the stack.
+     */
+    fun removeWidgetId(widgetId: Int) {
+        viewModelScope.launch {
+            repository.removeWidgetId(widgetId)
+        }
+    }
+
+    /**
+     * Updates the ordering of the Widget Stack.
+     */
+    fun reorderWidgetIds(newList: List<Int>) {
+        viewModelScope.launch {
+            repository.reorderWidgetIds(newList)
         }
     }
 
