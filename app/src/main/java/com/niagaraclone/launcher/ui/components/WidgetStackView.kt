@@ -34,7 +34,7 @@ fun WidgetStackView(
     onAddWidgetClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showWidgetOptionsDialog for remember { mutableStateOf<Int?>(null) }
+    var showWidgetOptionsDialog by remember { mutableStateOf<Int?>(null) }
 
     if (widgetIds.isEmpty()) return
 
