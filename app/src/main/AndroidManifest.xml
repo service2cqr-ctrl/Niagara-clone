@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Normal/Runtime Permissions only -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
 
     <application
         android:name=".LauncherApp"
@@ -29,9 +29,9 @@
             </intent-filter>
         </activity>
 
-        <!-- Media Notification Listener Service for live music controls -->
+        <!-- Notification Listener Service (BIND_NOTIFICATION_LISTENER_SERVICE goes here only) -->
         <service
-            android:name=".services.MediaNotificationListener"
+            android:name="com.niagaraclone.launcher.services.MediaNotificationListener"
             android:label="Cascadia Media Service"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
