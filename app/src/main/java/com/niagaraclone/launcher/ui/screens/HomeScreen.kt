@@ -42,7 +42,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
+import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.components.MediaPlayerCard
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
 import com.niagaraclone.launcher.ui.components.WidgetStackView
 
@@ -68,6 +70,9 @@ fun HomeScreen(
     val homeLayoutOffsetY by viewModel.homeOffsetY.collectAsState()
     val widgetHeight by viewModel.widgetHeight.collectAsState()
     val widgetIds by viewModel.widgetIds.collectAsState()
+
+    // Real-time media playback state from NotificationListenerService
+    val mediaState by MediaNotificationListener.mediaState.collectAsState()
 
     var isWidgetMenuOpen by remember { mutableStateOf(false) }
     var isEditingWidget by remember { mutableStateOf(false) }
@@ -195,6 +200,39 @@ fun HomeScreen(
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
+
+                    // --- LIVE GLASSMORPHISM MEDIA PLAYER CARD ---
+                    mediaState?.let { media ->
+                        if (showMediaWidget && media.title.isNotEmpty()) {
+                            MediaPlayerCard(
+                                albumArt = media.albumArt?.asImageBitmap(),
+                                trackTitle = media.title,
+                                artistName = media.artist,
+                                isPlaying = media.isPlaying,
+                                isDarkMode = true,
+                                onPlayPauseToggle = {
+                                    val controller = MediaNotificationListener.activeController
+                                    if (media.isPlaying) {
+                                        controller?.transportControls?.pause()
+                                    } else {
+                                        controller?.transportControls?.play()
+                                    }
+                                },
+                                onOpenApp = {
+                                    val launchIntent = context.packageManager.getLaunchIntentForPackage(media.packageName)
+                                    launchIntent?.let { context.startActivity(it) }
+                                },
+                                onNextTrack = {
+                                    MediaNotificationListener.activeController?.transportControls?.skipToNext()
+                                },
+                                onPreviousTrack = {
+                                    MediaNotificationListener.activeController?.transportControls?.skipToPrevious()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
 
                     // --- NATIVE APPWIDGET STACK ---
                     if (widgetIds.isNotEmpty()) {
