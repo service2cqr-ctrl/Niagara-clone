@@ -3,6 +3,7 @@ package com.niagaraclone.launcher.ui.screens
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -32,10 +33,6 @@ private enum class SettingsPage {
     BACKUP_RESTORE
 }
 
-/**
- * Main Settings Navigation Screen matching the exact categories, sub-items,
- * and dialog flows demonstrated in the UI recording.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -46,9 +43,18 @@ fun SettingsScreen(
 ) {
     var currentPage by remember { mutableStateOf(SettingsPage.MAIN) }
 
+    // System Back Gesture Listener: Navigates back internally first, then closes settings
+    BackHandler {
+        if (currentPage == SettingsPage.MAIN) {
+            onDismiss()
+        } else {
+            currentPage = SettingsPage.MAIN
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color(0xFF0D0D0D) // Deep black background matching recording
+        color = Color(0xFF0D0D0D)
     ) {
         when (currentPage) {
             SettingsPage.MAIN -> MainSettingsContent(
@@ -56,6 +62,7 @@ fun SettingsScreen(
                 onDismiss = onDismiss
             )
             SettingsPage.PRODUCTIVITY -> ProductivitySettingsContent(
+                viewModel = viewModel,
                 onBack = { currentPage = SettingsPage.MAIN },
                 onAddWidgetClick = {
                     onDismiss()
@@ -95,8 +102,20 @@ private fun MainSettingsContent(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 32.dp)
+            .padding(horizontal = 24.dp, vertical = 24.dp)
     ) {
+        // Main Screen Back Action Bar
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        ) {
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back to Home", tint = Color.White)
+            }
+        }
+
         // App Logo / Title Banner
         Column(
             modifier = Modifier
@@ -144,14 +163,14 @@ private fun MainSettingsContent(
             icon = Icons.Outlined.HelpOutline,
             title = "Help & Feedback",
             subtitle = null,
-            onClick = { /* Help link */ }
+            onClick = { }
         )
 
         SettingsCategoryItem(
             icon = Icons.Outlined.Public,
             title = "Community",
             subtitle = null,
-            onClick = { /* Community link */ }
+            onClick = { }
         )
 
         SettingsCategoryItem(
@@ -168,16 +187,17 @@ private fun MainSettingsContent(
 // -----------------------------------------------------------------------------
 @Composable
 private fun ProductivitySettingsContent(
+    viewModel: LauncherViewModel,
     onBack: () -> Unit,
     onAddWidgetClick: () -> Unit,
     onMoveWidgetClick: () -> Unit
 ) {
-    val context = LocalContext.current
     var showCalendarDialog by remember { mutableStateOf(false) }
 
-    // Media Player Theme State & Dialog Trigger
-    var isMediaWidgetEnabled by remember { mutableStateOf(true) }
-    var selectedMediaTheme by remember { mutableStateOf(MediaWidgetTheme.FROSTED_GLASS) }
+    // Direct State Flow collection from LauncherViewModel
+    val isMediaWidgetEnabled by viewModel.showMediaWidget.collectAsState()
+    val selectedMediaTheme by viewModel.mediaWidgetTheme.collectAsState()
+
     var showMediaThemeDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -200,7 +220,7 @@ private fun ProductivitySettingsContent(
         ToggleSettingRow("Calendar Preview", "See upcoming events on your home screen", true)
         ToggleSettingRow("Weather Forecast", "See the full forecast by tapping the current weather", true)
         
-        // Custom Media Player Row with Subtitle showing current theme & Dialog launcher
+        // Media Player Row with Direct ViewModel Binding
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -222,7 +242,7 @@ private fun ProductivitySettingsContent(
             }
             Switch(
                 checked = isMediaWidgetEnabled,
-                onCheckedChange = { isMediaWidgetEnabled = it },
+                onCheckedChange = { viewModel.setShowMediaWidget(it) },
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.Black,
                     checkedTrackColor = Color(0xFF4DD0E1)
@@ -287,7 +307,7 @@ private fun ProductivitySettingsContent(
         ToggleSettingRow("Allow Haptic Feedback", "Follow system", true)
     }
 
-    // Media Player Theme Selection Dialog
+    // Persistent Theme Dialog Writer
     if (showMediaThemeDialog) {
         AlertDialog(
             onDismissRequest = { showMediaThemeDialog = false },
@@ -299,7 +319,7 @@ private fun ProductivitySettingsContent(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    selectedMediaTheme = theme
+                                    viewModel.setMediaWidgetTheme(theme)
                                     showMediaThemeDialog = false
                                 }
                                 .padding(vertical = 8.dp),
@@ -308,7 +328,7 @@ private fun ProductivitySettingsContent(
                             RadioButton(
                                 selected = (selectedMediaTheme == theme),
                                 onClick = {
-                                    selectedMediaTheme = theme
+                                    viewModel.setMediaWidgetTheme(theme)
                                     showMediaThemeDialog = false
                                 },
                                 colors = RadioButtonDefaults.colors(
