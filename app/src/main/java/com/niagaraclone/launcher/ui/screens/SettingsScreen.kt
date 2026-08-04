@@ -39,7 +39,9 @@ private enum class SettingsPage {
 @Composable
 fun SettingsScreen(
     viewModel: LauncherViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onAddWidgetClick: () -> Unit = {},
+    onMoveWidgetClick: () -> Unit = {}
 ) {
     var currentPage by remember { mutableStateOf(SettingsPage.MAIN) }
 
@@ -53,7 +55,15 @@ fun SettingsScreen(
                 onDismiss = onDismiss
             )
             SettingsPage.PRODUCTIVITY -> ProductivitySettingsContent(
-                onBack = { currentPage = SettingsPage.MAIN }
+                onBack = { currentPage = SettingsPage.MAIN },
+                onAddWidgetClick = {
+                    onDismiss()
+                    onAddWidgetClick()
+                },
+                onMoveWidgetClick = {
+                    onDismiss()
+                    onMoveWidgetClick()
+                }
             )
             SettingsPage.THEMES -> ThemesSettingsContent(
                 onBack = { currentPage = SettingsPage.MAIN }
@@ -156,7 +166,11 @@ private fun MainSettingsContent(
 // 2. PRODUCTIVITY PAGE
 // -----------------------------------------------------------------------------
 @Composable
-private fun ProductivitySettingsContent(onBack: () -> Unit) {
+private fun ProductivitySettingsContent(
+    onBack: () -> Unit,
+    onAddWidgetClick: () -> Unit,
+    onMoveWidgetClick: () -> Unit
+) {
     val context = LocalContext.current
     var showCalendarDialog by remember { mutableStateOf(false) }
 
@@ -224,13 +238,13 @@ private fun ProductivitySettingsContent(onBack: () -> Unit) {
             icon = Icons.Outlined.AddBox,
             title = "Add Custom Widget",
             subtitle = null,
-            onClick = { }
+            onClick = onAddWidgetClick
         )
         ClickableSettingRow(
             icon = Icons.Outlined.SwapVert,
             title = "Move Widget",
             subtitle = null,
-            onClick = { }
+            onClick = onMoveWidgetClick
         )
         ToggleSettingRow("Show Battery Percentage", null, true)
         ToggleSettingRow("Allow Home Screen Rotation", "When device is rotated", true)
