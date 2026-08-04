@@ -55,6 +55,7 @@ fun HomeScreen(
     viewModel: LauncherViewModel,
     appWidgetHost: AppWidgetHost,
     appWidgetManager: AppWidgetManager,
+    isEditingWidgetExternal: Boolean = false,
     onAddWidgetClick: () -> Unit = {},
     onOpenAppDrawer: () -> Unit = {},
     onOpenSettings: () -> Unit = {}
@@ -71,6 +72,13 @@ fun HomeScreen(
     var isWidgetMenuOpen by remember { mutableStateOf(false) }
     var isEditingWidget by remember { mutableStateOf(false) }
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
+
+    // Synchronize external edit trigger from Settings
+    LaunchedEffect(isEditingWidgetExternal) {
+        if (isEditingWidgetExternal) {
+            isEditingWidget = true
+        }
+    }
 
     // --- STATE MANAGEMENT ---
     var isDrawerExpanded by remember { mutableStateOf(false) }
