@@ -397,16 +397,15 @@ fun HomeScreen(
                         )
                     }
 
-                    if (widgetIds.isNotEmpty()) {
-                        BottomSheetRow(
-                            icon = Icons.Default.UnfoldMore,
-                            title = "Move Widget",
-                            onClick = {
-                                isWidgetMenuOpen = false
-                                isEditingWidget = true
-                            }
-                        )
-                    }
+                    // --- MOVE WIDGET IS ALWAYS VISIBLE ---
+                    BottomSheetRow(
+                        icon = Icons.Default.UnfoldMore,
+                        title = "Move Widget",
+                        onClick = {
+                            isWidgetMenuOpen = false
+                            isEditingWidget = true
+                        }
+                    )
 
                     BottomSheetSwitchRow(
                         icon = null,
