@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.components.MediaWidgetTheme
 
 private enum class SettingsPage {
     MAIN,
@@ -174,6 +175,11 @@ private fun ProductivitySettingsContent(
     val context = LocalContext.current
     var showCalendarDialog by remember { mutableStateOf(false) }
 
+    // Media Player Theme State & Dialog Trigger
+    var isMediaWidgetEnabled by remember { mutableStateOf(true) }
+    var selectedMediaTheme by remember { mutableStateOf(MediaWidgetTheme.FROSTED_GLASS) }
+    var showMediaThemeDialog by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -193,7 +199,37 @@ private fun ProductivitySettingsContent(
         )
         ToggleSettingRow("Calendar Preview", "See upcoming events on your home screen", true)
         ToggleSettingRow("Weather Forecast", "See the full forecast by tapping the current weather", true)
-        ToggleSettingRow("Media Player", "Control music and videos from your home screen", true)
+        
+        // Custom Media Player Row with Subtitle showing current theme & Dialog launcher
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showMediaThemeDialog = true }
+                .padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "Media Player", fontSize = 16.sp, color = Color.White)
+                Text(
+                    text = "Theme: ${when (selectedMediaTheme) {
+                        MediaWidgetTheme.FROSTED_GLASS -> "Frosted Glass"
+                        MediaWidgetTheme.DARK -> "Dark"
+                        MediaWidgetTheme.LIGHT -> "Light"
+                    }}",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+            }
+            Switch(
+                checked = isMediaWidgetEnabled,
+                onCheckedChange = { isMediaWidgetEnabled = it },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.Black,
+                    checkedTrackColor = Color(0xFF4DD0E1)
+                )
+            )
+        }
+
         ClickableSettingRow(
             icon = Icons.Outlined.MusicNote,
             title = "Music Apps",
@@ -249,6 +285,58 @@ private fun ProductivitySettingsContent(
         ToggleSettingRow("Show Battery Percentage", null, true)
         ToggleSettingRow("Allow Home Screen Rotation", "When device is rotated", true)
         ToggleSettingRow("Allow Haptic Feedback", "Follow system", true)
+    }
+
+    // Media Player Theme Selection Dialog
+    if (showMediaThemeDialog) {
+        AlertDialog(
+            onDismissRequest = { showMediaThemeDialog = false },
+            title = { Text("Media Player Theme", color = Color.White) },
+            text = {
+                Column {
+                    MediaWidgetTheme.values().forEach { theme ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedMediaTheme = theme
+                                    showMediaThemeDialog = false
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = (selectedMediaTheme == theme),
+                                onClick = {
+                                    selectedMediaTheme = theme
+                                    showMediaThemeDialog = false
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color(0xFF4DD0E1),
+                                    unselectedColor = Color.Gray
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = when (theme) {
+                                    MediaWidgetTheme.FROSTED_GLASS -> "Frosted Glass"
+                                    MediaWidgetTheme.DARK -> "Dark"
+                                    MediaWidgetTheme.LIGHT -> "Light"
+                                },
+                                color = Color.White,
+                                fontSize = 16.sp
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showMediaThemeDialog = false }) {
+                    Text("Close", color = Color(0xFF4DD0E1))
+                }
+            },
+            containerColor = Color(0xFF1E1E1E)
+        )
     }
 
     if (showCalendarDialog) {
