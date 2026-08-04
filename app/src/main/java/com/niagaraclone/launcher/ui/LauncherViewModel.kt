@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.data.AppTheme
 import com.niagaraclone.launcher.data.SettingsRepository
+import com.niagaraclone.launcher.ui.components.MediaWidgetTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -51,7 +52,6 @@ class LauncherViewModel(
             initialValue = emptySet()
         )
 
-    // Expose layout offset & widget height persistent flows
     val homeOffsetY: StateFlow<Float> = repository.homeOffsetY
         .stateIn(
             scope = viewModelScope,
@@ -66,7 +66,6 @@ class LauncherViewModel(
             initialValue = 180f
         )
 
-    // --- EXPOSE WIDGET STACK STATE ---
     val widgetIds: StateFlow<List<Int>> = repository.widgetIds
         .stateIn(
             scope = viewModelScope,
@@ -74,13 +73,32 @@ class LauncherViewModel(
             initialValue = emptyList()
         )
 
+    // --- MEDIA PLAYER STATE FLOWS ---
+    val showMediaWidget: StateFlow<Boolean> = repository.showMediaWidget
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    val mediaWidgetTheme: StateFlow<MediaWidgetTheme> = repository.mediaWidgetThemeName
+        .map { name ->
+            try {
+                MediaWidgetTheme.valueOf(name)
+            } catch (e: Exception) {
+                MediaWidgetTheme.FROSTED_GLASS
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = MediaWidgetTheme.FROSTED_GLASS
+        )
+
     init {
         refreshApps()
     }
 
-    /**
-     * Queries PackageManager on a background thread for all launchable apps.
-     */
     fun refreshApps() {
         viewModelScope.launch(Dispatchers.IO) {
             val pm = context.packageManager
@@ -97,7 +115,6 @@ class LauncherViewModel(
 
             val installedApps = resolveInfos.mapNotNull { resolveInfo ->
                 val packageName = resolveInfo.activityInfo.packageName
-                // Skip launcher's own package from the app list
                 if (packageName == context.packageName) return@mapNotNull null
 
                 val label = resolveInfo.loadLabel(pm).toString()
@@ -115,9 +132,6 @@ class LauncherViewModel(
         }
     }
 
-    /**
-     * Toggles an app in or out of the favorites list.
-     */
     fun toggleFavorite(packageName: String) {
         viewModelScope.launch {
             val currentFavs = favoritePackages.value.toMutableSet()
@@ -130,56 +144,49 @@ class LauncherViewModel(
         }
     }
 
-    /**
-     * Updates and persists the Home Screen vertical layout position offset.
-     */
     fun updateHomeOffsetY(offsetY: Float) {
         viewModelScope.launch {
             repository.setHomeOffsetY(offsetY)
         }
     }
 
-    /**
-     * Updates and persists the custom widget slot container height.
-     */
     fun updateWidgetHeight(height: Float) {
         viewModelScope.launch {
             repository.setWidgetHeight(height)
         }
     }
 
-    // --- WIDGET STACK MANAGEMENT METHODS ---
-
-    /**
-     * Adds a newly bound AppWidget ID to the active stack (up to 4 max).
-     */
     fun addWidgetId(widgetId: Int) {
         viewModelScope.launch {
             repository.addWidgetId(widgetId)
         }
     }
 
-    /**
-     * Removes an AppWidget ID from the stack.
-     */
     fun removeWidgetId(widgetId: Int) {
         viewModelScope.launch {
             repository.removeWidgetId(widgetId)
         }
     }
 
-    /**
-     * Updates the ordering of the Widget Stack.
-     */
     fun reorderWidgetIds(newList: List<Int>) {
         viewModelScope.launch {
             repository.reorderWidgetIds(newList)
         }
     }
 
-    /**
-     * ViewModel Factory required for MainActivity viewModels delegate
-     */
+    // --- MEDIA PLAYER PREFERENCE METHODS ---
+    fun setShowMediaWidget(show: Boolean) {
+        viewModelScope.launch {
+            repository.setShowMediaWidget(show)
+        }
+    }
+
+    fun setMediaWidgetTheme(theme: MediaWidgetTheme) {
+        viewModelScope.launch {
+            repository.setMediaWidgetThemeName(theme.name)
+        }
+    }
+
     class Factory(private val context: Context) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
