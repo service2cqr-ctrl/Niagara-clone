@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
@@ -18,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -27,6 +29,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+enum class MediaWidgetTheme {
+    LIGHT,
+    DARK,
+    FROSTED_GLASS
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MediaPlayerCard(
@@ -34,30 +42,55 @@ fun MediaPlayerCard(
     trackTitle: String,
     artistName: String,
     isPlaying: Boolean,
-    isDarkMode: Boolean = true,
+    widgetTheme: MediaWidgetTheme = MediaWidgetTheme.FROSTED_GLASS,
     onPlayPauseToggle: () -> Unit,
     onOpenApp: () -> Unit,
     onNextTrack: () -> Unit,
     onPreviousTrack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Light / Dark Frosted Glass styling
-    val backgroundColor = if (isDarkMode) Color.Black.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.55f)
-    val borderColor = if (isDarkMode) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.1f)
-    val textColorPrimary = if (isDarkMode) Color.White else Color(0xFF1E1E1E)
-    val textColorSecondary = if (isDarkMode) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.6f)
-    val equalizerBarColor = if (isDarkMode) Color(0xFF4DD0E1) else Color(0xFF00ACC1)
+    val backgroundColor = when (widgetTheme) {
+        MediaWidgetTheme.LIGHT -> Color.White.copy(alpha = 0.85f)
+        MediaWidgetTheme.DARK -> Color(0xFF1E1E1E).copy(alpha = 0.90f)
+        MediaWidgetTheme.FROSTED_GLASS -> Color.White.copy(alpha = 0.22f)
+    }
 
-    // Gesture distance tracking for horizontal swipes
+    val borderBrush = when (widgetTheme) {
+        MediaWidgetTheme.LIGHT -> Brush.verticalGradient(
+            listOf(Color.Black.copy(alpha = 0.1f), Color.Black.copy(alpha = 0.05f))
+        )
+        MediaWidgetTheme.DARK -> Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.05f))
+        )
+        MediaWidgetTheme.FROSTED_GLASS -> Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = 0.55f), Color.White.copy(alpha = 0.15f))
+        )
+    }
+
+    val textColorPrimary = when (widgetTheme) {
+        MediaWidgetTheme.LIGHT -> Color(0xFF111111)
+        else -> Color.White
+    }
+
+    val textColorSecondary = when (widgetTheme) {
+        MediaWidgetTheme.LIGHT -> Color.Black.copy(alpha = 0.6f)
+        else -> Color.White.copy(alpha = 0.75f)
+    }
+
+    val equalizerColor = when (widgetTheme) {
+        MediaWidgetTheme.LIGHT -> Color.Black.copy(alpha = 0.8f)
+        else -> Color.White
+    }
+
     var dragAmountTotal by remember { mutableFloatStateOf(0f) }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(64.dp)
-            .clip(RoundedCornerShape(32.dp))
+            .height(56.dp)
+            .clip(CircleShape)
             .background(backgroundColor)
-            .border(1.dp, borderColor, RoundedCornerShape(32.dp))
+            .border(1.2.dp, borderBrush, CircleShape)
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragStart = { dragAmountTotal = 0f },
@@ -75,19 +108,19 @@ fun MediaPlayerCard(
                 )
             }
             .clickable { onOpenApp() }
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(start = 6.dp, end = 16.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // --- 1. ALBUM ART THUMBNAIL (TAP TO PLAY/PAUSE) ---
+            // ALBUM ARTWORK (TAP TO PLAY/PAUSE)
             Box(
                 modifier = Modifier
-                    .size(50.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (isDarkMode) Color(0xFF222222) else Color(0xFFE0E0E0))
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.Black.copy(alpha = 0.25f))
                     .clickable { onPlayPauseToggle() },
                 contentAlignment = Alignment.Center
             ) {
@@ -103,14 +136,14 @@ fun MediaPlayerCard(
                         imageVector = Icons.Default.MusicNote,
                         contentDescription = "Music",
                         tint = textColorSecondary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // --- 2. TRACK TITLE & ARTIST (WITH MARQUEE SCROLL) ---
+            // TRACK TITLE & ARTIST (WITH MARQUEE SCROLL)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -120,27 +153,27 @@ fun MediaPlayerCard(
                 Text(
                     text = trackTitle,
                     color = textColorPrimary,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.basicMarquee()
+                    modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(1.dp))
                 Text(
                     text = artistName,
                     color = textColorSecondary,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            // --- 3. ANIMATED AUDIO EQUALIZER (SOUND WAVES) ---
+            // ANIMATED AUDIO EQUALIZER (WHITE BARS)
             AnimatedEqualizer(
                 isPlaying = isPlaying,
-                barColor = equalizerBarColor,
-                modifier = Modifier.padding(end = 12.dp)
+                barColor = equalizerColor
             )
         }
     }
@@ -154,56 +187,51 @@ private fun AnimatedEqualizer(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "equalizer")
 
-    // Generate independent height animations for 3 bars
     val h1 by if (isPlaying) {
         infiniteTransition.animateFloat(
-            initialValue = 0.3f, targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(tween(400, easing = LinearEasing), RepeatMode.Reverse),
-            label = "b1"
+            initialValue = 0.25f, targetValue = 0.95f,
+            animationSpec = infiniteRepeatable(tween(380, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "bar1"
         )
     } else remember { mutableFloatStateOf(0.2f) }
 
     val h2 by if (isPlaying) {
         infiniteTransition.animateFloat(
-            initialValue = 0.8f, targetValue = 0.2f,
-            animationSpec = infiniteRepeatable(tween(320, easing = LinearEasing), RepeatMode.Reverse),
-            label = "b2"
+            initialValue = 0.85f, targetValue = 0.15f,
+            animationSpec = infiniteRepeatable(tween(300, easing = LinearOutSlowInEasing), RepeatMode.Reverse),
+            label = "bar2"
         )
     } else remember { mutableFloatStateOf(0.4f) }
 
     val h3 by if (isPlaying) {
         infiniteTransition.animateFloat(
-            initialValue = 0.4f, targetValue = 0.9f,
-            animationSpec = infiniteRepeatable(tween(480, easing = LinearEasing), RepeatMode.Reverse),
-            label = "b3"
+            initialValue = 0.35f, targetValue = 0.90f,
+            animationSpec = infiniteRepeatable(tween(450, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "bar3"
         )
-    } else remember { mutableFloatStateOf(0.2f) }
+    } else remember { mutableFloatStateOf(0.25f) }
+
+    val h4 by if (isPlaying) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.70f, targetValue = 0.20f,
+            animationSpec = infiniteRepeatable(tween(340, easing = LinearEasing), RepeatMode.Reverse),
+            label = "bar4"
+        )
+    } else remember { mutableFloatStateOf(0.35f) }
 
     Row(
-        modifier = modifier.height(18.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = modifier.height(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.5.dp),
         verticalAlignment = Alignment.Bottom
     ) {
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .fillMaxHeight(h1)
-                .clip(RoundedCornerShape(2.dp))
-                .background(barColor)
-        )
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .fillMaxHeight(h2)
-                .clip(RoundedCornerShape(2.dp))
-                .background(barColor)
-        )
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .fillMaxHeight(h3)
-                .clip(RoundedCornerShape(2.dp))
-                .background(barColor)
-        )
+        listOf(h1, h2, h3, h4).forEach { heightFraction ->
+            Box(
+                modifier = Modifier
+                    .width(2.5.dp)
+                    .fillMaxHeight(heightFraction)
+                    .clip(CircleShape)
+                    .background(barColor)
+            )
+        }
     }
 }
