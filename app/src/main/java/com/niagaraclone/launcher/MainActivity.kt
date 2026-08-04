@@ -1,11 +1,13 @@
 package com.niagaraclone.launcher
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -21,6 +23,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import com.niagaraclone.launcher.gestures.GestureHost
 import com.niagaraclone.launcher.gestures.SwipeDirection
@@ -45,6 +49,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val APPWIDGET_HOST_ID = 1024
+        private const val REQUEST_CODE_POST_NOTIFICATIONS = 101
     }
 
     // 1. Result Launcher for Selecting an AppWidget
@@ -81,6 +86,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Request POST_NOTIFICATIONS permission on Android 13+ (API 33+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    REQUEST_CODE_POST_NOTIFICATIONS
+                )
+            }
+        }
 
         // Initialize AppWidget system services
         appWidgetManager = AppWidgetManager.getInstance(this)
