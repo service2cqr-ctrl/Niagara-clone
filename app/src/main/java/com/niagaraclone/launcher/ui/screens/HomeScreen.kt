@@ -84,8 +84,12 @@ fun HomeScreen(
     val widgetIds by viewModel.widgetIds.collectAsState()
 
     // Persistent Media Widget Preferences from ViewModel
-    val showMediaWidget by viewModel.showMediaWidget.collectAsState()
+    val rawShowMediaWidget by viewModel.showMediaWidget.collectAsState()
     val mediaWidgetTheme by viewModel.mediaWidgetTheme.collectAsState()
+
+    // Dynamic Permission Gate: Ensures toggle accurately reflects active permission state
+    val isPermissionGranted = remember(rawShowMediaWidget) { isNotificationListenerGranted(context) }
+    val showMediaWidget = rawShowMediaWidget && isPermissionGranted
 
     // Real-time media playback state from NotificationListenerService
     val mediaState by MediaNotificationListener.mediaState.collectAsState()
