@@ -54,39 +54,30 @@ class MainActivity : ComponentActivity() {
         private const val REQUEST_CODE_POST_NOTIFICATIONS = 101
     }
 
-    // Role Manager Launcher for Setting Default Launcher
     private val roleLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
         viewModel.checkDefaultLauncherStatus()
     }
 
-    // 1. Result Launcher for Selecting an AppWidget
     private val selectWidgetLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val widgetId = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1) ?: -1
-            if (widgetId != -1) {
-                configureWidget(widgetId)
-            }
-        } else {
-            if (pendingWidgetId != -1) {
-                appWidgetHost.deleteAppWidgetId(pendingWidgetId)
-                pendingWidgetId = -1
-            }
+            if (widgetId != -1) configureWidget(widgetId)
+        } else if (pendingWidgetId != -1) {
+            appWidgetHost.deleteAppWidgetId(pendingWidgetId)
+            pendingWidgetId = -1
         }
     }
 
-    // 2. Result Launcher for Configuring an AppWidget
     private val configureWidgetLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val widgetId = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingWidgetId) ?: pendingWidgetId
-            if (widgetId != -1) {
-                viewModel.addWidgetId(widgetId)
-            }
+            if (widgetId != -1) viewModel.addWidgetId(widgetId)
         } else if (pendingWidgetId != -1) {
             appWidgetHost.deleteAppWidgetId(pendingWidgetId)
         }
@@ -96,30 +87,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Request POST_NOTIFICATIONS permission on Android 13+ (API 33+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                    REQUEST_CODE_POST_NOTIFICATIONS
-                )
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_CODE_POST_NOTIFICATIONS)
             }
         }
 
-        // Request default launcher on first launch if not already set
         requestDefaultLauncher()
 
-        // Initialize AppWidget system services
         appWidgetManager = AppWidgetManager.getInstance(this)
         appWidgetHost = AppWidgetHost(this, APPWIDGET_HOST_ID)
-        
-        // Ensures wallpaper extends behind system status bar and gesture navigation bar
-        WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        // Render system wallpaper directly behind activity window
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
 
         setContent {
@@ -135,9 +114,7 @@ class MainActivity : ComponentActivity() {
                     onSwipe = { direction ->
                         page = when (direction) {
                             SwipeDirection.DOWN -> {
-                                if (page == Page.HOME) {
-                                    openNotificationShade(this@MainActivity)
-                                }
+                                if (page == Page.HOME) openNotificationShade(this@MainActivity)
                                 page
                             }
                             SwipeDirection.LEFT -> if (page == Page.HOME) Page.WIDGETS else page
@@ -145,7 +122,7 @@ class MainActivity : ComponentActivity() {
                             SwipeDirection.UP -> page
                         }
                     },
-                    onDoubleTap = { /* Extension point for double-tap gestures */ }
+                    onDoubleTap = { }
                 ) {
                     AnimatedContent(
                         targetState = page,
@@ -159,10 +136,11 @@ class MainActivity : ComponentActivity() {
                                 appWidgetManager = appWidgetManager,
                                 isEditingWidgetExternal = triggerWidgetMoveEdit,
                                 onAddWidgetClick = { launchWidgetPicker() },
-                                onOpenSettings = { 
+                                onOpenSettings = {
                                     triggerWidgetMoveEdit = false
-                                    page = Page.SETTINGS 
-                                }
+                                    page = Page.SETTINGS
+                                },
+                                onRequestSetDefaultLauncher = { requestDefaultLauncher() }
                             )
                             Page.WIDGETS -> WidgetsScreen()
                             Page.SETTINGS -> SettingsScreen(
@@ -195,11 +173,9 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         viewModel.refreshApps()
         viewModel.checkDefaultLauncherStatus()
+        viewModel.refreshPermissions()
     }
 
-    /**
-     * Prompts the user to set Cascadia Launcher as the default home app.
-     */
     fun requestDefaultLauncher() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = getSystemService(RoleManager::class.java)
@@ -213,22 +189,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Allocates a new widget ID and opens the system widget picker list.
-     */
     private fun launchWidgetPicker() {
         val newWidgetId = appWidgetHost.allocateAppWidgetId()
         pendingWidgetId = newWidgetId
-
         val pickIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, newWidgetId)
         }
         selectWidgetLauncher.launch(pickIntent)
     }
 
-    /**
-     * Checks if selected widget needs configuration or directly adds it to ViewModel stack.
-     */
     private fun configureWidget(widgetId: Int) {
         val widgetInfo = appWidgetManager.getAppWidgetInfo(widgetId)
         if (widgetInfo?.configure != null) {
@@ -252,7 +221,5 @@ private fun openNotificationShade(context: Context) {
         val methodName = if (Build.VERSION.SDK_INT >= 17) "expandNotificationsPanel" else "expand"
         val method = statusBarManagerClass.getMethod(methodName)
         method.invoke(statusBarService)
-    } catch (e: Exception) {
-        // Best-effort attempt across OEM devices; ignore failure silently
-    }
+    } catch (e: Exception) { }
 }
