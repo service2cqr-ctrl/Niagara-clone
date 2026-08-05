@@ -1,11 +1,13 @@
 package com.niagaraclone.launcher.ui
 
 import android.annotation.SuppressLint
+import android.app.Application
 import android.app.role.RoleManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.BatteryManager
@@ -51,6 +53,10 @@ class LauncherViewModel(
 
     private val _notificationPermissionGranted = MutableStateFlow(false)
     val notificationPermissionGranted: StateFlow<Boolean> = _notificationPermissionGranted.asStateFlow()
+
+    // --- MUSIC APPS SELECTION STATE ---
+    private val _selectedMusicPackages = MutableStateFlow<Set<String>>(emptySet())
+    val selectedMusicPackages: StateFlow<Set<String>> = _selectedMusicPackages.asStateFlow()
 
     // --- LIVE WEATHER STATES ---
     private val _liveWeather = MutableStateFlow<WeatherData?>(null)
@@ -109,6 +115,45 @@ class LauncherViewModel(
         checkDefaultLauncherStatus()
         refreshPermissions()
         fetchLiveWeatherForCurrentMode()
+        loadSelectedMusicPackages()
+    }
+
+    // --- MUSIC APP MANAGEMENT ---
+    private fun loadSelectedMusicPackages() {
+        val prefs = context.getSharedPreferences("launcher_prefs", Context.MODE_PRIVATE)
+        val saved = prefs.getStringSet("selected_music_packages", setOf("com.spotify.music", "com.google.android.apps.youtube.music")) ?: emptySet()
+        _selectedMusicPackages.value = saved
+    }
+
+    fun toggleMusicPackage(packageName: String) {
+        val current = _selectedMusicPackages.value.toMutableSet()
+        if (current.contains(packageName)) {
+            current.remove(packageName)
+        } else {
+            current.add(packageName)
+        }
+        _selectedMusicPackages.value = current
+        val prefs = context.getSharedPreferences("launcher_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putStringSet("selected_music_packages", current).apply()
+    }
+
+    fun getAutoDetectedMusicApps(): List<AppModel> {
+        val pm = context.packageManager
+        return _apps.value.filter { app ->
+            try {
+                val appInfo = pm.getApplicationInfo(app.packageName, 0)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    appInfo.category == ApplicationInfo.CATEGORY_AUDIO
+                } else {
+                    app.label.contains("Music", ignoreCase = true) ||
+                    app.label.contains("Spotify", ignoreCase = true) ||
+                    app.label.contains("Podcast", ignoreCase = true) ||
+                    app.label.contains("Audio", ignoreCase = true)
+                }
+            } catch (e: Exception) {
+                false
+            }
+        }
     }
 
     fun fetchLiveWeatherForCurrentMode() {
