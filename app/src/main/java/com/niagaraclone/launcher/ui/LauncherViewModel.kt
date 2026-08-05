@@ -1,8 +1,12 @@
 package com.niagaraclone.launcher.ui
 
+import android.app.role.RoleManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.os.BatteryManager
 import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -28,6 +32,17 @@ class LauncherViewModel(
 
     private val _apps = MutableStateFlow<List<AppModel>>(emptyList())
     val apps: StateFlow<List<AppModel>> = _apps.asStateFlow()
+
+    // --- REAL-TIME BATTERY STATE ---
+    private val _batteryStatus = MutableStateFlow("100%")
+    val batteryStatus: StateFlow<String> = _batteryStatus.asStateFlow()
+
+    // --- DEFAULT LAUNCHER STATE ---
+    private val _isDefaultLauncher = MutableStateFlow(true)
+    val isDefaultLauncher: StateFlow<Boolean> = _isDefaultLauncher.asStateFlow()
+
+    private val _isBannerDismissedSession = MutableStateFlow(false)
+    val isBannerDismissedSession: StateFlow<Boolean> = _isBannerDismissedSession.asStateFlow()
 
     // Expose DataStore settings directly to Compose UI
     val theme: StateFlow<AppTheme> = repository.theme
@@ -73,7 +88,6 @@ class LauncherViewModel(
             initialValue = emptyList()
         )
 
-    // --- MEDIA PLAYER STATE FLOWS ---
     val showMediaWidget: StateFlow<Boolean> = repository.showMediaWidget
         .stateIn(
             scope = viewModelScope,
@@ -95,8 +109,55 @@ class LauncherViewModel(
             initialValue = MediaWidgetTheme.FROSTED_GLASS
         )
 
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            intent?.let { updateBatteryState(it) }
+        }
+    }
+
     init {
         refreshApps()
+        registerBatteryReceiver()
+        checkDefaultLauncherStatus()
+    }
+
+    /**
+     * Checks whether Cascadia Launcher is set as the default home app.
+     */
+    fun checkDefaultLauncherStatus() {
+        val isDefault = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = context.getSystemService(RoleManager::class.java)
+            roleManager?.isRoleHeld(RoleManager.ROLE_HOME) == true
+        } else {
+            val intent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+            }
+            val resolveInfo = context.packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            resolveInfo?.activityInfo?.packageName == context.packageName
+        }
+        _isDefaultLauncher.value = isDefault
+    }
+
+    fun dismissBannerForSession() {
+        _isBannerDismissedSession.value = true
+    }
+
+    private fun registerBatteryReceiver() {
+        val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+        val stickyIntent = context.registerReceiver(batteryReceiver, filter)
+        stickyIntent?.let { updateBatteryState(it) }
+    }
+
+    private fun updateBatteryState(intent: Intent) {
+        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+        val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+
+        if (level != -1 && scale != -1) {
+            val pct = (level * 100 / scale.toFloat()).toInt()
+            _batteryStatus.value = if (isCharging) "⚡ $pct%" else "$pct%"
+        }
     }
 
     fun refreshApps() {
@@ -174,7 +235,6 @@ class LauncherViewModel(
         }
     }
 
-    // --- MEDIA PLAYER PREFERENCE METHODS ---
     fun setShowMediaWidget(show: Boolean) {
         viewModelScope.launch {
             repository.setShowMediaWidget(show)
@@ -184,6 +244,15 @@ class LauncherViewModel(
     fun setMediaWidgetTheme(theme: MediaWidgetTheme) {
         viewModelScope.launch {
             repository.setMediaWidgetThemeName(theme.name)
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        try {
+            context.unregisterReceiver(batteryReceiver)
+        } catch (e: Exception) {
+            // Receiver already unregistered
         }
     }
 
