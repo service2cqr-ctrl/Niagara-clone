@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Normal/Runtime Permissions only -->
+    <!-- Normal/Runtime Permissions -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <application
         android:name=".LauncherApp"
@@ -29,7 +33,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Notification Listener Service (BIND_NOTIFICATION_LISTENER_SERVICE goes here only) -->
+        <!-- Notification Listener Service -->
         <service
             android:name="com.niagaraclone.launcher.services.MediaNotificationListener"
             android:label="Cascadia Media Service"
