@@ -94,6 +94,7 @@ fun HomeScreen(
 
     val weatherEnabled by viewModel.weatherEnabled.collectAsState()
     val tempUnit by viewModel.weatherTempUnit.collectAsState()
+    val liveWeather by viewModel.liveWeather.collectAsState()
 
     val mediaState by MediaNotificationListener.mediaState.collectAsState()
 
@@ -102,6 +103,13 @@ fun HomeScreen(
     var isEditingWidget by remember { mutableStateOf(false) }
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
     var showPermissionDialog by remember { mutableStateOf(false) }
+
+    val liveTempDisplay = remember(liveWeather, tempUnit) {
+        val c = liveWeather?.temperatureCelsius ?: 28f
+        val icon = liveWeather?.conditionIcon ?: "☀️"
+        val deg = if (tempUnit == "CELSIUS") "${c.roundToInt()}°" else "${(c * 9 / 5 + 32).roundToInt()}°"
+        "$icon $deg"
+    }
 
     LaunchedEffect(isEditingWidgetExternal) {
         if (isEditingWidgetExternal) isEditingWidget = true
@@ -195,7 +203,7 @@ fun HomeScreen(
                             }
                             if (weatherEnabled) {
                                 Text(
-                                    text = if (tempUnit == "CELSIUS") "☀️ 28°" else "☀️ 82°",
+                                    text = liveTempDisplay,
                                     color = Color.White.copy(alpha = 0.9f),
                                     fontSize = 16.sp,
                                     modifier = Modifier.clickable { isWeatherSheetOpen = true }
