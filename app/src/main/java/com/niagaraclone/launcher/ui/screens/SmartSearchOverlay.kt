@@ -58,7 +58,8 @@ fun SmartSearchOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f))
+            // Translucent overlay to let the home wallpaper remain visible
+            .background(Color.Black.copy(alpha = 0.5f))
             .clickable(onClick = onDismiss)
     ) {
         Column(
@@ -68,7 +69,6 @@ fun SmartSearchOverlay(
                 .padding(horizontal = 20.dp, vertical = 12.dp)
                 .clickable(enabled = false) {}
         ) {
-            // Search Bar Input Field
             Surface(
                 shape = RoundedCornerShape(28.dp),
                 color = Color(0xFF222222),
