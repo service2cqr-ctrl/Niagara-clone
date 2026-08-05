@@ -25,10 +25,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import kotlinx.coroutines.delay
 
 private enum class WeatherStep {
     MAIN,
     CHOOSE_LOCATION,
+    SCANNING_CURRENT_LOCATION,
     FIXED_LOCATION_PROMPT,
     MANUAL_LOCATION_INPUT,
     MANUAL_LOCATION_CONFIRM,
@@ -81,20 +83,24 @@ fun WeatherBottomSheet(
                 WeatherStep.CHOOSE_LOCATION -> ChooseLocationStep(
                     selectedMode = locationMode,
                     onSelectAuto = {
-                        viewModel.setWeatherLocationMode("AUTO")
-                        viewModel.setWeatherCityName("Vadodara")
-                        currentStep = WeatherStep.MAIN
+                        currentStep = WeatherStep.SCANNING_CURRENT_LOCATION
                     },
                     onSelectFixed = {
                         currentStep = WeatherStep.FIXED_LOCATION_PROMPT
                     }
                 )
 
-                WeatherStep.FIXED_LOCATION_PROMPT -> FixedLocationPromptStep(
-                    onOkayAutoDetect = {
-                        viewModel.setWeatherLocationMode("FIXED")
+                WeatherStep.SCANNING_CURRENT_LOCATION -> ScanningCurrentLocationStep(
+                    onScanComplete = {
+                        viewModel.setWeatherLocationMode("AUTO")
                         viewModel.setWeatherCityName("Vadodara")
                         currentStep = WeatherStep.MAIN
+                    }
+                )
+
+                WeatherStep.FIXED_LOCATION_PROMPT -> FixedLocationPromptStep(
+                    onOkayAutoDetect = {
+                        currentStep = WeatherStep.SCANNING_CURRENT_LOCATION
                     },
                     onEnterManually = {
                         currentStep = WeatherStep.MANUAL_LOCATION_INPUT
@@ -159,7 +165,6 @@ private fun MainWeatherStep(
             Text(text = "Weather", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
         }
 
-        // Dark Preview Container Card
         Surface(
             shape = RoundedCornerShape(20.dp),
             color = Color(0xFF1E1E1E),
@@ -177,7 +182,6 @@ private fun MainWeatherStep(
             }
         }
 
-        // Location Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -194,7 +198,6 @@ private fun MainWeatherStep(
             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.Gray)
         }
 
-        // Temperature Units Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -224,7 +227,6 @@ private fun MainWeatherStep(
             modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)
         )
 
-        // Action Buttons
         Button(
             onClick = onKeepEnabled,
             modifier = Modifier
@@ -313,7 +315,72 @@ private fun ChooseLocationStep(
 }
 
 // -----------------------------------------------------------------------------
-// STEP 3: FIXED LOCATION PROMPT STEP
+// STEP 3: SCANNING CURRENT LOCATION STEP
+// -----------------------------------------------------------------------------
+@Composable
+private fun ScanningCurrentLocationStep(
+    onScanComplete: () -> Unit
+) {
+    var isScanned by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(1200) // Brief scan animation
+        isScanned = true
+        delay(800) // Display detected location briefly
+        onScanComplete()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 12.dp)
+    ) {
+        Text(text = "Current location", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xFF1E1E1E),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(110.dp)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                if (!isScanned) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(36.dp)
+                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Vadodara",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+// -----------------------------------------------------------------------------
+// STEP 4: FIXED LOCATION PROMPT STEP
 // -----------------------------------------------------------------------------
 @Composable
 private fun FixedLocationPromptStep(
@@ -357,7 +424,7 @@ private fun FixedLocationPromptStep(
 }
 
 // -----------------------------------------------------------------------------
-// STEP 4: MANUAL LOCATION INPUT STEP
+// STEP 5: MANUAL LOCATION INPUT STEP
 // -----------------------------------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -415,7 +482,7 @@ private fun ManualLocationInputStep(
 }
 
 // -----------------------------------------------------------------------------
-// STEP 5: MANUAL LOCATION CONFIRM STEP
+// STEP 6: MANUAL LOCATION CONFIRM STEP
 // -----------------------------------------------------------------------------
 @Composable
 private fun ManualLocationConfirmStep(
@@ -457,7 +524,7 @@ private fun ManualLocationConfirmStep(
 }
 
 // -----------------------------------------------------------------------------
-// STEP 6: TEMPERATURE UNITS STEP
+// STEP 7: TEMPERATURE UNITS STEP
 // -----------------------------------------------------------------------------
 @Composable
 private fun TempUnitsStep(
