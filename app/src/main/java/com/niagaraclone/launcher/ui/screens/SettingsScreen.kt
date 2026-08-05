@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.MediaWidgetTheme
+import com.niagaraclone.launcher.ui.components.WeatherBottomSheet
 
 private enum class SettingsPage {
     MAIN,
@@ -32,12 +33,6 @@ private enum class SettingsPage {
     PRO,
     ADVANCED,
     BACKUP_RESTORE
-}
-
-private fun isNotificationListenerGranted(context: Context): Boolean {
-    val packageName = context.packageName
-    val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
-    return flat != null && flat.contains(packageName)
 }
 
 private fun openNotificationAccessSettings(context: Context) {
@@ -55,7 +50,6 @@ fun SettingsScreen(
 ) {
     var currentPage by remember { mutableStateOf(SettingsPage.MAIN) }
 
-    // System Back Gesture Listener
     BackHandler {
         if (currentPage == SettingsPage.MAIN) {
             onDismiss()
@@ -205,12 +199,11 @@ private fun ProductivitySettingsContent(
     val context = LocalContext.current
     var showCalendarDialog by remember { mutableStateOf(false) }
     var showPermissionDialog by remember { mutableStateOf(false) }
+    var isWeatherSheetOpen by remember { mutableStateOf(false) }
 
     val rawMediaWidgetEnabled by viewModel.showMediaWidget.collectAsState()
     val selectedMediaTheme by viewModel.mediaWidgetTheme.collectAsState()
-
-    // Real-time permission evaluation ensures UI toggle matches actual granted state
-    val isPermissionGranted = remember(rawMediaWidgetEnabled) { isNotificationListenerGranted(context) }
+    val isPermissionGranted by viewModel.notificationPermissionGranted.collectAsState()
     val isMediaWidgetActive = rawMediaWidgetEnabled && isPermissionGranted
 
     var showMediaThemeDialog by remember { mutableStateOf(false) }
@@ -233,9 +226,15 @@ private fun ProductivitySettingsContent(
             onClick = { showCalendarDialog = true }
         )
         ToggleSettingRow("Calendar Preview", "See upcoming events on your home screen", false)
-        ToggleSettingRow("Weather Forecast", "See the full forecast by tapping the current weather", true)
         
-        // Media Player Setting Row with Permission Interceptor
+        // Weather Forecast Setting Triggers Interactive Sheet
+        ClickableSettingRow(
+            icon = Icons.Outlined.WbSunny,
+            title = "Weather Forecast",
+            subtitle = "See the full forecast by tapping the current weather",
+            onClick = { isWeatherSheetOpen = true }
+        )
+        
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -259,7 +258,7 @@ private fun ProductivitySettingsContent(
                 checked = isMediaWidgetActive,
                 onCheckedChange = { checked ->
                     viewModel.setShowMediaWidget(checked)
-                    if (checked && !isNotificationListenerGranted(context)) {
+                    if (checked && !isPermissionGranted) {
                         showPermissionDialog = true
                     }
                 },
@@ -327,7 +326,14 @@ private fun ProductivitySettingsContent(
         ToggleSettingRow("Allow Haptic Feedback", "Follow system", true)
     }
 
-    // Media Theme Selection Dialog
+    // Weather Interactive Sheet Triggered From Settings
+    if (isWeatherSheetOpen) {
+        WeatherBottomSheet(
+            viewModel = viewModel,
+            onDismiss = { isWeatherSheetOpen = false }
+        )
+    }
+
     if (showMediaThemeDialog) {
         AlertDialog(
             onDismissRequest = { showMediaThemeDialog = false },
@@ -379,7 +385,6 @@ private fun ProductivitySettingsContent(
         )
     }
 
-    // Permission Access Dialog in Launcher Settings Page
     if (showPermissionDialog) {
         AlertDialog(
             onDismissRequest = { showPermissionDialog = false },
@@ -500,37 +505,17 @@ private fun CascadiaProContent(onBack: () -> Unit) {
             modifier = Modifier.size(80.dp)
         )
         Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            text = "Member since",
-            color = Color.Gray,
-            fontSize = 14.sp
-        )
-        Text(
-            text = "21 Nov 2023",
-            color = Color.White,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = "Thank you for your support.",
-            color = Color.Gray,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(top = 8.dp)
-        )
+        Text(text = "Member since", color = Color.Gray, fontSize = 14.sp)
+        Text(text = "21 Nov 2023", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(text = "Thank you for your support.", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
 
         Spacer(modifier = Modifier.height(48.dp))
 
-        TextButton(onClick = { }) {
-            Text("Discover features", color = Color.White, fontSize = 16.sp)
-        }
+        TextButton(onClick = { }) { Text("Discover features", color = Color.White, fontSize = 16.sp) }
         Spacer(modifier = Modifier.height(8.dp))
-        TextButton(onClick = { }) {
-            Text("Manage membership", color = Color.Gray, fontSize = 16.sp)
-        }
+        TextButton(onClick = { }) { Text("Manage membership", color = Color.Gray, fontSize = 16.sp) }
         Spacer(modifier = Modifier.height(24.dp))
-        OutlinedButton(onClick = onBack) {
-            Text("Back", color = Color.White)
-        }
+        OutlinedButton(onClick = onBack) { Text("Back", color = Color.White) }
     }
 }
 
@@ -629,12 +614,7 @@ private fun BackupRestoreContent(onBack: () -> Unit) {
     ) {
         SubPageHeader(title = "Backup & Restore (Beta)", onBack = onBack)
 
-        Text(
-            text = "Back up your home screen setup and restore it on any device.",
-            color = Color.Gray,
-            fontSize = 14.sp
-        )
-
+        Text(text = "Back up your home screen setup and restore it on any device.", color = Color.Gray, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(24.dp))
 
         FeatureBenefitRow(
@@ -660,19 +640,8 @@ private fun BackupRestoreContent(onBack: () -> Unit) {
         Text("Actions", color = Color(0xFF4DD0E1), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(12.dp))
 
-        ClickableSettingRow(
-            icon = Icons.Outlined.FileUpload,
-            title = "Create backup",
-            subtitle = null,
-            onClick = { }
-        )
-
-        ClickableSettingRow(
-            icon = Icons.Outlined.RestartAlt,
-            title = "Restore backup",
-            subtitle = null,
-            onClick = { }
-        )
+        ClickableSettingRow(icon = Icons.Outlined.FileUpload, title = "Create backup", subtitle = null, onClick = { })
+        ClickableSettingRow(icon = Icons.Outlined.RestartAlt, title = "Restore backup", subtitle = null, onClick = { })
     }
 }
 
