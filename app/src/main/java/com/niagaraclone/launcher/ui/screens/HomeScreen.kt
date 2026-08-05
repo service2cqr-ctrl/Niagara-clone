@@ -55,6 +55,7 @@ import com.niagaraclone.launcher.ui.components.PopUpFolderCard
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
 import com.niagaraclone.launcher.ui.components.WeatherBottomSheet
 import com.niagaraclone.launcher.ui.components.WidgetStackView
+import com.niagaraclone.launcher.ui.components.rememberCurrentTimeState
 import kotlin.math.roundToInt
 
 private val AppModel.firstLetter: Char
@@ -109,6 +110,12 @@ fun HomeScreen(
     var showPermissionDialog by remember { mutableStateOf(false) }
 
     var activePopUpApp by remember { mutableStateOf<AppModel?>(null) }
+
+    // Real-Time System Time Receiver
+    val (currentTime, currentDate) = rememberCurrentTimeState(timeFormatPattern = "HH:mm", dateFormatPattern = "EEE d MMM")
+    val timeParts = remember(currentTime) { currentTime.split(":") }
+    val timeHours = timeParts.getOrNull(0) ?: "10"
+    val timeMinutes = timeParts.getOrNull(1) ?: "28"
 
     val liveTempDisplay = remember(liveWeather, tempUnit) {
         val c = liveWeather?.temperatureCelsius ?: 28f
@@ -165,7 +172,6 @@ fun HomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                // Adjusted default clock headroom top padding (64.dp) to allow smooth elastic motions
                 .padding(start = 24.dp, end = 48.dp, top = 64.dp)
         ) {
             if (!isDrawerExpanded) {
@@ -194,8 +200,8 @@ fun HomeScreen(
                             )
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "10", color = Color(0xFF4DD0E1), fontSize = 72.sp, fontWeight = FontWeight.Bold)
-                            Text(text = "28", color = Color.White, fontSize = 72.sp, fontWeight = FontWeight.Bold)
+                            Text(text = timeHours, color = Color(0xFF4DD0E1), fontSize = 72.sp, fontWeight = FontWeight.Bold)
+                            Text(text = timeMinutes, color = Color.White, fontSize = 72.sp, fontWeight = FontWeight.Bold)
                         }
 
                         Spacer(modifier = Modifier.height(4.dp))
@@ -204,7 +210,7 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(text = "Wed 5 Aug", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                            Text(text = currentDate.ifEmpty { "Wed 5 Aug" }, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
                             if (showBattery) {
                                 Text(text = batteryStatus, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
                             }
@@ -380,7 +386,6 @@ fun HomeScreen(
             }
         }
 
-        // Widget Long Press Bottom Sheet
         if (isWidgetMenuOpen) {
             ModalBottomSheet(
                 onDismissRequest = { isWidgetMenuOpen = false },
@@ -397,7 +402,6 @@ fun HomeScreen(
                     BottomSheetRow(icon = Icons.Outlined.Schedule, title = "Clock style", onClick = { isWidgetMenuOpen = false })
                     BottomSheetRow(icon = Icons.Outlined.CalendarToday, title = "Calendar", subtitle = "Show upcoming events, Show date", onClick = { isWidgetMenuOpen = false })
 
-                    // Interactive Weather Row
                     BottomSheetSwitchRow(
                         icon = Icons.Outlined.WbSunny,
                         title = "Weather",
@@ -435,7 +439,6 @@ fun HomeScreen(
             }
         }
 
-        // Weather Interactive Sheet
         if (isWeatherSheetOpen) {
             WeatherBottomSheet(
                 viewModel = viewModel,
