@@ -33,7 +33,7 @@ import kotlin.math.roundToInt
 
 @Composable
 fun rememberCurrentTimeState(
-    timeFormatPattern: String = "HH:mm",
+    timeFormatPattern: String = "h:mm", // Updated to 12-hour format
     dateFormatPattern: String = "EEE d MMM"
 ): Pair<String, String> {
     var timeStr by remember { mutableStateOf("") }
@@ -173,7 +173,7 @@ private fun MainWeatherStep(
     onKeepEnabled: () -> Unit,
     onDisable: () -> Unit
 ) {
-    val (currentTime, currentDate) = rememberCurrentTimeState(timeFormatPattern = "H:mm", dateFormatPattern = "EEE d MMM")
+    val (currentTime, currentDate) = rememberCurrentTimeState(timeFormatPattern = "h:mm", dateFormatPattern = "EEE d MMM")
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 20.dp)) {
