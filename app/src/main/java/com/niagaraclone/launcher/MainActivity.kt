@@ -8,7 +8,9 @@ import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -30,13 +32,15 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import com.niagaraclone.launcher.gestures.GestureHost
 import com.niagaraclone.launcher.gestures.SwipeDirection
+import com.niagaraclone.launcher.services.AudioConnectionReceiver
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.screens.HomeScreen
 import com.niagaraclone.launcher.ui.screens.SettingsScreen
+import com.niagaraclone.launcher.ui.screens.SmartSearchOverlay
 import com.niagaraclone.launcher.ui.screens.WidgetsScreen
 import com.niagaraclone.launcher.ui.theme.NiagaraCloneTheme
 
-private enum class Page { HOME, WIDGETS, SETTINGS }
+private enum class Page { HOME, WIDGETS, SETTINGS, SEARCH }
 
 class MainActivity : ComponentActivity() {
 
@@ -46,6 +50,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var appWidgetManager: AppWidgetManager
     private lateinit var appWidgetHost: AppWidgetHost
+    private val audioReceiver = AudioConnectionReceiver()
 
     private var pendingWidgetId: Int = -1
 
@@ -98,6 +103,12 @@ class MainActivity : ComponentActivity() {
         appWidgetManager = AppWidgetManager.getInstance(this)
         appWidgetHost = AppWidgetHost(this, APPWIDGET_HOST_ID)
 
+        val audioFilter = IntentFilter().apply {
+            addAction(Intent.ACTION_HEADSET_PLUG)
+            addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        }
+        registerReceiver(audioReceiver, audioFilter)
+
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
 
@@ -111,19 +122,15 @@ class MainActivity : ComponentActivity() {
 
                 GestureHost(
                     modifier = Modifier.fillMaxSize(),
-                    onSwipe = { direction ->
-                        page = when (direction) {
+                    onTriggerAction = { direction ->
+                        when (direction) {
+                            SwipeDirection.UP -> page = Page.SEARCH
                             SwipeDirection.DOWN -> {
                                 if (page == Page.HOME) openNotificationShade(this@MainActivity)
-                                page
                             }
-                            SwipeDirection.LEFT -> if (page == Page.HOME) Page.WIDGETS else page
-                            SwipeDirection.RIGHT -> if (page == Page.WIDGETS) Page.HOME else page
-                            SwipeDirection.UP -> page
                         }
-                    },
-                    onDoubleTap = { }
-                ) {
+                    }
+                ) { offsetY ->
                     AnimatedContent(
                         targetState = page,
                         label = "page_transition",
@@ -140,7 +147,8 @@ class MainActivity : ComponentActivity() {
                                     triggerWidgetMoveEdit = false
                                     page = Page.SETTINGS
                                 },
-                                onRequestSetDefaultLauncher = { requestDefaultLauncher() }
+                                onRequestSetDefaultLauncher = { requestDefaultLauncher() },
+                                onOpenSearch = { page = Page.SEARCH }
                             )
                             Page.WIDGETS -> WidgetsScreen()
                             Page.SETTINGS -> SettingsScreen(
@@ -151,6 +159,10 @@ class MainActivity : ComponentActivity() {
                                     triggerWidgetMoveEdit = true
                                     page = Page.HOME
                                 }
+                            )
+                            Page.SEARCH -> SmartSearchOverlay(
+                                viewModel = viewModel,
+                                onDismiss = { page = Page.HOME }
                             )
                         }
                     }
@@ -167,6 +179,11 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         appWidgetHost.stopListening()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try { unregisterReceiver(audioReceiver) } catch (e: Exception) { }
     }
 
     override fun onResume() {
