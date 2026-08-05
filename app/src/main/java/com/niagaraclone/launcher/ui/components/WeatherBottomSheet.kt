@@ -26,7 +26,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
+
+@Composable
+fun rememberCurrentTimeState(
+    timeFormatPattern: String = "HH:mm",
+    dateFormatPattern: String = "EEE d MMM"
+): Pair<String, String> {
+    var timeStr by remember { mutableStateOf("") }
+    var dateStr by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            val now = Date()
+            timeStr = SimpleDateFormat(timeFormatPattern, Locale.getDefault()).format(now)
+            dateStr = SimpleDateFormat(dateFormatPattern, Locale.getDefault()).format(now)
+            delay(1000L)
+        }
+    }
+
+    return Pair(timeStr, dateStr)
+}
 
 private enum class WeatherStep {
     MAIN,
@@ -150,6 +173,8 @@ private fun MainWeatherStep(
     onKeepEnabled: () -> Unit,
     onDisable: () -> Unit
 ) {
+    val (currentTime, currentDate) = rememberCurrentTimeState(timeFormatPattern = "H:mm", dateFormatPattern = "EEE d MMM")
+
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 20.dp)) {
             Icon(imageVector = Icons.Default.WbSunny, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
@@ -159,9 +184,9 @@ private fun MainWeatherStep(
 
         Surface(shape = RoundedCornerShape(20.dp), color = Color(0xFF1E1E1E), modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text(text = "8:33", fontSize = 42.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(text = currentTime.ifEmpty { "10:28" }, fontSize = 42.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "Wed 5 Aug", fontSize = 16.sp, color = Color.Gray)
+                    Text(text = currentDate.ifEmpty { "Wed 5 Aug" }, fontSize = 16.sp, color = Color.Gray)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(text = tempDisplay, fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
                 }
