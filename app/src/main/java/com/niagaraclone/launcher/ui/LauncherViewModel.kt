@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.BatteryManager
 import android.os.Build
+import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -43,6 +44,10 @@ class LauncherViewModel(
 
     private val _isBannerDismissedSession = MutableStateFlow(false)
     val isBannerDismissedSession: StateFlow<Boolean> = _isBannerDismissedSession.asStateFlow()
+
+    // --- REAL-TIME PERMISSION REFRESH STATE ---
+    private val _notificationPermissionGranted = MutableStateFlow(false)
+    val notificationPermissionGranted: StateFlow<Boolean> = _notificationPermissionGranted.asStateFlow()
 
     // Expose DataStore settings directly to Compose UI
     val theme: StateFlow<AppTheme> = repository.theme
@@ -109,6 +114,35 @@ class LauncherViewModel(
             initialValue = MediaWidgetTheme.FROSTED_GLASS
         )
 
+    // --- WEATHER STATE FLOWS ---
+    val weatherEnabled: StateFlow<Boolean> = repository.weatherEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    val weatherLocationMode: StateFlow<String> = repository.weatherLocationMode
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "AUTO"
+        )
+
+    val weatherCityName: StateFlow<String> = repository.weatherCityName
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "Vadodara"
+        )
+
+    val weatherTempUnit: StateFlow<String> = repository.weatherTempUnit
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "CELSIUS"
+        )
+
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             intent?.let { updateBatteryState(it) }
@@ -119,6 +153,16 @@ class LauncherViewModel(
         refreshApps()
         registerBatteryReceiver()
         checkDefaultLauncherStatus()
+        refreshPermissions()
+    }
+
+    /**
+     * Dynamically re-evaluates system permissions on resume or screen return.
+     */
+    fun refreshPermissions() {
+        val packageName = context.packageName
+        val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        _notificationPermissionGranted.value = flat != null && flat.contains(packageName)
     }
 
     /**
@@ -244,6 +288,31 @@ class LauncherViewModel(
     fun setMediaWidgetTheme(theme: MediaWidgetTheme) {
         viewModelScope.launch {
             repository.setMediaWidgetThemeName(theme.name)
+        }
+    }
+
+    // --- WEATHER SETTERS ---
+    fun setWeatherEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setWeatherEnabled(enabled)
+        }
+    }
+
+    fun setWeatherLocationMode(mode: String) {
+        viewModelScope.launch {
+            repository.setWeatherLocationMode(mode)
+        }
+    }
+
+    fun setWeatherCityName(city: String) {
+        viewModelScope.launch {
+            repository.setWeatherCityName(city)
+        }
+    }
+
+    fun setWeatherTempUnit(unit: String) {
+        viewModelScope.launch {
+            repository.setWeatherTempUnit(unit)
         }
     }
 
