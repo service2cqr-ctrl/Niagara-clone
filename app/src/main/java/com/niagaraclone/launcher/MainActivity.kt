@@ -3,6 +3,7 @@ package com.niagaraclone.launcher
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.role.RoleManager
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
@@ -10,6 +11,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -52,6 +54,13 @@ class MainActivity : ComponentActivity() {
         private const val REQUEST_CODE_POST_NOTIFICATIONS = 101
     }
 
+    // Role Manager Launcher for Setting Default Launcher
+    private val roleLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        viewModel.checkDefaultLauncherStatus()
+    }
+
     // 1. Result Launcher for Selecting an AppWidget
     private val selectWidgetLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -69,7 +78,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 2. Result Launcher for Configuring an AppWidget (if widget requires configuration activity)
+    // 2. Result Launcher for Configuring an AppWidget
     private val configureWidgetLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -99,6 +108,9 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+
+        // Request default launcher on first launch if not already set
+        requestDefaultLauncher()
 
         // Initialize AppWidget system services
         appWidgetManager = AppWidgetManager.getInstance(this)
@@ -182,6 +194,23 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.refreshApps()
+        viewModel.checkDefaultLauncherStatus()
+    }
+
+    /**
+     * Prompts the user to set Cascadia Launcher as the default home app.
+     */
+    fun requestDefaultLauncher() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = getSystemService(RoleManager::class.java)
+            if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_HOME) && !roleManager.isRoleHeld(RoleManager.ROLE_HOME)) {
+                val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME)
+                roleLauncher.launch(intent)
+            }
+        } else {
+            val intent = Intent(Settings.ACTION_HOME_SETTINGS)
+            startActivity(intent)
+        }
     }
 
     /**
