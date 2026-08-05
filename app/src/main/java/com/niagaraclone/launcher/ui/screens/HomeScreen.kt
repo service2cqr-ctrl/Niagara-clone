@@ -50,8 +50,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
+import com.niagaraclone.launcher.services.AudioConnectionReceiver
 import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.components.AutoMusicPopUpCard
 import com.niagaraclone.launcher.ui.components.MediaPlayerCard
 import com.niagaraclone.launcher.ui.components.PopUpFolderCard
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
@@ -104,6 +106,18 @@ fun HomeScreen(
     val liveWeather by viewModel.liveWeather.collectAsState()
 
     val mediaState by MediaNotificationListener.mediaState.collectAsState()
+
+    // --- AUDIO CONNECTION & MUSIC LAUNCHER STATES ---
+    val isAudioConnected by AudioConnectionReceiver.isAudioDeviceConnected.collectAsState()
+    val selectedMusicPackages by viewModel.selectedMusicPackages.collectAsState()
+
+    val musicLauncherApps = remember(apps, selectedMusicPackages) {
+        if (selectedMusicPackages.isNotEmpty()) {
+            apps.filter { selectedMusicPackages.contains(it.packageName) }
+        } else {
+            viewModel.getAutoDetectedMusicApps()
+        }
+    }
 
     var isWidgetMenuOpen by remember { mutableStateOf(false) }
     var isWeatherSheetOpen by remember { mutableStateOf(false) }
@@ -235,6 +249,15 @@ fun HomeScreen(
                         SwipeableDefaultLauncherBanner(
                             onSetDefault = onRequestSetDefaultLauncher,
                             onDismiss = { viewModel.dismissBannerForSession() }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    // --- AUTO MUSIC POP-UP CARD ON AUDIO CONNECT ---
+                    if (isAudioConnected && musicLauncherApps.isNotEmpty() && (mediaState == null || mediaState?.title.isNullOrEmpty())) {
+                        AutoMusicPopUpCard(
+                            musicApps = musicLauncherApps,
+                            onDismiss = { }
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                     }
