@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.outlined.CalendarToday
@@ -40,12 +39,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.services.MediaNotificationListener
@@ -109,10 +111,12 @@ fun HomeScreen(
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
     var showPermissionDialog by remember { mutableStateOf(false) }
 
+    // Dynamic Pop-up Variables
     var activePopUpApp by remember { mutableStateOf<AppModel?>(null) }
+    var popupYOffset by remember { mutableFloatStateOf(0f) }
 
-    // Real-Time System Time Receiver
-    val (currentTime, currentDate) = rememberCurrentTimeState(timeFormatPattern = "HH:mm", dateFormatPattern = "EEE d MMM")
+    // Real-Time System Time Receiver (12-hour format)
+    val (currentTime, currentDate) = rememberCurrentTimeState(timeFormatPattern = "h:mm", dateFormatPattern = "EEE d MMM")
     val timeParts = remember(currentTime) { currentTime.split(":") }
     val timeHours = timeParts.getOrNull(0) ?: "10"
     val timeMinutes = timeParts.getOrNull(1) ?: "28"
@@ -271,17 +275,6 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                     }
-
-                    if (isEditingWidget && widgetIds.isNotEmpty()) {
-                        AdjustmentControlBar(
-                            onReset = { viewModel.updateWidgetHeight(180f) },
-                            onDrag = { deltaY ->
-                                val newHeight = (widgetHeight + deltaY).coerceIn(80f, 400f)
-                                viewModel.updateWidgetHeight(newHeight)
-                            }
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
                 }
             }
 
@@ -291,25 +284,18 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(favorites) { app ->
-                    Column {
-                        FavoriteAppRow(
-                            app = app,
-                            onClick = {
-                                val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                                intent?.let { context.startActivity(it) }
-                            },
-                            onLongClick = { appForMenu = app },
-                            onSwipeRight = { activePopUpApp = app }
-                        )
-
-                        if (activePopUpApp?.packageName == app.packageName) {
-                            PopUpFolderCard(
-                                folderName = app.label,
-                                subApps = apps.take(4),
-                                onDismiss = { activePopUpApp = null }
-                            )
+                    FavoriteAppRow(
+                        app = app,
+                        onClick = {
+                            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                            intent?.let { context.startActivity(it) }
+                        },
+                        onLongClick = { appForMenu = app },
+                        onSwipeRight = { yOffset ->
+                            popupYOffset = yOffset
+                            activePopUpApp = app
                         }
-                    }
+                    )
                 }
 
                 if (isDrawerExpanded) {
@@ -331,22 +317,30 @@ fun HomeScreen(
                                     intent?.let { context.startActivity(it) }
                                 },
                                 onLongClick = { appForMenu = app },
-                                onSwipeRight = { activePopUpApp = app }
+                                onSwipeRight = { yOffset ->
+                                    popupYOffset = yOffset
+                                    activePopUpApp = app
+                                }
                             )
                         }
                     }
+                }
+            }
+        }
 
-                    item {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 20.dp, bottom = 80.dp)
-                        ) {
-                            Text(text = "Cascadia Launcher", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 12.dp))
-                            DrawerFooterRow(icon = Icons.Default.History, title = "Recently installed", onClick = {})
-                            DrawerFooterRow(icon = Icons.Default.Settings, title = "Cascadia settings", onClick = onOpenSettings)
-                        }
-                    }
+        // --- Dynamic Overlay Pop-up Card ---
+        activePopUpApp?.let { app ->
+            Popup(
+                alignment = Alignment.TopStart,
+                offset = IntOffset(0, popupYOffset.roundToInt()),
+                onDismissRequest = { activePopUpApp = null }
+            ) {
+                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                    PopUpFolderCard(
+                        folderName = app.label,
+                        subApps = apps.take(4), // Future proofing: filter actual sub-apps here
+                        onDismiss = { activePopUpApp = null }
+                    )
                 }
             }
         }
@@ -373,7 +367,10 @@ fun HomeScreen(
 
         if (!isDrawerExpanded) {
             FloatingActionButton(
-                onClick = onOpenSearch,
+                onClick = {
+                    val intent = Intent(Intent.ACTION_DIAL)
+                    context.startActivity(intent)
+                },
                 containerColor = Color(0xFF4DD0E1),
                 contentColor = Color.Black,
                 shape = CircleShape,
@@ -382,10 +379,11 @@ fun HomeScreen(
                     .padding(bottom = 50.dp, end = 50.dp)
                     .size(56.dp)
             ) {
-                Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
+                Icon(imageVector = Icons.Default.Phone, contentDescription = "Phone")
             }
         }
 
+        // Widget Long Press Bottom Sheet
         if (isWidgetMenuOpen) {
             ModalBottomSheet(
                 onDismissRequest = { isWidgetMenuOpen = false },
@@ -439,6 +437,7 @@ fun HomeScreen(
             }
         }
 
+        // Weather Interactive Sheet
         if (isWeatherSheetOpen) {
             WeatherBottomSheet(
                 viewModel = viewModel,
@@ -488,16 +487,22 @@ private fun FavoriteAppRow(
     app: AppModel,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onSwipeRight: () -> Unit
+    onSwipeRight: (Float) -> Unit
 ) {
+    var bottomY by remember { mutableFloatStateOf(0f) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .onGloballyPositioned { coordinates ->
+                // Capture the exact vertical bottom edge of this specific row
+                bottomY = coordinates.boundsInRoot().bottom
+            }
             .pointerInput(Unit) {
                 detectHorizontalDragGestures { change, dragAmount ->
                     if (dragAmount > 30f) {
                         change.consume()
-                        onSwipeRight()
+                        onSwipeRight(bottomY) // Trigger popup and pass tracked coordinate
                     }
                 }
             }
