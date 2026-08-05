@@ -1,5 +1,6 @@
 package com.niagaraclone.launcher.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -33,6 +34,17 @@ private enum class SettingsPage {
     BACKUP_RESTORE
 }
 
+private fun isNotificationListenerGranted(context: Context): Boolean {
+    val packageName = context.packageName
+    val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+    return flat != null && flat.contains(packageName)
+}
+
+private fun openNotificationAccessSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+    context.startActivity(intent)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -43,7 +55,7 @@ fun SettingsScreen(
 ) {
     var currentPage by remember { mutableStateOf(SettingsPage.MAIN) }
 
-    // System Back Gesture Listener: Navigates back internally first, then closes settings
+    // System Back Gesture Listener
     BackHandler {
         if (currentPage == SettingsPage.MAIN) {
             onDismiss()
@@ -104,7 +116,6 @@ private fun MainSettingsContent(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 24.dp)
     ) {
-        // Main Screen Back Action Bar
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -116,7 +127,6 @@ private fun MainSettingsContent(
             }
         }
 
-        // App Logo / Title Banner
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -192,11 +202,16 @@ private fun ProductivitySettingsContent(
     onAddWidgetClick: () -> Unit,
     onMoveWidgetClick: () -> Unit
 ) {
+    val context = LocalContext.current
     var showCalendarDialog by remember { mutableStateOf(false) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
 
-    // Direct State Flow collection from LauncherViewModel
-    val isMediaWidgetEnabled by viewModel.showMediaWidget.collectAsState()
+    val rawMediaWidgetEnabled by viewModel.showMediaWidget.collectAsState()
     val selectedMediaTheme by viewModel.mediaWidgetTheme.collectAsState()
+
+    // Real-time permission evaluation ensures UI toggle matches actual granted state
+    val isPermissionGranted = remember(rawMediaWidgetEnabled) { isNotificationListenerGranted(context) }
+    val isMediaWidgetActive = rawMediaWidgetEnabled && isPermissionGranted
 
     var showMediaThemeDialog by remember { mutableStateOf(false) }
 
@@ -209,7 +224,7 @@ private fun ProductivitySettingsContent(
         SubPageHeader(title = "Productivity", onBack = onBack)
 
         SectionHeader("Instant Access")
-        ToggleSettingRow("Quick Replies", "Reply right from your home screen", true)
+        ToggleSettingRow("Quick Replies", "Reply right from your home screen", false)
         
         ClickableSettingRow(
             icon = Icons.Outlined.CalendarMonth,
@@ -217,10 +232,10 @@ private fun ProductivitySettingsContent(
             subtitle = "Open your calendar agenda by tapping the date",
             onClick = { showCalendarDialog = true }
         )
-        ToggleSettingRow("Calendar Preview", "See upcoming events on your home screen", true)
+        ToggleSettingRow("Calendar Preview", "See upcoming events on your home screen", false)
         ToggleSettingRow("Weather Forecast", "See the full forecast by tapping the current weather", true)
         
-        // Media Player Row with Direct ViewModel Binding
+        // Media Player Setting Row with Permission Interceptor
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -241,8 +256,13 @@ private fun ProductivitySettingsContent(
                 )
             }
             Switch(
-                checked = isMediaWidgetEnabled,
-                onCheckedChange = { viewModel.setShowMediaWidget(it) },
+                checked = isMediaWidgetActive,
+                onCheckedChange = { checked ->
+                    viewModel.setShowMediaWidget(checked)
+                    if (checked && !isNotificationListenerGranted(context)) {
+                        showPermissionDialog = true
+                    }
+                },
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.Black,
                     checkedTrackColor = Color(0xFF4DD0E1)
@@ -275,7 +295,7 @@ private fun ProductivitySettingsContent(
             onClick = { }
         )
         ToggleSettingRow("Suggest Often-Used Apps", "Directly access often-used apps from your favorites", false)
-        ToggleSettingRow("Sort All Apps List By Usage", "Prioritize most-used apps for each letter", true)
+        ToggleSettingRow("Sort All Apps List By Usage", "Prioritize most-used apps for each letter", false)
 
         SectionHeader("Smart Search")
         ClickableSettingRow(
@@ -286,8 +306,8 @@ private fun ProductivitySettingsContent(
         )
 
         SectionHeader("Shortcuts & Gestures")
-        ToggleSettingRow("Cascadia Button", "Run quick actions from your home screen", true)
-        ToggleSettingRow("Quick Lock", "Double-tap the alphabet to lock your phone", true)
+        ToggleSettingRow("Cascadia Button", "Run quick actions from your home screen", false)
+        ToggleSettingRow("Quick Lock", "Double-tap the alphabet to lock your phone", false)
 
         SectionHeader("Advanced")
         ClickableSettingRow(
@@ -303,11 +323,11 @@ private fun ProductivitySettingsContent(
             onClick = onMoveWidgetClick
         )
         ToggleSettingRow("Show Battery Percentage", null, true)
-        ToggleSettingRow("Allow Home Screen Rotation", "When device is rotated", true)
+        ToggleSettingRow("Allow Home Screen Rotation", "When device is rotated", false)
         ToggleSettingRow("Allow Haptic Feedback", "Follow system", true)
     }
 
-    // Persistent Theme Dialog Writer
+    // Media Theme Selection Dialog
     if (showMediaThemeDialog) {
         AlertDialog(
             onDismissRequest = { showMediaThemeDialog = false },
@@ -353,6 +373,36 @@ private fun ProductivitySettingsContent(
             confirmButton = {
                 TextButton(onClick = { showMediaThemeDialog = false }) {
                     Text("Close", color = Color(0xFF4DD0E1))
+                }
+            },
+            containerColor = Color(0xFF1E1E1E)
+        )
+    }
+
+    // Permission Access Dialog in Launcher Settings Page
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            title = { Text(text = "Notification Access Needed", color = Color.White) },
+            text = {
+                Text(
+                    text = "To display live track info and album art, Cascadia Launcher requires Notification Access in system settings.",
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPermissionDialog = false
+                        openNotificationAccessSettings(context)
+                    }
+                ) {
+                    Text(text = "Open Settings", color = Color(0xFF4DD0E1))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionDialog = false }) {
+                    Text(text = "Cancel", color = Color.Gray)
                 }
             },
             containerColor = Color(0xFF1E1E1E)
