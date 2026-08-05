@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.MediaWidgetTheme
+import com.niagaraclone.launcher.ui.components.MusicAppSelectionSheet
 import com.niagaraclone.launcher.ui.components.WeatherBottomSheet
 
 private enum class SettingsPage {
@@ -200,6 +201,7 @@ private fun ProductivitySettingsContent(
     var showCalendarDialog by remember { mutableStateOf(false) }
     var showPermissionDialog by remember { mutableStateOf(false) }
     var isWeatherSheetOpen by remember { mutableStateOf(false) }
+    var showMusicAppSheet by remember { mutableStateOf(false) }
 
     val rawMediaWidgetEnabled by viewModel.showMediaWidget.collectAsState()
     val selectedMediaTheme by viewModel.mediaWidgetTheme.collectAsState()
@@ -273,7 +275,7 @@ private fun ProductivitySettingsContent(
             icon = Icons.Outlined.MusicNote,
             title = "Music Apps",
             subtitle = "Show music apps when connecting headphones or speakers",
-            onClick = { }
+            onClick = { showMusicAppSheet = true }
         )
 
         SectionHeader("Digital Wellbeing")
@@ -326,11 +328,19 @@ private fun ProductivitySettingsContent(
         ToggleSettingRow("Allow Haptic Feedback", "Follow system", true)
     }
 
-    // Weather Interactive Sheet Triggered From Settings
+    // Interactive Weather Sheet Triggered From Settings
     if (isWeatherSheetOpen) {
         WeatherBottomSheet(
             viewModel = viewModel,
             onDismiss = { isWeatherSheetOpen = false }
+        )
+    }
+
+    // Music Apps Selection Sheet Triggered From Settings
+    if (showMusicAppSheet) {
+        MusicAppSelectionSheet(
+            viewModel = viewModel,
+            onDismiss = { showMusicAppSheet = false }
         )
     }
 
