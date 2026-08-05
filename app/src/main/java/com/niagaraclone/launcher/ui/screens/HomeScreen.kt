@@ -1,16 +1,21 @@
 package com.niagaraclone.launcher.ui.screens
 
+import android.app.role.RoleManager
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -39,6 +45,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -48,6 +56,7 @@ import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.MediaPlayerCard
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
 import com.niagaraclone.launcher.ui.components.WidgetStackView
+import kotlin.math.roundToInt
 
 private val AppModel.firstLetter: Char
     get() = label.firstOrNull()?.uppercaseChar() ?: '#'
@@ -60,6 +69,19 @@ private fun isNotificationListenerGranted(context: Context): Boolean {
 
 private fun openNotificationAccessSettings(context: Context) {
     val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+    context.startActivity(intent)
+}
+
+private fun launchDefaultHomeSettings(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val roleManager = context.getSystemService(RoleManager::class.java)
+        if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_HOME)) {
+            val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME)
+            context.startActivity(intent)
+            return
+        }
+    }
+    val intent = Intent(Settings.ACTION_HOME_SETTINGS)
     context.startActivity(intent)
 }
 
@@ -83,15 +105,17 @@ fun HomeScreen(
     val widgetHeight by viewModel.widgetHeight.collectAsState()
     val widgetIds by viewModel.widgetIds.collectAsState()
 
-    // Persistent Media Widget Preferences from ViewModel
+    // Live States
+    val batteryStatus by viewModel.batteryStatus.collectAsState()
+    val isDefaultLauncher by viewModel.isDefaultLauncher.collectAsState()
+    val isBannerDismissedSession by viewModel.isBannerDismissedSession.collectAsState()
+
     val rawShowMediaWidget by viewModel.showMediaWidget.collectAsState()
     val mediaWidgetTheme by viewModel.mediaWidgetTheme.collectAsState()
 
-    // Dynamic Permission Gate: Ensures toggle accurately reflects active permission state
     val isPermissionGranted = remember(rawShowMediaWidget) { isNotificationListenerGranted(context) }
     val showMediaWidget = rawShowMediaWidget && isPermissionGranted
 
-    // Real-time media playback state from NotificationListenerService
     val mediaState by MediaNotificationListener.mediaState.collectAsState()
 
     var isWidgetMenuOpen by remember { mutableStateOf(false) }
@@ -99,14 +123,12 @@ fun HomeScreen(
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
     var showPermissionDialog by remember { mutableStateOf(false) }
 
-    // Synchronize external edit trigger from Settings
     LaunchedEffect(isEditingWidgetExternal) {
         if (isEditingWidgetExternal) {
             isEditingWidget = true
         }
     }
 
-    // --- STATE MANAGEMENT ---
     var isDrawerExpanded by remember { mutableStateOf(false) }
     var isIndexerVisible by remember { mutableStateOf(false) }
     var activeLetter by remember { mutableStateOf<String?>(null) }
@@ -122,7 +144,6 @@ fun HomeScreen(
         apps.groupBy { it.firstLetter }.toSortedMap()
     }
 
-    // --- UNIFIED INDEX MAP ---
     val letterIndexMap = remember(favorites, groupedApps) {
         val map = mutableMapOf<String, Int>()
         map["⭐"] = 0
@@ -136,7 +157,6 @@ fun HomeScreen(
         map
     }
 
-    // --- REAL-TIME SCROLL LISTENER ---
     LaunchedEffect(activeLetter, isDrawerExpanded) {
         val letter = activeLetter ?: return@LaunchedEffect
         if (letter == "⭐") {
@@ -155,13 +175,11 @@ fun HomeScreen(
                 isEditingWidget = false
             }
     ) {
-        // --- 1. MAIN CONTENT AREA ---
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(start = 24.dp, end = 48.dp, top = 48.dp)
         ) {
-            // CLOCK & HEADER
             if (!isDrawerExpanded) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     if (homeLayoutOffsetY > 0f) {
@@ -210,7 +228,7 @@ fun HomeScreen(
                         ) {
                             Text(text = "Mon 3 Aug", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
                             if (showBattery) {
-                                Text(text = "⚡ 39%", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                                Text(text = batteryStatus, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
                             }
                             if (weatherEnabled) {
                                 Text(text = "💧 30°", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
@@ -220,7 +238,16 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // --- LIVE GLASSMORPHISM MEDIA PLAYER CARD ---
+                    // --- DEFAULT LAUNCHER SWIPEABLE PROMPT BANNER ---
+                    if (!isDefaultLauncher && !isBannerDismissedSession) {
+                        SwipeableDefaultLauncherBanner(
+                            onSetDefault = { launchDefaultHomeSettings(context) },
+                            onDismiss = { viewModel.dismissBannerForSession() }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    // --- LIVE MEDIA PLAYER CARD ---
                     mediaState?.let { media ->
                         if (showMediaWidget && media.title.isNotEmpty()) {
                             MediaPlayerCard(
@@ -253,7 +280,6 @@ fun HomeScreen(
                         }
                     }
 
-                    // --- NATIVE APPWIDGET STACK ---
                     if (widgetIds.isNotEmpty()) {
                         WidgetStackView(
                             widgetIds = widgetIds,
@@ -280,13 +306,11 @@ fun HomeScreen(
                 }
             }
 
-            // --- LAZYCOLUMN LIST ---
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // 1. PINNED FAVORITES
                 items(favorites) { app ->
                     FavoriteAppRow(
                         app = app,
@@ -298,7 +322,6 @@ fun HomeScreen(
                     )
                 }
 
-                // 2. FULL A-Z APP DRAWER & FOOTER
                 if (isDrawerExpanded) {
                     groupedApps.forEach { (letter, appGroup) ->
                         item {
@@ -339,7 +362,7 @@ fun HomeScreen(
                             DrawerFooterRow(
                                 icon = Icons.Default.History,
                                 title = "Recently installed",
-                                onClick = { /* Opens recent apps/install history */ }
+                                onClick = { }
                             )
 
                             DrawerFooterRow(
@@ -353,7 +376,6 @@ fun HomeScreen(
             }
         }
 
-        // --- 2. WAVE SIDE INDEXER ---
         WaveSideIndex(
             isIndexerVisible = isIndexerVisible,
             onTouchStart = {
@@ -381,7 +403,6 @@ fun HomeScreen(
             modifier = Modifier.align(Alignment.CenterEnd)
         )
 
-        // --- 3. FLOATING ACTION BUTTON ---
         if (!isDrawerExpanded) {
             FloatingActionButton(
                 onClick = {
@@ -400,7 +421,6 @@ fun HomeScreen(
             }
         }
 
-        // --- 4. WIDGET BOTTOM SHEET MENU ---
         if (isWidgetMenuOpen) {
             ModalBottomSheet(
                 onDismissRequest = { isWidgetMenuOpen = false },
@@ -487,7 +507,6 @@ fun HomeScreen(
             }
         }
 
-        // --- 5. PERMISSION DIALOG ---
         if (showPermissionDialog) {
             AlertDialog(
                 onDismissRequest = { showPermissionDialog = false },
@@ -517,7 +536,6 @@ fun HomeScreen(
             )
         }
 
-        // --- 6. APP LONG PRESS MENU ---
         appForMenu?.let { app ->
             AppLongPressMenu(
                 app = app,
@@ -542,6 +560,79 @@ fun HomeScreen(
                     appForMenu = null
                 }
             )
+        }
+    }
+}
+
+// --- SWIPEABLE DEFAULT LAUNCHER BANNER COMPONENT ---
+@Composable
+private fun SwipeableDefaultLauncherBanner(
+    onSetDefault: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var offsetX by remember { mutableFloatStateOf(0f) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .offset { IntOffset(offsetX.roundToInt(), 0) }
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragEnd = {
+                        if (offsetX > 200f || offsetX < -200f) {
+                            onDismiss()
+                        } else {
+                            offsetX = 0f
+                        }
+                    },
+                    onDragCancel = { offsetX = 0f },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        offsetX += dragAmount.x
+                    }
+                )
+            }
+            .background(Color.Transparent)
+            .padding(vertical = 4.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFFE5A93C),
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Home,
+                        contentDescription = "Home",
+                        tint = Color.Black,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column {
+                Text(
+                    text = "Welcome back! Set Cascadia Launcher as your home screen?",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Set as home screen",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable { onSetDefault() }
+                )
+            }
         }
     }
 }
