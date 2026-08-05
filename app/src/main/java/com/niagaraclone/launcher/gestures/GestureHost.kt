@@ -1,75 +1,83 @@
 package com.niagaraclone.launcher.gestures
 
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
-import kotlin.math.absoluteValue
+import kotlinx.coroutines.launch
 
-enum class SwipeDirection { UP, DOWN, LEFT, RIGHT }
+enum class SwipeDirection { UP, DOWN }
 
-/**
- * Wraps the home screen content and reports discrete swipe gestures once a
- * drag exceeds [thresholdDp], matching Niagara's "swipe from anywhere" model
- * rather than requiring an edge-swipe. Also reports double taps.
- */
 @Composable
 fun GestureHost(
     modifier: Modifier = Modifier,
-    thresholdDp: Int = 56,
-    onSwipe: (SwipeDirection) -> Unit,
-    onDoubleTap: () -> Unit,
-    content: @Composable () -> Unit
+    onTriggerAction: (SwipeDirection) -> Unit,
+    content: @Composable (offsetY: Float) -> Unit
 ) {
-    val density = LocalDensity.current
-    val thresholdPx = with(density) { thresholdDp.dp.toPx() }
-
-    var dragTotalX by remember { mutableFloatStateOf(0f) }
-    var dragTotalY by remember { mutableFloatStateOf(0f) }
-    var consumed by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+    val offsetYAnimatable = remember { Animatable(0f) }
+    val dragThreshold = 140f // Minimum drag distance to trigger actions
 
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onDoubleTap = { onDoubleTap() }
-                )
-            }
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = {
-                        dragTotalX = 0f
-                        dragTotalY = 0f
-                        consumed = false
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        dragTotalX += dragAmount.x
-                        dragTotalY += dragAmount.y
-
-                        if (!consumed) {
-                            val absX = dragTotalX.absoluteValue
-                            val absY = dragTotalY.absoluteValue
-                            if (absX > thresholdPx || absY > thresholdPx) {
-                                consumed = true
-                                val direction = if (absX > absY) {
-                                    if (dragTotalX > 0) SwipeDirection.RIGHT else SwipeDirection.LEFT
-                                } else {
-                                    if (dragTotalY > 0) SwipeDirection.DOWN else SwipeDirection.UP
-                                }
-                                onSwipe(direction)
-                            }
+        modifier = modifier.pointerInput(Unit) {
+            detectVerticalDragGestures(
+                onDragStart = { },
+                onDragEnd = {
+                    val currentOffset = offsetYAnimatable.value
+                    coroutineScope.launch {
+                        if (currentOffset < -dragThreshold) {
+                            // Dragged UP past threshold -> Smart Search
+                            onTriggerAction(SwipeDirection.UP)
+                            offsetYAnimatable.animateTo(
+                                targetValue = 0f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+                            )
+                        } else if (currentOffset > dragThreshold) {
+                            // Dragged DOWN past threshold -> Notification Shade
+                            onTriggerAction(SwipeDirection.DOWN)
+                            offsetYAnimatable.animateTo(
+                                targetValue = 0f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+                            )
+                        } else {
+                            // Cancelled / Micro-drag -> Elastic Spring Rebound back to center
+                            offsetYAnimatable.animateTo(
+                                targetValue = 0f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+                            )
                         }
                     }
-                )
-            }
+                },
+                onDragCancel = {
+                    coroutineScope.launch {
+                        offsetYAnimatable.animateTo(
+                            targetValue = 0f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+                        )
+                    }
+                },
+                onVerticalDrag = { change, dragAmount ->
+                    change.consume()
+                    coroutineScope.launch {
+                        // Apply friction damping for smooth drag physics
+                        val newOffset = offsetYAnimatable.value + (dragAmount * 0.7f)
+                        offsetYAnimatable.snapTo(newOffset)
+                    }
+                }
+            )
+        }
     ) {
-        content()
+        Box(
+            modifier = Modifier.graphicsLayer {
+                translationY = offsetYAnimatable.value
+            }
+        ) {
+            content(offsetYAnimatable.value)
+        }
     }
 }
