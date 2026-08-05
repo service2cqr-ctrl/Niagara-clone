@@ -37,6 +37,12 @@ class SettingsRepository(private val context: Context) {
         // Media Widget Persistence Keys
         val KEY_SHOW_MEDIA_WIDGET = booleanPreferencesKey("show_media_widget")
         val KEY_MEDIA_WIDGET_THEME = stringPreferencesKey("media_widget_theme")
+
+        // Weather Persistence Keys
+        val KEY_WEATHER_ENABLED = booleanPreferencesKey("weather_enabled")
+        val KEY_WEATHER_LOCATION_MODE = stringPreferencesKey("weather_location_mode") // "AUTO" or "FIXED"
+        val KEY_WEATHER_CITY_NAME = stringPreferencesKey("weather_city_name")
+        val KEY_WEATHER_TEMP_UNIT = stringPreferencesKey("weather_temp_unit") // "CELSIUS" or "FAHRENHEIT"
     }
 
     val theme: Flow<AppTheme> = context.dataStore.data.map { prefs ->
@@ -86,6 +92,23 @@ class SettingsRepository(private val context: Context) {
         prefs[KEY_MEDIA_WIDGET_THEME] ?: "FROSTED_GLASS"
     }
 
+    // --- WEATHER FLOWS ---
+    val weatherEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_WEATHER_ENABLED] ?: true
+    }
+
+    val weatherLocationMode: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_WEATHER_LOCATION_MODE] ?: "AUTO"
+    }
+
+    val weatherCityName: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_WEATHER_CITY_NAME] ?: "Vadodara"
+    }
+
+    val weatherTempUnit: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_WEATHER_TEMP_UNIT] ?: "CELSIUS"
+    }
+
     suspend fun setTheme(theme: AppTheme) {
         context.dataStore.edit { prefs -> prefs[KEY_THEME] = theme.name }
     }
@@ -123,6 +146,23 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setMediaWidgetThemeName(themeName: String) {
         context.dataStore.edit { prefs -> prefs[KEY_MEDIA_WIDGET_THEME] = themeName }
+    }
+
+    // --- WEATHER SETTERS ---
+    suspend fun setWeatherEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_WEATHER_ENABLED] = enabled }
+    }
+
+    suspend fun setWeatherLocationMode(mode: String) {
+        context.dataStore.edit { prefs -> prefs[KEY_WEATHER_LOCATION_MODE] = mode }
+    }
+
+    suspend fun setWeatherCityName(cityName: String) {
+        context.dataStore.edit { prefs -> prefs[KEY_WEATHER_CITY_NAME] = cityName }
+    }
+
+    suspend fun setWeatherTempUnit(unit: String) {
+        context.dataStore.edit { prefs -> prefs[KEY_WEATHER_TEMP_UNIT] = unit }
     }
 
     // --- WIDGET STACK HELPER METHODS ---
