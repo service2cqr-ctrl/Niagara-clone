@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.outlined.CalendarToday
@@ -49,6 +51,7 @@ import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.MediaPlayerCard
+import com.niagaraclone.launcher.ui.components.PopUpFolderCard
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
 import com.niagaraclone.launcher.ui.components.WeatherBottomSheet
 import com.niagaraclone.launcher.ui.components.WidgetStackView
@@ -72,7 +75,8 @@ fun HomeScreen(
     onAddWidgetClick: () -> Unit = {},
     onOpenAppDrawer: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
-    onRequestSetDefaultLauncher: () -> Unit = {}
+    onRequestSetDefaultLauncher: () -> Unit = {},
+    onOpenSearch: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -103,6 +107,8 @@ fun HomeScreen(
     var isEditingWidget by remember { mutableStateOf(false) }
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
     var showPermissionDialog by remember { mutableStateOf(false) }
+
+    var activePopUpApp by remember { mutableStateOf<AppModel?>(null) }
 
     val liveTempDisplay = remember(liveWeather, tempUnit) {
         val c = liveWeather?.temperatureCelsius ?: 28f
@@ -159,7 +165,8 @@ fun HomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 24.dp, end = 48.dp, top = 48.dp)
+                // Adjusted default clock headroom top padding (64.dp) to allow smooth elastic motions
+                .padding(start = 24.dp, end = 48.dp, top = 64.dp)
         ) {
             if (!isDrawerExpanded) {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -187,8 +194,8 @@ fun HomeScreen(
                             )
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "09", color = Color(0xFF4DD0E1), fontSize = 72.sp, fontWeight = FontWeight.Bold)
-                            Text(text = "31", color = Color.White, fontSize = 72.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "10", color = Color(0xFF4DD0E1), fontSize = 72.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "28", color = Color.White, fontSize = 72.sp, fontWeight = FontWeight.Bold)
                         }
 
                         Spacer(modifier = Modifier.height(4.dp))
@@ -197,7 +204,7 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(text = "Mon 3 Aug", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                            Text(text = "Wed 5 Aug", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
                             if (showBattery) {
                                 Text(text = batteryStatus, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
                             }
@@ -278,14 +285,25 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(favorites) { app ->
-                    FavoriteAppRow(
-                        app = app,
-                        onClick = {
-                            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                            intent?.let { context.startActivity(it) }
-                        },
-                        onLongClick = { appForMenu = app }
-                    )
+                    Column {
+                        FavoriteAppRow(
+                            app = app,
+                            onClick = {
+                                val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                                intent?.let { context.startActivity(it) }
+                            },
+                            onLongClick = { appForMenu = app },
+                            onSwipeRight = { activePopUpApp = app }
+                        )
+
+                        if (activePopUpApp?.packageName == app.packageName) {
+                            PopUpFolderCard(
+                                folderName = app.label,
+                                subApps = apps.take(4),
+                                onDismiss = { activePopUpApp = null }
+                            )
+                        }
+                    }
                 }
 
                 if (isDrawerExpanded) {
@@ -306,7 +324,8 @@ fun HomeScreen(
                                     val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
                                     intent?.let { context.startActivity(it) }
                                 },
-                                onLongClick = { appForMenu = app }
+                                onLongClick = { appForMenu = app },
+                                onSwipeRight = { activePopUpApp = app }
                             )
                         }
                     }
@@ -348,10 +367,7 @@ fun HomeScreen(
 
         if (!isDrawerExpanded) {
             FloatingActionButton(
-                onClick = {
-                    val intent = Intent(Intent.ACTION_DIAL)
-                    context.startActivity(intent)
-                },
+                onClick = onOpenSearch,
                 containerColor = Color(0xFF4DD0E1),
                 contentColor = Color.Black,
                 shape = CircleShape,
@@ -360,7 +376,7 @@ fun HomeScreen(
                     .padding(bottom = 50.dp, end = 50.dp)
                     .size(56.dp)
             ) {
-                Icon(imageVector = Icons.Default.Phone, contentDescription = "Phone")
+                Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
             }
         }
 
@@ -463,6 +479,41 @@ fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FavoriteAppRow(
+    app: AppModel,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onSwipeRight: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { change, dragAmount ->
+                    if (dragAmount > 30f) {
+                        change.consume()
+                        onSwipeRight()
+                    }
+                }
+            }
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        app.icon?.let { iconDrawable ->
+            Image(
+                bitmap = iconDrawable.toBitmap(width = 40, height = 40).asImageBitmap(),
+                contentDescription = app.label,
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+        } ?: Spacer(modifier = Modifier.width(44.dp))
+        Text(text = app.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
 @Composable
 private fun SwipeableDefaultLauncherBanner(
     onSetDefault: () -> Unit,
@@ -514,18 +565,6 @@ private fun DrawerFooterRow(icon: ImageVector, title: String, onClick: () -> Uni
         Icon(imageVector = icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(28.dp))
         Spacer(modifier = Modifier.width(8.dp))
         Text(text = title, fontSize = 18.sp, fontWeight = FontWeight.Medium, color = Color.White)
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun FavoriteAppRow(app: AppModel, onClick: () -> Unit, onLongClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        app.icon?.let { iconDrawable ->
-            Image(bitmap = iconDrawable.toBitmap(width = 40, height = 40).asImageBitmap(), contentDescription = app.label, modifier = Modifier.size(28.dp))
-            Spacer(modifier = Modifier.width(16.dp))
-        } ?: Spacer(modifier = Modifier.width(44.dp))
-        Text(text = app.label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
 
