@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -52,6 +53,7 @@ import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.services.AudioConnectionReceiver
 import com.niagaraclone.launcher.services.MediaNotificationListener
+import com.niagaraclone.launcher.services.ScreenLockService
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.AutoMusicPopUpCard
 import com.niagaraclone.launcher.ui.components.MediaPlayerCard
@@ -87,6 +89,7 @@ fun HomeScreen(
     val listState = rememberLazyListState()
 
     val apps by viewModel.apps.collectAsState()
+    val hiddenPackages by viewModel.hiddenPackages.collectAsState()
     val favoritePackages by viewModel.favoritePackages.collectAsState()
     val homeLayoutOffsetY by viewModel.homeOffsetY.collectAsState()
     val widgetHeight by viewModel.widgetHeight.collectAsState()
@@ -111,11 +114,15 @@ fun HomeScreen(
     val isAudioConnected by AudioConnectionReceiver.isAudioDeviceConnected.collectAsState()
     val selectedMusicPackages by viewModel.selectedMusicPackages.collectAsState()
 
-    val musicLauncherApps = remember(apps, selectedMusicPackages) {
+    val visibleApps = remember(apps, hiddenPackages) {
+        apps.filter { !hiddenPackages.contains(it.packageName) }
+    }
+
+    val musicLauncherApps = remember(visibleApps, selectedMusicPackages) {
         if (selectedMusicPackages.isNotEmpty()) {
-            apps.filter { selectedMusicPackages.contains(it.packageName) }
+            visibleApps.filter { selectedMusicPackages.contains(it.packageName) }
         } else {
-            viewModel.getAutoDetectedMusicApps()
+            viewModel.getAutoDetectedMusicApps().filter { !hiddenPackages.contains(it.packageName) }
         }
     }
 
@@ -151,12 +158,12 @@ fun HomeScreen(
     var activeLetter by remember { mutableStateOf<String?>(null) }
     var showBattery by remember { mutableStateOf(true) }
 
-    val favorites = remember(apps, favoritePackages) {
-        apps.filter { favoritePackages.contains(it.packageName) }
+    val favorites = remember(visibleApps, favoritePackages) {
+        visibleApps.filter { favoritePackages.contains(it.packageName) }
     }
 
-    val groupedApps = remember(apps) {
-        apps.groupBy { it.firstLetter }.toSortedMap()
+    val groupedApps = remember(visibleApps) {
+        visibleApps.groupBy { it.firstLetter }.toSortedMap()
     }
 
     val letterIndexMap = remember(favorites, groupedApps) {
@@ -185,7 +192,20 @@ fun HomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent)
-            .clickable(enabled = isEditingWidget) { isEditingWidget = false }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = {
+                        val isLocked = ScreenLockService.lockScreen()
+                        if (!isLocked) {
+                            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                            context.startActivity(intent)
+                        }
+                    },
+                    onTap = {
+                        if (isEditingWidget) isEditingWidget = false
+                    }
+                )
+            }
     ) {
         Column(
             modifier = Modifier
@@ -381,12 +401,12 @@ fun HomeScreen(
 
         // --- Dynamic Overlay Pop-up Card with Real Operational Apps ---
         activePopUpApp?.let { parentApp ->
-            val subApps = remember(apps, parentApp) {
-                val categoryMatch = apps.filter {
+            val subApps = remember(visibleApps, parentApp) {
+                val categoryMatch = visibleApps.filter {
                     it.packageName != parentApp.packageName &&
                     it.label.take(3).equals(parentApp.label.take(3), ignoreCase = true)
                 }
-                if (categoryMatch.isNotEmpty()) categoryMatch.take(4) else apps.filter { it.packageName != parentApp.packageName }.take(4)
+                if (categoryMatch.isNotEmpty()) categoryMatch.take(4) else visibleApps.filter { it.packageName != parentApp.packageName }.take(4)
             }
 
             Popup(
