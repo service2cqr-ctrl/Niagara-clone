@@ -437,7 +437,7 @@ fun HomeScreen(
         if (isWidgetMenuOpen) {
             ModalBottomSheet(
                 onDismissRequest = { isWidgetMenuOpen = false },
-                containerColor = Color(0xFF181818),
+                containerColor = Color.Black,
                 contentColor = Color.White,
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
             ) {
@@ -506,7 +506,7 @@ fun HomeScreen(
                     }
                 },
                 dismissButton = { TextButton(onClick = { showPermissionDialog = false }) { Text(text = "Cancel", color = Color.Gray) } },
-                containerColor = Color(0xFF1E1E1E)
+                containerColor = Color.Black
             )
         }
 
@@ -683,6 +683,6 @@ private fun AppLongPressMenu(app: AppModel, isFavorite: Boolean, onDismiss: () -
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(text = "Cancel", color = Color.Gray) } },
-        containerColor = Color(0xFF1E1E1E)
+        containerColor = Color.Black
     )
 }
