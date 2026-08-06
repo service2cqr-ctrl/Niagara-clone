@@ -61,7 +61,7 @@ fun SettingsScreen(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color(0xFF0D0D0D)
+        color = Color.Black
     ) {
         when (currentPage) {
             SettingsPage.MAIN -> MainSettingsContent(
@@ -391,7 +391,7 @@ private fun ProductivitySettingsContent(
                     Text("Close", color = Color(0xFF4DD0E1))
                 }
             },
-            containerColor = Color(0xFF1E1E1E)
+            containerColor = Color.Black
         )
     }
 
@@ -420,7 +420,7 @@ private fun ProductivitySettingsContent(
                     Text(text = "Cancel", color = Color.Gray)
                 }
             },
-            containerColor = Color(0xFF1E1E1E)
+            containerColor = Color.Black
         )
     }
 
@@ -445,7 +445,7 @@ private fun ProductivitySettingsContent(
                     Text("Done", color = Color(0xFF4DD0E1))
                 }
             },
-            containerColor = Color(0xFF1E1E1E)
+            containerColor = Color.Black
         )
     }
 }
