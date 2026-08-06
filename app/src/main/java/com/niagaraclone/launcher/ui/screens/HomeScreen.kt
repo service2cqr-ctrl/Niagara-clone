@@ -347,6 +347,33 @@ fun HomeScreen(
                             )
                         }
                     }
+
+                    // --- APP DRAWER FOOTER (CASACADIA SETTINGS & RECENTLY INSTALLED) ---
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 24.dp, bottom = 96.dp)
+                        ) {
+                            Text(
+                                text = "Cascadia Launcher",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            DrawerFooterRow(
+                                icon = Icons.Default.History,
+                                title = "Recently installed",
+                                onClick = { }
+                            )
+                            DrawerFooterRow(
+                                icon = Icons.Default.Settings,
+                                title = "Cascadia settings",
+                                onClick = onOpenSettings
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -361,7 +388,7 @@ fun HomeScreen(
                 Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
                     PopUpFolderCard(
                         folderName = app.label,
-                        subApps = apps.take(4), // Future proofing: filter actual sub-apps here
+                        subApps = apps.take(4),
                         onDismiss = { activePopUpApp = null }
                     )
                 }
@@ -518,14 +545,13 @@ private fun FavoriteAppRow(
         modifier = Modifier
             .fillMaxWidth()
             .onGloballyPositioned { coordinates ->
-                // Capture the exact vertical bottom edge of this specific row
                 bottomY = coordinates.boundsInRoot().bottom
             }
             .pointerInput(Unit) {
                 detectHorizontalDragGestures { change, dragAmount ->
                     if (dragAmount > 30f) {
                         change.consume()
-                        onSwipeRight(bottomY) // Trigger popup and pass tracked coordinate
+                        onSwipeRight(bottomY)
                     }
                 }
             }
@@ -592,10 +618,16 @@ private fun SwipeableDefaultLauncherBanner(
 // Helpers
 @Composable
 private fun DrawerFooterRow(icon: ImageVector, title: String, onClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Icon(imageVector = icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(28.dp))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text = title, fontSize = 18.sp, fontWeight = FontWeight.Medium, color = Color.White)
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.White)
     }
 }
 
