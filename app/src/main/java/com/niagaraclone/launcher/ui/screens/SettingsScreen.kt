@@ -4,7 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -33,7 +36,8 @@ private enum class SettingsPage {
     THEMES,
     PRO,
     ADVANCED,
-    BACKUP_RESTORE
+    BACKUP_RESTORE,
+    HIDE_APPS
 }
 
 private fun openNotificationAccessSettings(context: Context) {
@@ -71,6 +75,7 @@ fun SettingsScreen(
             SettingsPage.PRODUCTIVITY -> ProductivitySettingsContent(
                 viewModel = viewModel,
                 onBack = { currentPage = SettingsPage.MAIN },
+                onNavigateToHideApps = { currentPage = SettingsPage.HIDE_APPS },
                 onAddWidgetClick = {
                     onDismiss()
                     onAddWidgetClick()
@@ -91,7 +96,12 @@ fun SettingsScreen(
                 onBack = { currentPage = SettingsPage.MAIN }
             )
             SettingsPage.BACKUP_RESTORE -> BackupRestoreContent(
+                viewModel = viewModel,
                 onBack = { currentPage = SettingsPage.ADVANCED }
+            )
+            SettingsPage.HIDE_APPS -> HideAppsScreen(
+                viewModel = viewModel,
+                onBack = { currentPage = SettingsPage.PRODUCTIVITY }
             )
         }
     }
@@ -194,6 +204,7 @@ private fun MainSettingsContent(
 private fun ProductivitySettingsContent(
     viewModel: LauncherViewModel,
     onBack: () -> Unit,
+    onNavigateToHideApps: () -> Unit,
     onAddWidgetClick: () -> Unit,
     onMoveWidgetClick: () -> Unit
 ) {
@@ -229,7 +240,6 @@ private fun ProductivitySettingsContent(
         )
         ToggleSettingRow("Calendar Preview", "See upcoming events on your home screen", false)
         
-        // Weather Forecast Setting Triggers Interactive Sheet
         ClickableSettingRow(
             icon = Icons.Outlined.WbSunny,
             title = "Weather Forecast",
@@ -287,7 +297,7 @@ private fun ProductivitySettingsContent(
             icon = Icons.Outlined.VisibilityOff,
             title = "Hide Apps",
             subtitle = "Hide apps from your app list",
-            onClick = { }
+            onClick = onNavigateToHideApps
         )
         ClickableSettingRow(
             icon = Icons.Outlined.Folder,
@@ -308,7 +318,7 @@ private fun ProductivitySettingsContent(
 
         SectionHeader("Shortcuts & Gestures")
         ToggleSettingRow("Cascadia Button", "Run quick actions from your home screen", false)
-        ToggleSettingRow("Quick Lock", "Double-tap the alphabet to lock your phone", false)
+        ToggleSettingRow("Quick Lock", "Double-tap the home screen to lock your phone", false)
 
         SectionHeader("Advanced")
         ClickableSettingRow(
@@ -328,7 +338,6 @@ private fun ProductivitySettingsContent(
         ToggleSettingRow("Allow Haptic Feedback", "Follow system", true)
     }
 
-    // Interactive Weather Sheet Triggered From Settings
     if (isWeatherSheetOpen) {
         WeatherBottomSheet(
             viewModel = viewModel,
@@ -336,7 +345,6 @@ private fun ProductivitySettingsContent(
         )
     }
 
-    // Music Apps Selection Sheet Triggered From Settings
     if (showMusicAppSheet) {
         MusicAppSelectionSheet(
             viewModel = viewModel,
@@ -615,7 +623,30 @@ private fun AdvancedSettingsContent(
 // 6. BACKUP & RESTORE PAGE
 // -----------------------------------------------------------------------------
 @Composable
-private fun BackupRestoreContent(onBack: () -> Unit) {
+private fun BackupRestoreContent(
+    viewModel: LauncherViewModel,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let {
+            val success = viewModel.exportBackupJson(context, it)
+            Toast.makeText(context, if (success) "Backup saved successfully!" else "Failed to save backup", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            val success = viewModel.importBackupJson(context, it)
+            Toast.makeText(context, if (success) "Backup restored successfully!" else "Failed to restore backup", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -650,8 +681,18 @@ private fun BackupRestoreContent(onBack: () -> Unit) {
         Text("Actions", color = Color(0xFF4DD0E1), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(12.dp))
 
-        ClickableSettingRow(icon = Icons.Outlined.FileUpload, title = "Create backup", subtitle = null, onClick = { })
-        ClickableSettingRow(icon = Icons.Outlined.RestartAlt, title = "Restore backup", subtitle = null, onClick = { })
+        ClickableSettingRow(
+            icon = Icons.Outlined.FileUpload,
+            title = "Create backup",
+            subtitle = "Save setup to JSON",
+            onClick = { exportLauncher.launch("cascadia_backup.json") }
+        )
+        ClickableSettingRow(
+            icon = Icons.Outlined.RestartAlt,
+            title = "Restore backup",
+            subtitle = "Load setup from JSON file",
+            onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) }
+        )
     }
 }
 
