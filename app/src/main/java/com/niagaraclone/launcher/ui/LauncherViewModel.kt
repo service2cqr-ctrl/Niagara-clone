@@ -10,6 +10,7 @@ import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.location.LocationManager
+import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
 import android.provider.Settings
@@ -31,6 +32,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 class LauncherViewModel(
     val repository: SettingsRepository,
@@ -38,6 +41,7 @@ class LauncherViewModel(
 ) : ViewModel() {
 
     private val weatherRepository = WeatherRepository(context)
+    private val prefs = context.getSharedPreferences("launcher_prefs", Context.MODE_PRIVATE)
 
     private val _apps = MutableStateFlow<List<AppModel>>(emptyList())
     val apps: StateFlow<List<AppModel>> = _apps.asStateFlow()
@@ -53,6 +57,10 @@ class LauncherViewModel(
 
     private val _notificationPermissionGranted = MutableStateFlow(false)
     val notificationPermissionGranted: StateFlow<Boolean> = _notificationPermissionGranted.asStateFlow()
+
+    // --- HIDDEN PACKAGES STATE ---
+    private val _hiddenPackages = MutableStateFlow<Set<String>>(emptySet())
+    val hiddenPackages: StateFlow<Set<String>> = _hiddenPackages.asStateFlow()
 
     // --- MUSIC APPS SELECTION STATE ---
     private val _selectedMusicPackages = MutableStateFlow<Set<String>>(emptySet())
@@ -111,6 +119,7 @@ class LauncherViewModel(
 
     init {
         refreshApps()
+        loadHiddenPackages()
         registerBatteryReceiver()
         checkDefaultLauncherStatus()
         refreshPermissions()
@@ -118,9 +127,75 @@ class LauncherViewModel(
         loadSelectedMusicPackages()
     }
 
+    // --- HIDDEN APPS MANAGEMENT ---
+    private fun loadHiddenPackages() {
+        val saved = prefs.getStringSet("hidden_packages", emptySet()) ?: emptySet()
+        _hiddenPackages.value = saved
+    }
+
+    fun toggleHidePackage(packageName: String) {
+        val current = _hiddenPackages.value.toMutableSet()
+        if (current.contains(packageName)) current.remove(packageName) else current.add(packageName)
+        _hiddenPackages.value = current
+        prefs.edit().putStringSet("hidden_packages", current).apply()
+    }
+
+    // --- BACKUP & RESTORE LOGIC ---
+    fun exportBackupJson(context: Context, uri: Uri): Boolean {
+        return try {
+            val json = JSONObject().apply {
+                put("favoritePackages", JSONArray(favoritePackages.value.toList()))
+                put("hiddenPackages", JSONArray(_hiddenPackages.value.toList()))
+                put("widgetIds", JSONArray(widgetIds.value))
+                put("homeOffsetY", homeOffsetY.value.toDouble())
+                put("weatherEnabled", weatherEnabled.value)
+                put("weatherLocationMode", weatherLocationMode.value)
+                put("weatherCityName", weatherCityName.value)
+                put("weatherTempUnit", weatherTempUnit.value)
+            }
+            context.contentResolver.openOutputStream(uri)?.use { stream ->
+                stream.write(json.toString(4).toByteArray())
+            }
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    fun importBackupJson(context: Context, uri: Uri): Boolean {
+        return try {
+            val jsonString = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: return false
+            val json = JSONObject(jsonString)
+
+            if (json.has("favoritePackages")) {
+                val favArray = json.getJSONArray("favoritePackages")
+                val favs = mutableListOf<String>()
+                for (i in 0 until favArray.length()) favs.add(favArray.getString(i))
+                viewModelScope.launch { repository.setFavorites(favs) }
+            }
+
+            if (json.has("hiddenPackages")) {
+                val hiddenArray = json.getJSONArray("hiddenPackages")
+                val hiddens = mutableSetOf<String>()
+                for (i in 0 until hiddenArray.length()) hiddens.add(hiddenArray.getString(i))
+                _hiddenPackages.value = hiddens
+                prefs.edit().putStringSet("hidden_packages", hiddens).apply()
+            }
+
+            if (json.has("weatherEnabled")) setWeatherEnabled(json.getBoolean("weatherEnabled"))
+            if (json.has("weatherCityName")) setWeatherCityName(json.getString("weatherCityName"))
+            if (json.has("homeOffsetY")) updateHomeOffsetY(json.getDouble("homeOffsetY").toFloat())
+
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
     // --- MUSIC APP MANAGEMENT ---
     private fun loadSelectedMusicPackages() {
-        val prefs = context.getSharedPreferences("launcher_prefs", Context.MODE_PRIVATE)
         val saved = prefs.getStringSet("selected_music_packages", setOf("com.spotify.music", "com.google.android.apps.youtube.music")) ?: emptySet()
         _selectedMusicPackages.value = saved
     }
@@ -133,7 +208,6 @@ class LauncherViewModel(
             current.add(packageName)
         }
         _selectedMusicPackages.value = current
-        val prefs = context.getSharedPreferences("launcher_prefs", Context.MODE_PRIVATE)
         prefs.edit().putStringSet("selected_music_packages", current).apply()
     }
 
@@ -161,7 +235,6 @@ class LauncherViewModel(
             if (weatherLocationMode.value == "AUTO") {
                 scanAndFetchLocationWeather()
             } else {
-                // Default fallback coords for fixed city
                 val data = weatherRepository.fetchLiveWeather(22.3072, 73.1812)
                 if (data != null) {
                     _liveWeather.value = data.copy(cityName = weatherCityName.value)
@@ -187,7 +260,6 @@ class LauncherViewModel(
                     setWeatherCityName(data.cityName)
                 }
             } else {
-                // Default coordinates if location unavailable
                 val data = weatherRepository.fetchLiveWeather(22.3072, 73.1812)
                 if (data != null) {
                     _liveWeather.value = data
