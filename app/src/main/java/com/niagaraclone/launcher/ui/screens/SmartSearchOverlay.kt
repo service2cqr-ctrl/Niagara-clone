@@ -58,8 +58,8 @@ fun SmartSearchOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            // Translucent overlay to let the home wallpaper remain visible
-            .background(Color.Black.copy(alpha = 0.5f))
+            // Pitch Black UI Background
+            .background(Color.Black)
             .clickable(onClick = onDismiss)
     ) {
         Column(
@@ -71,7 +71,7 @@ fun SmartSearchOverlay(
         ) {
             Surface(
                 shape = RoundedCornerShape(28.dp),
-                color = Color(0xFF222222),
+                color = Color(0xFF181818),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
