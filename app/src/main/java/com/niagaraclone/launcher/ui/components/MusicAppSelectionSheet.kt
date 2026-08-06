@@ -46,7 +46,7 @@ fun MusicAppSelectionSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141414),
+        containerColor = Color.Black, // Pitch Black Background
         contentColor = Color.White,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
