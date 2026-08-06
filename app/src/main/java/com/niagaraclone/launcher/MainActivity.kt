@@ -7,6 +7,7 @@ import android.app.role.RoleManager
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothHeadset
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -57,7 +58,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val APPWIDGET_HOST_ID = 1024
-        private const val REQUEST_CODE_POST_NOTIFICATIONS = 101
+        private const val REQUEST_CODE_PERMISSIONS = 101
     }
 
     private val roleLauncher = registerForActivityResult(
@@ -93,10 +94,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val permissionsToRequest = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_CODE_POST_NOTIFICATIONS)
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+        }
+
+        if (permissionsToRequest.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, permissionsToRequest.toTypedArray(), REQUEST_CODE_PERMISSIONS)
         }
 
         requestDefaultLauncher()
@@ -109,8 +120,10 @@ class MainActivity : ComponentActivity() {
             addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
             addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
         }
         registerReceiver(audioReceiver, audioFilter)
+        AudioConnectionReceiver.checkAudioConnectionState(this)
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
@@ -177,6 +190,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         appWidgetHost.startListening()
+        AudioConnectionReceiver.checkAudioConnectionState(this)
     }
 
     override fun onStop() {
@@ -194,6 +208,7 @@ class MainActivity : ComponentActivity() {
         viewModel.refreshApps()
         viewModel.checkDefaultLauncherStatus()
         viewModel.refreshPermissions()
+        AudioConnectionReceiver.checkAudioConnectionState(this)
     }
 
     fun requestDefaultLauncher() {
