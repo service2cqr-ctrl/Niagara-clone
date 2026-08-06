@@ -1,5 +1,6 @@
 package com.niagaraclone.launcher.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -51,6 +53,12 @@ fun SmartSearchOverlay(
         else listOf(query, "$query store", "$query news", "$query india")
     }
 
+    // Handle physical / gesture back button
+    BackHandler {
+        onDismiss()
+    }
+
+    // Automatically request keyboard focus when search opens
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
     }
@@ -58,28 +66,34 @@ fun SmartSearchOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            // Pitch Black UI Background
-            .background(Color.Black)
-            .clickable(onClick = onDismiss)
+            .background(Color.Black) // Solid pitch black UI
+            .statusBarsPadding()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-                .clickable(enabled = false) {}
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
+            // Pill-Shaped Search Input Bar
             Surface(
                 shape = RoundedCornerShape(28.dp),
-                color = Color(0xFF181818),
+                color = Color(0xFF1E1E1E),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp)
                 ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White
+                        )
+                    }
+
                     TextField(
                         value = query,
                         onValueChange = { query = it },
@@ -97,17 +111,23 @@ fun SmartSearchOverlay(
                             .weight(1f)
                             .focusRequester(focusRequester)
                     )
+
                     IconButton(onClick = { }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.Gray)
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Menu",
+                            tint = Color.Gray
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
+            // Search Results & Suggestions List
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (query.isBlank()) {
                     item {
@@ -116,7 +136,7 @@ fun SmartSearchOverlay(
                             color = Color.Gray,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+                            modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 8.dp)
                         )
                     }
                 }
