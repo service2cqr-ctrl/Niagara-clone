@@ -254,7 +254,7 @@ fun HomeScreen(
                     }
 
                     // --- AUTO MUSIC POP-UP CARD ON AUDIO CONNECT ---
-                    if (isAudioConnected && musicLauncherApps.isNotEmpty() && (mediaState == null || mediaState?.title.isNullOrEmpty())) {
+                    if (isAudioConnected && musicLauncherApps.isNotEmpty() && mediaState?.isPlaying != true) {
                         AutoMusicPopUpCard(
                             musicApps = musicLauncherApps,
                             onDismiss = { }
@@ -262,8 +262,9 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
+                    // --- ONLY SHOW ACTIVE PLAYING MEDIA CARD ---
                     mediaState?.let { media ->
-                        if (showMediaWidget && media.title.isNotEmpty()) {
+                        if (showMediaWidget && media.isPlaying && media.title.isNotEmpty()) {
                             MediaPlayerCard(
                                 albumArt = media.albumArt?.asImageBitmap(),
                                 trackTitle = media.title,
@@ -348,7 +349,7 @@ fun HomeScreen(
                         }
                     }
 
-                    // --- APP DRAWER FOOTER (CASACADIA SETTINGS & RECENTLY INSTALLED) ---
+                    // --- APP DRAWER FOOTER ---
                     item {
                         Column(
                             modifier = Modifier
@@ -378,8 +379,16 @@ fun HomeScreen(
             }
         }
 
-        // --- Dynamic Overlay Pop-up Card ---
-        activePopUpApp?.let { app ->
+        // --- Dynamic Overlay Pop-up Card with Real Operational Apps ---
+        activePopUpApp?.let { parentApp ->
+            val subApps = remember(apps, parentApp) {
+                val categoryMatch = apps.filter {
+                    it.packageName != parentApp.packageName &&
+                    it.label.take(3).equals(parentApp.label.take(3), ignoreCase = true)
+                }
+                if (categoryMatch.isNotEmpty()) categoryMatch.take(4) else apps.filter { it.packageName != parentApp.packageName }.take(4)
+            }
+
             Popup(
                 alignment = Alignment.TopStart,
                 offset = IntOffset(0, popupYOffset.roundToInt()),
@@ -387,8 +396,8 @@ fun HomeScreen(
             ) {
                 Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
                     PopUpFolderCard(
-                        folderName = app.label,
-                        subApps = apps.take(4),
+                        folderName = parentApp.label,
+                        subApps = subApps,
                         onDismiss = { activePopUpApp = null }
                     )
                 }
