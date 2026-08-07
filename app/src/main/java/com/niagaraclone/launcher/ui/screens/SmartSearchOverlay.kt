@@ -40,7 +40,6 @@ fun SmartSearchOverlay(
 
     val apps by viewModel.apps.collectAsState()
 
-    // Dynamically filter installed apps based solely on input query
     val filteredApps = remember(query, apps) {
         if (query.isBlank()) {
             emptyList()
@@ -49,30 +48,23 @@ fun SmartSearchOverlay(
         }
     }
 
-    // Recent/Last opened app result when search query is empty
     val lastResultApp = remember(apps) {
         apps.firstOrNull { it.label.contains("Cascadia", ignoreCase = true) } ?: apps.firstOrNull()
     }
 
     val webSuggestions = remember(query) {
         if (query.isBlank()) emptyList()
-        else listOf(query, "$query store", "$query news", "$query india")
+        else listOf(query, "$query store", "$query news", "$query updates")
     }
 
-    // Handle physical or gesture back action
-    BackHandler {
-        onDismiss()
-    }
+    BackHandler { onDismiss() }
 
-    // Auto-focus soft keyboard when overlay opens
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Transparent) // Transparent overlay showing home wallpaper
+            .background(Color.Transparent)
             .statusBarsPadding()
     ) {
         Column(
@@ -80,10 +72,9 @@ fun SmartSearchOverlay(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            // Pitch-Black Pill Search Bar Matching Image 2
             Surface(
                 shape = RoundedCornerShape(28.dp),
-                color = Color.Black, // Pitch Black surface
+                color = Color.Black,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
@@ -93,17 +84,13 @@ fun SmartSearchOverlay(
                     modifier = Modifier.padding(horizontal = 8.dp)
                 ) {
                     IconButton(onClick = onDismiss) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White
-                        )
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
 
                     TextField(
                         value = query,
                         onValueChange = { query = it },
-                        placeholder = { Text("Search apps", color = Color.Gray, fontSize = 16.sp) },
+                        placeholder = { Text("Search apps or web", color = Color.Gray, fontSize = 16.sp) },
                         singleLine = true,
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
@@ -119,29 +106,24 @@ fun SmartSearchOverlay(
                     )
 
                     IconButton(onClick = { }) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Menu",
-                            tint = Color.Gray
-                        )
+                        Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.Gray)
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Dynamic Results List
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // Showing Last Result on Empty Query (Replicating Image 2)
                 if (query.isBlank() && lastResultApp != null) {
                     item {
                         SearchAppResultRow(
                             app = lastResultApp,
                             subText = "Last result",
                             onClick = {
+                                viewModel.trackAppLaunch(lastResultApp.packageName)
                                 val intent = context.packageManager.getLaunchIntentForPackage(lastResultApp.packageName)
                                 intent?.let { context.startActivity(it) }
                                 onDismiss()
@@ -153,8 +135,9 @@ fun SmartSearchOverlay(
                 items(filteredApps) { app ->
                     SearchAppResultRow(
                         app = app,
-                        subText = "Tap Search to open",
+                        subText = "Tap to launch",
                         onClick = {
+                            viewModel.trackAppLaunch(app.packageName)
                             val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
                             intent?.let { context.startActivity(it) }
                             onDismiss()
@@ -177,7 +160,10 @@ fun SmartSearchOverlay(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { }
+                                .clickable {
+                                    viewModel.launchWebSearch(context, suggestion)
+                                    onDismiss()
+                                }
                                 .padding(vertical = 10.dp, horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -191,13 +177,18 @@ fun SmartSearchOverlay(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { }
+                                .clickable {
+                                    if (query.isNotBlank()) {
+                                        viewModel.launchWebSearch(context, query)
+                                        onDismiss()
+                                    }
+                                }
                                 .padding(vertical = 12.dp, horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray)
                             Spacer(modifier = Modifier.width(16.dp))
-                            Text(text = "Search for more apps", color = Color.White.copy(alpha = 0.8f), fontSize = 15.sp)
+                            Text(text = "Search web for \"$query\"", color = Color(0xFF4DD0E1), fontSize = 15.sp)
                         }
                     }
                 }
@@ -207,11 +198,7 @@ fun SmartSearchOverlay(
 }
 
 @Composable
-private fun SearchAppResultRow(
-    app: AppModel,
-    subText: String,
-    onClick: () -> Unit
-) {
+private fun SearchAppResultRow(app: AppModel, subText: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
