@@ -131,6 +131,7 @@ fun HomeScreen(
     var isEditingWidget by remember { mutableStateOf(false) }
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
     var showPermissionDialog by remember { mutableStateOf(false) }
+    var showRecentlyInstalledDialog by remember { mutableStateOf(false) }
 
     // Dynamic Pop-up Variables
     var activePopUpApp by remember { mutableStateOf<AppModel?>(null) }
@@ -287,6 +288,7 @@ fun HomeScreen(
                                     if (media.isPlaying) controller?.transportControls?.pause() else controller?.transportControls?.play()
                                 },
                                 onOpenApp = {
+                                    viewModel.trackAppLaunch(media.packageName)
                                     val launchIntent = context.packageManager.getLaunchIntentForPackage(media.packageName)
                                     launchIntent?.let { context.startActivity(it) }
                                 },
@@ -332,6 +334,7 @@ fun HomeScreen(
                     FavoriteAppRow(
                         app = app,
                         onClick = {
+                            viewModel.trackAppLaunch(app.packageName)
                             val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
                             intent?.let { context.startActivity(it) }
                         },
@@ -358,6 +361,7 @@ fun HomeScreen(
                             FavoriteAppRow(
                                 app = app,
                                 onClick = {
+                                    viewModel.trackAppLaunch(app.packageName)
                                     val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
                                     intent?.let { context.startActivity(it) }
                                 },
@@ -387,7 +391,7 @@ fun HomeScreen(
                             DrawerFooterRow(
                                 icon = Icons.Default.History,
                                 title = "Recently installed",
-                                onClick = { }
+                                onClick = { showRecentlyInstalledDialog = true }
                             )
                             DrawerFooterRow(
                                 icon = Icons.Default.Settings,
@@ -398,6 +402,53 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+
+        // --- Recently Installed Apps Dialog ---
+        if (showRecentlyInstalledDialog) {
+            val recentApps = remember { viewModel.getRecentlyInstalledApps() }
+            AlertDialog(
+                onDismissRequest = { showRecentlyInstalledDialog = false },
+                title = { Text("Recently Installed Apps", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+                text = {
+                    if (recentApps.isEmpty()) {
+                        Text("No apps installed in the last 30 days.", color = Color.Gray)
+                    } else {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(recentApps) { app ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            viewModel.trackAppLaunch(app.packageName)
+                                            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                                            intent?.let { context.startActivity(it) }
+                                            showRecentlyInstalledDialog = false
+                                        }
+                                        .padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    app.icon?.let { icon ->
+                                        Image(
+                                            bitmap = icon.toBitmap(width = 36, height = 36).asImageBitmap(),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                    }
+                                    Text(text = app.label, color = Color.White, fontSize = 15.sp)
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showRecentlyInstalledDialog = false }) {
+                        Text("Close", color = Color(0xFF4DD0E1))
+                    }
+                },
+                containerColor = Color.Black
+            )
         }
 
         // --- Dynamic Overlay Pop-up Card with Real Operational Apps ---
