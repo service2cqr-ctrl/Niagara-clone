@@ -127,6 +127,43 @@ class LauncherViewModel(
         loadSelectedMusicPackages()
     }
 
+    // --- APP USAGE TRACKING & RECENTLY INSTALLED ---
+    fun trackAppLaunch(packageName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val countKey = "launch_count_$packageName"
+            val currentCount = prefs.getInt(countKey, 0)
+            prefs.edit().putInt(countKey, currentCount + 1).apply()
+        }
+    }
+
+    fun getRecentlyInstalledApps(): List<AppModel> {
+        val pm = context.packageManager
+        val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+        return _apps.value.filter { app ->
+            try {
+                val packageInfo = pm.getPackageInfo(app.packageName, 0)
+                packageInfo.firstInstallTime >= thirtyDaysAgo
+            } catch (e: Exception) {
+                false
+            }
+        }.sortedByDescending { app ->
+            try { pm.getPackageInfo(app.packageName, 0).firstInstallTime } catch (e: Exception) { 0L }
+        }
+    }
+
+    // --- REAL WEB SEARCH EXECUTOR ---
+    fun launchWebSearch(context: Context, query: String) {
+        try {
+            val searchUrl = "https://www.google.com/search?q=${Uri.encode(query)}"
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(searchUrl)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     // --- HIDDEN APPS MANAGEMENT ---
     private fun loadHiddenPackages() {
         val saved = prefs.getStringSet("hidden_packages", emptySet()) ?: emptySet()
