@@ -273,15 +273,6 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
-                    // --- AUTO MUSIC POP-UP CARD ON AUDIO CONNECT ---
-                    if (isAudioConnected && musicLauncherApps.isNotEmpty() && mediaState?.isPlaying != true) {
-                        AutoMusicPopUpCard(
-                            musicApps = musicLauncherApps,
-                            onDismiss = { }
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
-
                     // --- ONLY SHOW ACTIVE PLAYING MEDIA CARD ---
                     mediaState?.let { media ->
                         if (showMediaWidget && media.isPlaying && media.title.isNotEmpty()) {
@@ -327,6 +318,16 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // --- INLINE MUSIC APP ROW ON AUDIO CONNECT ---
+                if (!isDrawerExpanded && isAudioConnected && musicLauncherApps.isNotEmpty() && mediaState?.isPlaying != true) {
+                    item {
+                        AutoMusicPopUpCard(
+                            musicApps = musicLauncherApps,
+                            onDismiss = { }
+                        )
+                    }
+                }
+
                 items(favorites) { app ->
                     FavoriteAppRow(
                         app = app,
