@@ -25,10 +25,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material3.*
@@ -37,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -58,6 +61,7 @@ import com.niagaraclone.launcher.ui.components.CascadiaButtonMenuSheet
 import com.niagaraclone.launcher.ui.components.FabActionSelectionSheet
 import com.niagaraclone.launcher.ui.components.MediaPlayerCard
 import com.niagaraclone.launcher.ui.components.PopUpFolderCard
+import com.niagaraclone.launcher.ui.components.WaveSideIndex
 import com.niagaraclone.launcher.ui.components.WidgetStackView
 import com.niagaraclone.launcher.ui.components.rememberCurrentTimeState
 import java.text.SimpleDateFormat
@@ -127,6 +131,7 @@ fun HomeScreen(
     var showFabEditActionSheet by remember { mutableStateOf(false) }
     var isSwipeActionEdit by remember { mutableStateOf(false) }
     var selectedNotificationForReply by remember { mutableStateOf<NotificationSummaryModel?>(null) }
+    var showRecentlyInstalledDialog by remember { mutableStateOf(false) }
 
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -167,6 +172,8 @@ fun HomeScreen(
     }
 
     var isDrawerExpanded by remember { mutableStateOf(false) }
+    var isIndexerVisible by remember { mutableStateOf(false) }
+    var activeLetter by remember { mutableStateOf<String?>(null) }
 
     val favorites = remember(visibleApps, favoritePackages) {
         visibleApps.filter { favoritePackages.contains(it.packageName) }
@@ -174,6 +181,27 @@ fun HomeScreen(
 
     val groupedApps = remember(visibleApps) {
         visibleApps.groupBy { it.firstLetter }.toSortedMap()
+    }
+
+    val letterIndexMap = remember(favorites, groupedApps) {
+        val map = mutableMapOf<String, Int>()
+        map["⭐"] = 0
+        var currentIndex = favorites.size
+        groupedApps.forEach { (letter, appList) ->
+            map[letter.toString()] = currentIndex
+            currentIndex += 1 + appList.size
+        }
+        map
+    }
+
+    LaunchedEffect(activeLetter, isDrawerExpanded) {
+        val letter = activeLetter ?: return@LaunchedEffect
+        if (letter == "⭐") {
+            listState.scrollToItem(0)
+        } else if (isDrawerExpanded) {
+            val targetIdx = letterIndexMap[letter] ?: 0
+            listState.scrollToItem(targetIdx)
+        }
     }
 
     val executeAction: (String, AppModel?) -> Unit = { actionType, targetApp ->
@@ -371,11 +399,62 @@ fun HomeScreen(
                             )
                         }
                     }
+
+                    // --- APP DRAWER FOOTER ---
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 24.dp, bottom = 96.dp)
+                        ) {
+                            Text(
+                                text = "Cascadia Launcher",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            DrawerFooterRow(
+                                icon = Icons.Default.History,
+                                title = "Recently installed",
+                                onClick = { showRecentlyInstalledDialog = true }
+                            )
+                            DrawerFooterRow(
+                                icon = Icons.Default.Settings,
+                                title = "Cascadia settings",
+                                onClick = onOpenSettings
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // --- CASCADIA FAB BUTTON WITH DIRECT VERTICAL DRAG SHORTCUT ---
+        // --- WAVE SIDE INDEXER FOR APP DRAWER ---
+        WaveSideIndex(
+            isIndexerVisible = isIndexerVisible,
+            onTouchStart = {
+                isIndexerVisible = true
+                isDrawerExpanded = true
+            },
+            onCharSelected = { char ->
+                activeLetter = char
+                isDrawerExpanded = (char != "⭐")
+            },
+            onDragEnd = { lastChar ->
+                if (lastChar == "⭐") {
+                    isDrawerExpanded = false
+                    isIndexerVisible = false
+                    activeLetter = null
+                } else {
+                    isDrawerExpanded = true
+                    isIndexerVisible = true
+                }
+            },
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
+
+        // --- CASCADIA FAB BUTTON ---
         if (cascadiaButtonEnabled && !isDrawerExpanded) {
             var totalDragY by remember { mutableFloatStateOf(0f) }
 
@@ -598,5 +677,20 @@ private fun FavoriteAppRow(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DrawerFooterRow(icon: ImageVector, title: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(28.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.White)
     }
 }
