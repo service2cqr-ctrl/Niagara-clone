@@ -8,16 +8,20 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
+import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
+import android.content.pm.ShortcutInfo
 import android.location.LocationManager
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Process
 import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.niagaraclone.launcher.data.AppModel
+import com.niagaraclone.launcher.data.AppShortcutModel
 import com.niagaraclone.launcher.data.AppTheme
 import com.niagaraclone.launcher.data.CalendarEventModel
 import com.niagaraclone.launcher.data.CalendarRepository
@@ -179,6 +183,52 @@ class LauncherViewModel(
         loadCalendarEvents()
     }
 
+    // --- APP SHORTCUTS RETRIEVAL & EXECUTION ---
+    fun getAppShortcuts(packageName: String): List<AppShortcutModel> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return emptyList()
+        val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as? LauncherApps ?: return emptyList()
+
+        return try {
+            val query = LauncherApps.ShortcutQuery().apply {
+                setQueryFlags(
+                    LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                    LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
+                    LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+                )
+                setPackage(packageName)
+            }
+            val shortcuts = launcherApps.getShortcuts(query, Process.myUserHandle()) ?: emptyList()
+
+            shortcuts.map { info ->
+                val iconDrawable = try {
+                    launcherApps.getShortcutIconDrawable(info, context.resources.displayMetrics.densityDpi)
+                } catch (e: Exception) {
+                    null
+                }
+                AppShortcutModel(
+                    id = info.id,
+                    label = (info.shortLabel ?: info.longLabel ?: "Shortcut").toString(),
+                    packageName = info.packageName,
+                    icon = iconDrawable,
+                    shortcutInfo = info
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    fun launchAppShortcut(shortcutInfo: ShortcutInfo) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return
+        val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as? LauncherApps ?: return
+        try {
+            launcherApps.startShortcut(shortcutInfo, null, null)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     // --- SETTERS ---
     fun setClockStyle(style: String) = viewModelScope.launch { repository.setClockStyle(style) }
     fun setAccentColor(colorArgb: Int) = viewModelScope.launch { repository.setAccentColor(colorArgb) }
@@ -308,11 +358,23 @@ class LauncherViewModel(
 
     fun exportBackupJson(context: Context, uri: Uri): Boolean {
         return try {
+            val folderPrefs = mutableMapOf<String, List<String>>()
+            prefs.all.forEach { (key, value) ->
+                if (key.startsWith("folder_sub_apps_") && value is Set<*>) {
+                    @Suppress("UNCHECKED_CAST")
+                    folderPrefs[key.removePrefix("folder_sub_apps_")] = (value as Set<String>).toList()
+                }
+            }
+
             val json = JSONObject().apply {
                 put("favoritePackages", JSONArray(favoritePackages.value.toList()))
                 put("hiddenPackages", JSONArray(_hiddenPackages.value.toList()))
+                put("selectedMusicPackages", JSONArray(_selectedMusicPackages.value.toList()))
                 put("widgetIds", JSONArray(widgetIds.value))
+                put("widgetHeight", widgetHeight.value.toDouble())
                 put("homeOffsetY", homeOffsetY.value.toDouble())
+                put("showMediaWidget", showMediaWidget.value)
+                put("mediaWidgetTheme", mediaWidgetTheme.value.name)
                 put("weatherEnabled", weatherEnabled.value)
                 put("weatherLocationMode", weatherLocationMode.value)
                 put("weatherCityName", weatherCityName.value)
@@ -328,7 +390,14 @@ class LauncherViewModel(
                 put("fabTapPackage", fabTapPackage.value ?: "")
                 put("fabSwipeActionType", fabSwipeActionType.value)
                 put("fabSwipePackage", fabSwipePackage.value ?: "")
+
+                val foldersObj = JSONObject()
+                folderPrefs.forEach { (parentPkg, subPkgs) ->
+                    foldersObj.put(parentPkg, JSONArray(subPkgs))
+                }
+                put("folderSubApps", foldersObj)
             }
+
             context.contentResolver.openOutputStream(uri)?.use { stream ->
                 stream.write(json.toString(4).toByteArray())
             }
@@ -359,9 +428,33 @@ class LauncherViewModel(
                 prefs.edit().putStringSet("hidden_packages", hiddens).apply()
             }
 
-            if (json.has("weatherEnabled")) setWeatherEnabled(json.getBoolean("weatherEnabled"))
-            if (json.has("weatherCityName")) setWeatherCityName(json.getString("weatherCityName"))
+            if (json.has("selectedMusicPackages")) {
+                val musicArray = json.getJSONArray("selectedMusicPackages")
+                val musicPkgs = mutableSetOf<String>()
+                for (i in 0 until musicArray.length()) musicPkgs.add(musicArray.getString(i))
+                _selectedMusicPackages.value = musicPkgs
+                prefs.edit().putStringSet("selected_music_packages", musicPkgs).apply()
+            }
+
+            if (json.has("widgetIds")) {
+                val wArray = json.getJSONArray("widgetIds")
+                val wList = mutableListOf<Int>()
+                for (i in 0 until wArray.length()) wList.add(wArray.getInt(i))
+                viewModelScope.launch { repository.reorderWidgetIds(wList) }
+            }
+
+            if (json.has("widgetHeight")) updateWidgetHeight(json.getDouble("widgetHeight").toFloat())
             if (json.has("homeOffsetY")) updateHomeOffsetY(json.getDouble("homeOffsetY").toFloat())
+            if (json.has("showMediaWidget")) setShowMediaWidget(json.getBoolean("showMediaWidget"))
+            if (json.has("mediaWidgetTheme")) {
+                try { setMediaWidgetTheme(MediaWidgetTheme.valueOf(json.getString("mediaWidgetTheme"))) } catch (e: Exception) {}
+            }
+
+            if (json.has("weatherEnabled")) setWeatherEnabled(json.getBoolean("weatherEnabled"))
+            if (json.has("weatherLocationMode")) setWeatherLocationMode(json.getString("weatherLocationMode"))
+            if (json.has("weatherCityName")) setWeatherCityName(json.getString("weatherCityName"))
+            if (json.has("weatherTempUnit")) setWeatherTempUnit(json.getString("weatherTempUnit"))
+
             if (json.has("clockStyle")) setClockStyle(json.getString("clockStyle"))
             if (json.has("accentColor")) setAccentColor(json.getInt("accentColor"))
             if (json.has("quickLockEnabled")) setQuickLockEnabled(json.getBoolean("quickLockEnabled"))
@@ -369,6 +462,7 @@ class LauncherViewModel(
             if (json.has("rotationEnabled")) setRotationEnabled(json.getBoolean("rotationEnabled"))
             if (json.has("showBatteryPercentage")) setShowBatteryPercentage(json.getBoolean("showBatteryPercentage"))
             if (json.has("cascadiaButtonEnabled")) setCascadiaButtonEnabled(json.getBoolean("cascadiaButtonEnabled"))
+
             if (json.has("fabTapActionType")) {
                 val pkg = if (json.has("fabTapPackage")) json.getString("fabTapPackage").ifEmpty { null } else null
                 setFabTapAction(json.getString("fabTapActionType"), pkg)
@@ -376,6 +470,18 @@ class LauncherViewModel(
             if (json.has("fabSwipeActionType")) {
                 val pkg = if (json.has("fabSwipePackage")) json.getString("fabSwipePackage").ifEmpty { null } else null
                 setFabSwipeAction(json.getString("fabSwipeActionType"), pkg)
+            }
+
+            if (json.has("folderSubApps")) {
+                val foldersObj = json.getJSONObject("folderSubApps")
+                val editor = prefs.edit()
+                foldersObj.keys().forEach { parentPkg ->
+                    val arr = foldersObj.getJSONArray(parentPkg)
+                    val subPkgs = mutableSetOf<String>()
+                    for (i in 0 until arr.length()) subPkgs.add(arr.getString(i))
+                    editor.putStringSet("folder_sub_apps_$parentPkg", subPkgs)
+                }
+                editor.apply()
             }
 
             true
