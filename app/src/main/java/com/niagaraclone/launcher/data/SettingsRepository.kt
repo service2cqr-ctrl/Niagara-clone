@@ -28,14 +28,6 @@ data class LiveWeatherModel(
     val conditionIcon: String = "☀️"
 )
 
-data class CalendarEventModel(
-    val id: Long = 0L,
-    val title: String = "",
-    val startTimeMillis: Long = 0L,
-    val endTimeMillis: Long = 0L,
-    val isAllDay: Boolean = false
-)
-
 class SettingsRepository(private val context: Context) {
 
     private val scope = CoroutineScope(Dispatchers.IO)
