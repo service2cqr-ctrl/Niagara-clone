@@ -10,6 +10,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -61,6 +62,7 @@ import com.niagaraclone.launcher.ui.components.CascadiaButtonMenuSheet
 import com.niagaraclone.launcher.ui.components.FabActionSelectionSheet
 import com.niagaraclone.launcher.ui.components.MediaPlayerCard
 import com.niagaraclone.launcher.ui.components.PopUpFolderCard
+import com.niagaraclone.launcher.ui.components.SmartSearchSheet
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
 import com.niagaraclone.launcher.ui.components.WidgetStackView
 import com.niagaraclone.launcher.ui.components.rememberCurrentTimeState
@@ -115,6 +117,8 @@ fun HomeScreen(
     val showBatteryPercentage by viewModel.showBatteryPercentage.collectAsState()
     val cascadiaButtonEnabled by viewModel.cascadiaButtonEnabled.collectAsState()
 
+    val calendarPreviewEnabled by viewModel.repository.calendarPreviewEnabled.collectAsState(initial = true)
+
     val fabTapActionType by viewModel.fabTapActionType.collectAsState()
     val fabTapPackage by viewModel.fabTapPackage.collectAsState()
     val fabSwipeActionType by viewModel.fabSwipeActionType.collectAsState()
@@ -127,6 +131,7 @@ fun HomeScreen(
     val notificationSummaries by viewModel.notificationSummaries.collectAsState()
 
     var showAgendaSheet by remember { mutableStateOf(false) }
+    var showSmartSearchSheet by remember { mutableStateOf(false) }
     var showFabMenuSheet by remember { mutableStateOf(false) }
     var showFabEditActionSheet by remember { mutableStateOf(false) }
     var isSwipeActionEdit by remember { mutableStateOf(false) }
@@ -152,6 +157,13 @@ fun HomeScreen(
 
     val assignedFabSwipeApp = remember(visibleApps, fabSwipePackage) {
         visibleApps.firstOrNull { it.packageName == fabSwipePackage }
+    }
+
+    val notificationLetters = remember(notificationSummaries, visibleApps) {
+        notificationSummaries.mapNotNull { notification ->
+            visibleApps.firstOrNull { it.packageName == notification.packageName }
+                ?.label?.firstOrNull()?.uppercaseChar()?.toString()
+        }.toSet()
     }
 
     var isWidgetMenuOpen by remember { mutableStateOf(false) }
@@ -206,7 +218,7 @@ fun HomeScreen(
 
     val executeAction: (String, AppModel?) -> Unit = { actionType, targetApp ->
         when (actionType) {
-            "SEARCH" -> onOpenSearch()
+            "SEARCH" -> showSmartSearchSheet = true
             "AGENDA" -> {
                 val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
                 if (hasPermission) {
@@ -295,29 +307,31 @@ fun HomeScreen(
                         }
 
                         // --- INLINE AGENDA PREVIEW ---
-                        if (upcomingEvents.isNotEmpty()) {
-                            val nextEvent = upcomingEvents.first()
-                            val eventTime = if (nextEvent.isAllDay) "All day" else SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(nextEvent.startTimeMillis))
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clickable {
-                                    viewModel.loadCalendarEvents()
-                                    showAgendaSheet = true
+                        AnimatedVisibility(visible = calendarPreviewEnabled && upcomingEvents.isNotEmpty()) {
+                            val nextEvent = upcomingEvents.firstOrNull()
+                            if (nextEvent != null) {
+                                val eventTime = if (nextEvent.isAllDay) "All day" else SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(nextEvent.startTimeMillis))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.clickable {
+                                        viewModel.loadCalendarEvents()
+                                        showAgendaSheet = true
+                                    }
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .background(accentColor, CircleShape)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "$eventTime • ${nextEvent.title}",
+                                        color = Color.White.copy(alpha = 0.85f),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 }
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .background(accentColor, CircleShape)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "$eventTime • ${nextEvent.title}",
-                                    color = Color.White.copy(alpha = 0.85f),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
                             }
                         }
                     }
@@ -363,19 +377,18 @@ fun HomeScreen(
                     FavoriteAppRow(
                         app = app,
                         badgeCount = notificationCounts[app.packageName] ?: 0,
-                        latestNotificationText = appNotification?.text?.ifEmpty { appNotification.title },
+                        notificationSummary = appNotification,
                         accentColor = accentColor,
                         onClick = {
-                            if (appNotification != null) {
-                                selectedNotificationForReply = appNotification
-                            } else {
-                                context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) }
-                            }
+                            context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) }
                         },
                         onLongClick = { },
                         onSwipeRight = { yOffset ->
                             popupYOffset = yOffset
                             activePopUpApp = app
+                        },
+                        onQuickReplyClick = { notification ->
+                            selectedNotificationForReply = notification
                         }
                     )
                 }
@@ -388,13 +401,16 @@ fun HomeScreen(
                             FavoriteAppRow(
                                 app = app,
                                 badgeCount = notificationCounts[app.packageName] ?: 0,
-                                latestNotificationText = appNotification?.text,
+                                notificationSummary = appNotification,
                                 accentColor = accentColor,
                                 onClick = { context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) } },
                                 onLongClick = { },
                                 onSwipeRight = { yOffset ->
                                     popupYOffset = yOffset
                                     activePopUpApp = app
+                                },
+                                onQuickReplyClick = { notification ->
+                                    selectedNotificationForReply = notification
                                 }
                             )
                         }
@@ -430,9 +446,12 @@ fun HomeScreen(
             }
         }
 
-        // --- WAVE SIDE INDEXER FOR APP DRAWER ---
+        // --- WAVE SIDE INDEXER FOR APP DRAWER WITH NOTIFICATION DOTS & GESTURE EXCLUSION ---
         WaveSideIndex(
             isIndexerVisible = isIndexerVisible,
+            notificationLetters = notificationLetters,
+            activeChar = activeLetter,
+            accentColor = accentColor,
             onTouchStart = {
                 isIndexerVisible = true
                 isDrawerExpanded = true
@@ -509,6 +528,14 @@ fun HomeScreen(
         }
 
         // --- OVERLAYS & SHEETS ---
+        if (showSmartSearchSheet) {
+            SmartSearchSheet(
+                viewModel = viewModel,
+                apps = visibleApps,
+                onDismiss = { showSmartSearchSheet = false }
+            )
+        }
+
         activePopUpApp?.let { parentApp ->
             val subApps = remember(parentApp) { viewModel.getFolderSubApps(parentApp.packageName) }
 
@@ -625,15 +652,17 @@ private fun ClockHeaderDisplay(
 private fun FavoriteAppRow(
     app: AppModel,
     badgeCount: Int = 0,
-    latestNotificationText: String? = null,
+    notificationSummary: NotificationSummaryModel? = null,
     accentColor: Color = Color(0xFF4DD0E1),
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onSwipeRight: (Float) -> Unit
+    onSwipeRight: (Float) -> Unit,
+    onQuickReplyClick: (NotificationSummaryModel) -> Unit
 ) {
     var bottomY by remember { mutableFloatStateOf(0f) }
+    var isExpanded by remember { mutableStateOf(false) }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .onGloballyPositioned { coordinates -> bottomY = coordinates.boundsInRoot().bottom }
@@ -645,35 +674,96 @@ private fun FavoriteAppRow(
                     }
                 }
             }
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        app.icon?.let { iconDrawable ->
-            Image(
-                bitmap = iconDrawable.toBitmap(width = 40, height = 40).asImageBitmap(),
-                contentDescription = app.label,
-                modifier = Modifier.size(28.dp)
+            .combinedClickable(
+                onClick = {
+                    if (notificationSummary != null) {
+                        isExpanded = !isExpanded
+                    } else {
+                        onClick()
+                    }
+                },
+                onLongClick = onLongClick
             )
-            Spacer(modifier = Modifier.width(16.dp))
-        } ?: Spacer(modifier = Modifier.width(44.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = app.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            if (!latestNotificationText.isNullOrEmpty()) {
-                Text(
-                    text = latestNotificationText,
-                    color = Color.Gray,
-                    fontSize = 12.sp,
-                    maxLines = 1
+            .padding(vertical = 6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            app.icon?.let { iconDrawable ->
+                Image(
+                    bitmap = iconDrawable.toBitmap(width = 40, height = 40).asImageBitmap(),
+                    contentDescription = app.label,
+                    modifier = Modifier.size(28.dp)
                 )
+                Spacer(modifier = Modifier.width(16.dp))
+            } ?: Spacer(modifier = Modifier.width(44.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = app.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                if (notificationSummary != null && !isExpanded) {
+                    Text(
+                        text = notificationSummary.text.ifEmpty { notificationSummary.title },
+                        color = Color.Gray,
+                        fontSize = 12.sp,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            if (badgeCount > 0) {
+                Surface(shape = CircleShape, color = accentColor, modifier = Modifier.padding(start = 8.dp)) {
+                    Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), contentAlignment = Alignment.Center) {
+                        Text(text = if (badgeCount > 99) "99+" else badgeCount.toString(), color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 
-        if (badgeCount > 0) {
-            Surface(shape = CircleShape, color = accentColor, modifier = Modifier.padding(start = 8.dp)) {
-                Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), contentAlignment = Alignment.Center) {
-                    Text(text = if (badgeCount > 99) "99+" else badgeCount.toString(), color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        // --- IN-PLACE SYSTEM NOTIFICATION EXPANSION ---
+        if (isExpanded && notificationSummary != null) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF1E1E1E),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, start = 44.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(text = notificationSummary.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(text = notificationSummary.text, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { onQuickReplyClick(notificationSummary) },
+                            colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text(text = "Reply", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        OutlinedButton(
+                            onClick = onClick,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text(text = "Open App", color = Color.White, fontSize = 12.sp)
+                        }
+
+                        TextButton(
+                            onClick = { isExpanded = false },
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text(text = "Dismiss", color = Color.Gray, fontSize = 12.sp)
+                        }
+                    }
                 }
             }
         }
