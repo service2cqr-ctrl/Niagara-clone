@@ -45,6 +45,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -55,7 +56,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.services.NotificationSummaryModel
@@ -157,7 +157,6 @@ fun HomeScreen(
     var isIndexerVisible by remember { mutableStateOf(false) }
     var activeLetter by remember { mutableStateOf<String?>(null) }
 
-    // --- RE-CHECK PERMISSIONS & DEFAULT LAUNCHER STATUS ON APP RESUME ---
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -171,7 +170,6 @@ fun HomeScreen(
         }
     }
 
-    // --- SYSTEM BACK BUTTON INTERCEPTION FOR APP DRAWER ---
     BackHandler(enabled = isDrawerExpanded) {
         isDrawerExpanded = false
         isIndexerVisible = false
@@ -231,7 +229,6 @@ fun HomeScreen(
         visibleApps.groupBy { it.firstLetter }.toSortedMap()
     }
 
-    // --- SMART INDEX MAP WITH MISSING LETTER FALLBACK & END FOOTER TARGETING ---
     val (letterIndexMap, totalDrawerItemCount) = remember(favorites, groupedApps) {
         val map = mutableMapOf<String, Int>()
         map["⭐"] = 0
@@ -242,7 +239,7 @@ fun HomeScreen(
             currentIndex += 1 + appList.size
         }
 
-        val totalCount = currentIndex + 1 // +1 for Footer item
+        val totalCount = currentIndex + 1
 
         var lastKnownIndex = 0
         INDEX_ITEMS.forEach { char ->
