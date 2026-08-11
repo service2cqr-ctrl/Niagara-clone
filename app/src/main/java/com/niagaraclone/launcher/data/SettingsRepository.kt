@@ -43,6 +43,13 @@ class SettingsRepository(private val context: Context) {
         val KEY_WEATHER_LOCATION_MODE = stringPreferencesKey("weather_location_mode") // "AUTO" or "FIXED"
         val KEY_WEATHER_CITY_NAME = stringPreferencesKey("weather_city_name")
         val KEY_WEATHER_TEMP_UNIT = stringPreferencesKey("weather_temp_unit") // "CELSIUS" or "FAHRENHEIT"
+
+        // Display & Gesture Persistence Keys
+        val KEY_CLOCK_STYLE = stringPreferencesKey("clock_style")
+        val KEY_QUICK_LOCK_ENABLED = booleanPreferencesKey("quick_lock_enabled")
+        val KEY_HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic_feedback_enabled")
+        val KEY_ROTATION_ENABLED = booleanPreferencesKey("rotation_enabled")
+        val KEY_SHOW_BATTERY_PERCENTAGE = booleanPreferencesKey("show_battery_percentage")
     }
 
     val theme: Flow<AppTheme> = context.dataStore.data.map { prefs ->
@@ -51,7 +58,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     val accentColor: Flow<Int> = context.dataStore.data.map { prefs ->
-        prefs[KEY_ACCENT_COLOR] ?: 0xFF3B82F6.toInt()
+        prefs[KEY_ACCENT_COLOR] ?: 0xFF4DD0E1.toInt()
     }
 
     val favorites: Flow<List<String>> = context.dataStore.data.map { prefs ->
@@ -109,6 +116,27 @@ class SettingsRepository(private val context: Context) {
         prefs[KEY_WEATHER_TEMP_UNIT] ?: "CELSIUS"
     }
 
+    // --- DISPLAY & GESTURE FLOWS ---
+    val clockStyle: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_CLOCK_STYLE] ?: "DIGITAL_BOLD"
+    }
+
+    val quickLockEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_QUICK_LOCK_ENABLED] ?: true
+    }
+
+    val hapticFeedbackEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_HAPTIC_FEEDBACK_ENABLED] ?: true
+    }
+
+    val rotationEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_ROTATION_ENABLED] ?: false
+    }
+
+    val showBatteryPercentage: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SHOW_BATTERY_PERCENTAGE] ?: true
+    }
+
     suspend fun setTheme(theme: AppTheme) {
         context.dataStore.edit { prefs -> prefs[KEY_THEME] = theme.name }
     }
@@ -163,6 +191,27 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setWeatherTempUnit(unit: String) {
         context.dataStore.edit { prefs -> prefs[KEY_WEATHER_TEMP_UNIT] = unit }
+    }
+
+    // --- DISPLAY & GESTURE SETTERS ---
+    suspend fun setClockStyle(style: String) {
+        context.dataStore.edit { prefs -> prefs[KEY_CLOCK_STYLE] = style }
+    }
+
+    suspend fun setQuickLockEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_QUICK_LOCK_ENABLED] = enabled }
+    }
+
+    suspend fun setHapticFeedbackEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_HAPTIC_FEEDBACK_ENABLED] = enabled }
+    }
+
+    suspend fun setRotationEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_ROTATION_ENABLED] = enabled }
+    }
+
+    suspend fun setShowBatteryPercentage(show: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_SHOW_BATTERY_PERCENTAGE] = show }
     }
 
     // --- WIDGET STACK HELPER METHODS ---
