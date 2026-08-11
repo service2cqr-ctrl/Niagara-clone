@@ -208,7 +208,7 @@ class LauncherViewModel(
                 AppShortcutModel(
                     id = info.id,
                     label = (info.shortLabel ?: info.longLabel ?: "Shortcut").toString(),
-                    packageName = info.packageName,
+                    packageName = info.`package`,
                     icon = iconDrawable,
                     shortcutInfo = info
                 )
