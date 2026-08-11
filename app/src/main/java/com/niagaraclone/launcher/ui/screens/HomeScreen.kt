@@ -1,11 +1,15 @@
 package com.niagaraclone.launcher.ui.screens
 
+import android.Manifest
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -25,8 +29,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.outlined.CalendarToday
@@ -49,6 +55,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.services.AudioConnectionReceiver
@@ -56,8 +63,11 @@ import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.services.ScreenLockService
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.AutoMusicPopUpCard
+import com.niagaraclone.launcher.ui.components.CalendarAgendaSheet
 import com.niagaraclone.launcher.ui.components.MediaPlayerCard
+import com.niagaraclone.launcher.ui.components.NotificationSummarySheet
 import com.niagaraclone.launcher.ui.components.PopUpFolderCard
+import com.niagaraclone.launcher.ui.components.UsageBreakerDialog
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
 import com.niagaraclone.launcher.ui.components.WeatherBottomSheet
 import com.niagaraclone.launcher.ui.components.WidgetStackView
@@ -109,6 +119,24 @@ fun HomeScreen(
     val liveWeather by viewModel.liveWeather.collectAsState()
 
     val mediaState by MediaNotificationListener.mediaState.collectAsState()
+
+    // --- CALENDAR & NOTIFICATION STATES ---
+    val notificationCounts by viewModel.notificationCounts.collectAsState()
+    val upcomingEvents by viewModel.upcomingEvents.collectAsState()
+    val notificationSummaries by viewModel.notificationSummaries.collectAsState()
+
+    var showAgendaSheet by remember { mutableStateOf(false) }
+    var showNotificationSummarySheet by remember { mutableStateOf(false) }
+    var pendingAppToLaunch by remember { mutableStateOf<AppModel?>(null) }
+
+    val calendarPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.loadCalendarEvents()
+            showAgendaSheet = true
+        }
+    }
 
     // --- AUDIO CONNECTION & MUSIC LAUNCHER STATES ---
     val isAudioConnected by AudioConnectionReceiver.isAudioDeviceConnected.collectAsState()
@@ -189,6 +217,16 @@ fun HomeScreen(
         }
     }
 
+    val handleAppLaunch: (AppModel) -> Unit = { app ->
+        val breached = viewModel.incrementAppLaunchCount(app.packageName)
+        if (breached) {
+            pendingAppToLaunch = app
+        } else {
+            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+            intent?.let { context.startActivity(it) }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -249,7 +287,24 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(text = currentDate.ifEmpty { "Wed 5 Aug" }, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                            Text(
+                                text = currentDate.ifEmpty { "Wed 5 Aug" },
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = 16.sp,
+                                modifier = Modifier.clickable {
+                                    val hasPermission = ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.READ_CALENDAR
+                                    ) == PackageManager.PERMISSION_GRANTED
+
+                                    if (hasPermission) {
+                                        viewModel.loadCalendarEvents()
+                                        showAgendaSheet = true
+                                    } else {
+                                        calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+                                    }
+                                }
+                            )
                             if (showBattery) {
                                 Text(text = batteryStatus, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
                             }
@@ -333,11 +388,8 @@ fun HomeScreen(
                 items(favorites) { app ->
                     FavoriteAppRow(
                         app = app,
-                        onClick = {
-                            viewModel.trackAppLaunch(app.packageName)
-                            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                            intent?.let { context.startActivity(it) }
-                        },
+                        badgeCount = notificationCounts[app.packageName] ?: 0,
+                        onClick = { handleAppLaunch(app) },
                         onLongClick = { appForMenu = app },
                         onSwipeRight = { yOffset ->
                             popupYOffset = yOffset
@@ -360,11 +412,8 @@ fun HomeScreen(
                         items(appGroup) { app ->
                             FavoriteAppRow(
                                 app = app,
-                                onClick = {
-                                    viewModel.trackAppLaunch(app.packageName)
-                                    val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                                    intent?.let { context.startActivity(it) }
-                                },
+                                badgeCount = notificationCounts[app.packageName] ?: 0,
+                                onClick = { handleAppLaunch(app) },
                                 onLongClick = { appForMenu = app },
                                 onSwipeRight = { yOffset ->
                                     popupYOffset = yOffset
@@ -420,9 +469,7 @@ fun HomeScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            viewModel.trackAppLaunch(app.packageName)
-                                            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                                            intent?.let { context.startActivity(it) }
+                                            handleAppLaunch(app)
                                             showRecentlyInstalledDialog = false
                                         }
                                         .padding(vertical = 6.dp),
@@ -496,12 +543,10 @@ fun HomeScreen(
             modifier = Modifier.align(Alignment.CenterEnd)
         )
 
+        // --- CASCADIA QUICK ACTION TRIGGER BUTTON ---
         if (!isDrawerExpanded) {
             FloatingActionButton(
-                onClick = {
-                    val intent = Intent(Intent.ACTION_DIAL)
-                    context.startActivity(intent)
-                },
+                onClick = { onOpenSearch() },
                 containerColor = Color(0xFF4DD0E1),
                 contentColor = Color.Black,
                 shape = CircleShape,
@@ -510,8 +555,37 @@ fun HomeScreen(
                     .padding(bottom = 50.dp, end = 50.dp)
                     .size(56.dp)
             ) {
-                Icon(imageVector = Icons.Default.Phone, contentDescription = "Phone")
+                Icon(imageVector = Icons.Default.Search, contentDescription = "Quick Search Action")
             }
+        }
+
+        // --- OVERLAYS & SHEETS ---
+        if (showAgendaSheet) {
+            CalendarAgendaSheet(
+                events = upcomingEvents,
+                onDismiss = { showAgendaSheet = false }
+            )
+        }
+
+        if (showNotificationSummarySheet) {
+            NotificationSummarySheet(
+                summaries = notificationSummaries,
+                onDismiss = { showNotificationSummarySheet = false }
+            )
+        }
+
+        pendingAppToLaunch?.let { app ->
+            val count = viewModel.getAppLaunchCountToday(app.packageName)
+            UsageBreakerDialog(
+                appName = app.label,
+                launchCount = count,
+                onContinue = {
+                    val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                    intent?.let { context.startActivity(it) }
+                    pendingAppToLaunch = null
+                },
+                onDismiss = { pendingAppToLaunch = null }
+            )
         }
 
         // Widget Long Press Bottom Sheet
@@ -529,7 +603,35 @@ fun HomeScreen(
                 ) {
                     Text(text = "Niagara widget", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 16.dp))
                     BottomSheetRow(icon = Icons.Outlined.Schedule, title = "Clock style", onClick = { isWidgetMenuOpen = false })
-                    BottomSheetRow(icon = Icons.Outlined.CalendarToday, title = "Calendar", subtitle = "Show upcoming events, Show date", onClick = { isWidgetMenuOpen = false })
+                    BottomSheetRow(
+                        icon = Icons.Outlined.CalendarToday,
+                        title = "Calendar Agenda",
+                        subtitle = "Show upcoming events",
+                        onClick = {
+                            isWidgetMenuOpen = false
+                            val hasPermission = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.READ_CALENDAR
+                            ) == PackageManager.PERMISSION_GRANTED
+
+                            if (hasPermission) {
+                                viewModel.loadCalendarEvents()
+                                showAgendaSheet = true
+                            } else {
+                                calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+                            }
+                        }
+                    )
+
+                    BottomSheetRow(
+                        icon = Icons.Default.Notifications,
+                        title = "Notification Summary",
+                        subtitle = "View bundled unread notifications",
+                        onClick = {
+                            isWidgetMenuOpen = false
+                            showNotificationSummarySheet = true
+                        }
+                    )
 
                     BottomSheetSwitchRow(
                         icon = Icons.Outlined.WbSunny,
@@ -616,6 +718,7 @@ fun HomeScreen(
 @Composable
 private fun FavoriteAppRow(
     app: AppModel,
+    badgeCount: Int = 0,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onSwipeRight: (Float) -> Unit
@@ -649,6 +752,27 @@ private fun FavoriteAppRow(
             Spacer(modifier = Modifier.width(16.dp))
         } ?: Spacer(modifier = Modifier.width(44.dp))
         Text(text = app.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+
+        if (badgeCount > 0) {
+            Spacer(modifier = Modifier.weight(1f))
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFF4DD0E1),
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (badgeCount > 99) "99+" else badgeCount.toString(),
+                        color = Color.Black,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
 }
 
