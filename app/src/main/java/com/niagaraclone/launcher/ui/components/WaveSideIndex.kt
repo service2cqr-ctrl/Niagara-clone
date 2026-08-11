@@ -46,7 +46,6 @@ fun WaveSideIndex(
     val density = LocalDensity.current
 
     var containerHeightPx by remember { mutableFloatStateOf(1f) }
-    var containerWidthPx by remember { mutableFloatStateOf(1f) }
 
     var isDragging by remember { mutableStateOf(false) }
     var touchY by remember { mutableStateOf<Float?>(null) }
@@ -59,10 +58,9 @@ fun WaveSideIndex(
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .fillMaxWidth()
+            .width(40.dp) // Restricted to right edge strip so it does not block Home Screen taps
             .onGloballyPositioned { coordinates ->
                 containerHeightPx = coordinates.size.height.toFloat()
-                containerWidthPx = coordinates.size.width.toFloat()
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -129,7 +127,7 @@ fun WaveSideIndex(
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .padding(top = 90.dp, bottom = 40.dp, end = 16.dp),
+                    .padding(top = 90.dp, bottom = 40.dp, end = 12.dp),
                 verticalArrangement = Arrangement.SpaceEvenly,
                 horizontalAlignment = Alignment.End
             ) {
@@ -137,32 +135,22 @@ fun WaveSideIndex(
                     val itemCenterY = itemCenterYMap[index] ?: 0f
                     val distance = if (currentY != null) abs(currentY - itemCenterY) else Float.MAX_VALUE
 
-                    // --- RAISED COSINE WAVE FORMULA FOR SMOOTH CIRCULAR ARC ---
-                    // Broad influence radius (180dp) spans ~12 letters above/below touch point
+                    // Smooth Raised Cosine Wave Arc Physics: cos^2(pi * d / (2 * R))
                     val influenceRadiusPx = with(density) { 180.dp.toPx() }
                     val circularArcFactor = if (distance < influenceRadiusPx) {
-                        0.5f * (1f + cos((distance / influenceRadiusPx) * PI.toFloat()))
+                        val cosVal = cos((PI.toFloat() * distance) / (2f * influenceRadiusPx))
+                        cosVal * cosVal
                     } else {
                         0f
                     }
 
-                    // Asymmetric Drag Physics
-                    val isRightToLeft = dragStartX > (containerWidthPx * 0.5f)
-                    val pullDistancePx = if (isRightToLeft) {
-                        (containerWidthPx - touchX).coerceAtLeast(0f)
-                    } else {
-                        (touchX - dragStartX).coerceAtLeast(0f)
-                    }
+                    // Horizontal displacement tracking leftward drag
+                    val pullDistancePx = (dragStartX - touchX).coerceAtLeast(0f)
+                    val maxLimitPx = with(density) { 200.dp.toPx() }
+                    val actualMaxDisplacement = pullDistancePx.coerceIn(with(density) { 36.dp.toPx() }, maxLimitPx)
 
-                    val maxDisplacementLimit = if (isRightToLeft) {
-                        with(density) { 220.dp.toPx() }
-                    } else {
-                        with(density) { 100.dp.toPx() }
-                    }
-
-                    val actualMaxDisplacement = pullDistancePx.coerceIn(with(density) { 40.dp.toPx() }, maxDisplacementLimit)
                     val targetTranslationX = -1f * (actualMaxDisplacement * circularArcFactor)
-                    val targetScale = 1.0f + (0.85f * circularArcFactor)
+                    val targetScale = 1.0f + (0.75f * circularArcFactor)
 
                     val animatedOffset by animateFloatAsState(
                         targetValue = targetTranslationX,
@@ -204,17 +192,16 @@ fun WaveSideIndex(
             }
         }
 
-        // Circular active letter preview badge tracking touch height
+        // Floating active letter preview badge tracking touch height
         if (isDragging && touchY != null) {
             val currentActiveChar = if (lastSelectedIndex in INDEX_ITEMS.indices) INDEX_ITEMS[lastSelectedIndex] else "⭐"
             val badgeOffsetY = ((touchY ?: 0f) - with(density) { 28.dp.toPx() }).roundToInt()
 
-            val isRightToLeft = dragStartX > (containerWidthPx * 0.5f)
-            val pullDistancePx = if (isRightToLeft) (containerWidthPx - touchX).coerceAtLeast(0f) else (touchX - dragStartX).coerceAtLeast(0f)
-            val maxLimit = if (isRightToLeft) with(density) { 220.dp.toPx() } else with(density) { 100.dp.toPx() }
-            val apexXDisplacement = pullDistancePx.coerceIn(with(density) { 40.dp.toPx() }, maxLimit)
+            val pullDistancePx = (dragStartX - touchX).coerceAtLeast(0f)
+            val maxLimitPx = with(density) { 200.dp.toPx() }
+            val apexXDisplacement = pullDistancePx.coerceIn(with(density) { 36.dp.toPx() }, maxLimitPx)
 
-            val badgeOffsetX = - (apexXDisplacement + with(density) { 52.dp.toPx() })
+            val badgeOffsetX = - (apexXDisplacement + with(density) { 48.dp.toPx() })
 
             Box(
                 modifier = Modifier
