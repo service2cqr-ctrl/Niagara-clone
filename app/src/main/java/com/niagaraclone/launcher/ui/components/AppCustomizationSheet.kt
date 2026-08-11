@@ -36,7 +36,8 @@ fun AppCustomizationSheet(
     viewModel: LauncherViewModel,
     onDismiss: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenCategorySheet: () -> Unit
+    onOpenCategorySheet: () -> Unit,
+    onOpenEditFolderSheet: () -> Unit
 ) {
     val context = LocalContext.current
     var isAdvancedExpanded by remember { mutableStateOf(false) }
@@ -57,7 +58,6 @@ fun AppCustomizationSheet(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
-            // --- APP HEADER ---
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -80,7 +80,6 @@ fun AppCustomizationSheet(
                 )
             }
 
-            // --- MAIN OPTIONS ---
             SheetActionRow(
                 icon = if (isFavorite) Icons.Outlined.Star else Icons.Outlined.StarBorder,
                 title = if (isFavorite) "Remove from favorites" else "Edit favorites",
@@ -122,9 +121,7 @@ fun AppCustomizationSheet(
             SheetActionRow(
                 icon = Icons.Outlined.AccountTree,
                 title = "Add to category",
-                onClick = {
-                    onOpenCategorySheet()
-                }
+                onClick = { onOpenCategorySheet() }
             )
 
             SheetActionRow(
@@ -140,7 +137,6 @@ fun AppCustomizationSheet(
                 }
             )
 
-            // --- ADVANCED DROPDOWN SECTION ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -168,7 +164,7 @@ fun AppCustomizationSheet(
                     SheetActionRow(
                         icon = Icons.Outlined.OpenInNew,
                         title = "Edit ${app.label} pop-up",
-                        onClick = { onDismiss() }
+                        onClick = { onOpenEditFolderSheet() }
                     )
 
                     SheetActionRow(
@@ -193,7 +189,6 @@ fun AppCustomizationSheet(
                 modifier = Modifier.padding(vertical = 16.dp)
             )
 
-            // --- BOTTOM LAUNCHER SETTINGS ---
             SheetActionRow(
                 icon = Icons.Outlined.Settings,
                 title = "Cascadia settings",
@@ -207,7 +202,7 @@ fun AppCustomizationSheet(
         }
     }
 
-    // --- EDIT NAME DIALOG ---
+    // --- EDIT NAME DIALOG (FIXED SAVING CALL) ---
     if (showRenameDialog) {
         var newName by remember { mutableStateOf(app.label) }
 
@@ -225,6 +220,7 @@ fun AppCustomizationSheet(
             },
             confirmButton = {
                 TextButton(onClick = {
+                    viewModel.setCustomAppLabel(app.packageName, newName)
                     showRenameDialog = false
                     onDismiss()
                 }) {
