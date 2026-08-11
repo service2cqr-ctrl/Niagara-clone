@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -52,6 +53,9 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.services.NotificationSummaryModel
@@ -93,6 +97,7 @@ fun HomeScreen(
     onOpenSearch: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val listState = rememberLazyListState()
 
     var hasCompletedStartupCheck by remember { mutableStateOf(false) }
@@ -148,6 +153,31 @@ fun HomeScreen(
     var selectedAppForCategory by remember { mutableStateOf<AppModel?>(null) }
     var editingFolderApp by remember { mutableStateOf<AppModel?>(null) }
 
+    var isDrawerExpanded by remember { mutableStateOf(false) }
+    var isIndexerVisible by remember { mutableStateOf(false) }
+    var activeLetter by remember { mutableStateOf<String?>(null) }
+
+    // --- RE-CHECK PERMISSIONS & DEFAULT LAUNCHER STATUS ON APP RESUME ---
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshPermissions()
+                viewModel.checkDefaultLauncherStatus()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // --- SYSTEM BACK BUTTON INTERCEPTION FOR APP DRAWER ---
+    BackHandler(enabled = isDrawerExpanded) {
+        isDrawerExpanded = false
+        isIndexerVisible = false
+        activeLetter = null
+    }
+
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -192,10 +222,6 @@ fun HomeScreen(
         val deg = if (tempUnit == "CELSIUS") "${c.roundToInt()}°" else "${(c * 9 / 5 + 32).roundToInt()}°"
         "$icon $deg"
     }
-
-    var isDrawerExpanded by remember { mutableStateOf(false) }
-    var isIndexerVisible by remember { mutableStateOf(false) }
-    var activeLetter by remember { mutableStateOf<String?>(null) }
 
     val favorites = remember(visibleApps, favoritePackages) {
         visibleApps.filter { favoritePackages.contains(it.packageName) }
