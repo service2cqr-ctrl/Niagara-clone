@@ -1,11 +1,15 @@
 package com.niagaraclone.launcher.services
 
+import android.app.Notification
+import android.app.RemoteInput
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +29,8 @@ data class NotificationSummaryModel(
     val packageName: String,
     val title: String,
     val text: String,
-    val postTime: Long
+    val postTime: Long,
+    val sbn: StatusBarNotification? = null
 )
 
 class MediaNotificationListener : NotificationListenerService() {
@@ -45,12 +50,47 @@ class MediaNotificationListener : NotificationListenerService() {
 
         var activeController: MediaController? = null
             private set
+
+        fun sendDirectReply(notificationKey: String, replyMessage: String): Boolean {
+            val listener = instance ?: return false
+            val activeSbns = listener.activeNotifications ?: return false
+            val targetSbn = activeSbns.firstOrNull { it.key == notificationKey } ?: return false
+
+            val actions = targetSbn.notification.actions ?: return false
+            for (action in actions) {
+                val remoteInputs = action.remoteInputs ?: continue
+                for (remoteInput in remoteInputs) {
+                    if (remoteInput.allowFreeFormInput) {
+                        try {
+                            val intent = Intent()
+                            val bundle = Bundle()
+                            bundle.putCharSequence(remoteInput.resultKey, replyMessage)
+                            RemoteInput.addResultsToIntent(arrayOf(remoteInput), intent, bundle)
+                            action.actionIntent.send(listener, 0, intent)
+                            return true
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            }
+            return false
+        }
+
+        fun dismissNotification(notificationKey: String) {
+            try {
+                instance?.cancelNotification(notificationKey)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     private lateinit var sessionManager: MediaSessionManager
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         sessionManager = getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
         val component = ComponentName(this, MediaNotificationListener::class.java)
 
@@ -64,6 +104,11 @@ class MediaNotificationListener : NotificationListenerService() {
             // Triggers if listener permission is not granted yet
             e.printStackTrace()
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (instance == this) instance = null
     }
 
     override fun onListenerConnected() {
@@ -80,7 +125,7 @@ class MediaNotificationListener : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
-        instance = null
+        if (instance == this) instance = null
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -105,8 +150,8 @@ class MediaNotificationListener : NotificationListenerService() {
                 countMap[pkg] = (countMap[pkg] ?: 0) + 1
 
                 val extras = sbn.notification?.extras
-                val title = extras?.getCharSequence("android.title")?.toString() ?: ""
-                val text = extras?.getCharSequence("android.text")?.toString() ?: ""
+                val title = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
+                val text = extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
 
                 if (title.isNotEmpty() || text.isNotEmpty()) {
                     summaries.add(
@@ -115,13 +160,14 @@ class MediaNotificationListener : NotificationListenerService() {
                             packageName = pkg,
                             title = title,
                             text = text,
-                            postTime = sbn.postTime
+                            postTime = sbn.postTime,
+                            sbn = sbn
                         )
                     )
                 }
             }
             _activeNotificationCounts.value = countMap
-            _notificationSummaries.value = summaries
+            _notificationSummaries.value = summaries.sortedByDescending { it.postTime }
         } catch (e: Exception) {
             e.printStackTrace()
         }
