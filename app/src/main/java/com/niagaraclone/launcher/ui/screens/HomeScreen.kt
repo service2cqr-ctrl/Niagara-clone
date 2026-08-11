@@ -156,6 +156,18 @@ fun HomeScreen(
     var isDrawerExpanded by remember { mutableStateOf(false) }
     var isIndexerVisible by remember { mutableStateOf(false) }
     var activeLetter by remember { mutableStateOf<String?>(null) }
+    var activePopUpApp by remember { mutableStateOf<AppModel?>(null) }
+
+    val isAnyOverlayActive = isDrawerExpanded ||
+            activePopUpApp != null ||
+            showSmartSearchSheet ||
+            showAgendaSheet ||
+            showFabMenuSheet ||
+            showFabEditActionSheet ||
+            selectedAppForCustomization != null ||
+            selectedAppForCategory != null ||
+            editingFolderApp != null ||
+            showRecentlyInstalledDialog
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -170,10 +182,24 @@ fun HomeScreen(
         }
     }
 
-    BackHandler(enabled = isDrawerExpanded) {
-        isDrawerExpanded = false
-        isIndexerVisible = false
-        activeLetter = null
+    // --- SYSTEM BACK GESTURE HANDLER ---
+    BackHandler(enabled = isAnyOverlayActive) {
+        when {
+            selectedAppForCategory != null -> selectedAppForCategory = null
+            selectedAppForCustomization != null -> selectedAppForCustomization = null
+            editingFolderApp != null -> editingFolderApp = null
+            activePopUpApp != null -> activePopUpApp = null
+            showSmartSearchSheet -> showSmartSearchSheet = false
+            showAgendaSheet -> showAgendaSheet = false
+            showFabEditActionSheet -> showFabEditActionSheet = false
+            showFabMenuSheet -> showFabMenuSheet = false
+            showRecentlyInstalledDialog -> showRecentlyInstalledDialog = false
+            isDrawerExpanded -> {
+                isDrawerExpanded = false
+                isIndexerVisible = false
+                activeLetter = null
+            }
+        }
     }
 
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
@@ -206,7 +232,6 @@ fun HomeScreen(
 
     var isWidgetMenuOpen by remember { mutableStateOf(false) }
     var isEditingWidget by remember { mutableStateOf(false) }
-    var activePopUpApp by remember { mutableStateOf<AppModel?>(null) }
     var popupYOffset by remember { mutableFloatStateOf(0f) }
 
     val (currentTime, currentDate) = rememberCurrentTimeState(timeFormatPattern = "h:mm", dateFormatPattern = "EEE d MMM")
