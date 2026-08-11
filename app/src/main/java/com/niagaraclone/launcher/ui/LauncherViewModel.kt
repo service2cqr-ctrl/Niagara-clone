@@ -19,9 +19,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.data.AppTheme
+import com.niagaraclone.launcher.data.CalendarEventModel
+import com.niagaraclone.launcher.data.CalendarRepository
 import com.niagaraclone.launcher.data.SettingsRepository
 import com.niagaraclone.launcher.data.WeatherData
 import com.niagaraclone.launcher.data.WeatherRepository
+import com.niagaraclone.launcher.services.MediaNotificationListener
+import com.niagaraclone.launcher.services.NotificationSummaryModel
 import com.niagaraclone.launcher.ui.components.MediaWidgetTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +38,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class LauncherViewModel(
     val repository: SettingsRepository,
@@ -41,6 +48,7 @@ class LauncherViewModel(
 ) : ViewModel() {
 
     private val weatherRepository = WeatherRepository(context)
+    private val calendarRepository = CalendarRepository(context)
     private val prefs = context.getSharedPreferences("launcher_prefs", Context.MODE_PRIVATE)
 
     private val _apps = MutableStateFlow<List<AppModel>>(emptyList())
@@ -57,6 +65,17 @@ class LauncherViewModel(
 
     private val _notificationPermissionGranted = MutableStateFlow(false)
     val notificationPermissionGranted: StateFlow<Boolean> = _notificationPermissionGranted.asStateFlow()
+
+    // --- CALENDAR & NOTIFICATION STATES ---
+    private val _upcomingEvents = MutableStateFlow<List<CalendarEventModel>>(emptyList())
+    val upcomingEvents: StateFlow<List<CalendarEventModel>> = _upcomingEvents.asStateFlow()
+
+    val notificationCounts: StateFlow<Map<String, Int>> = MediaNotificationListener.activeNotificationCounts
+    val notificationSummaries: StateFlow<List<NotificationSummaryModel>> = MediaNotificationListener.notificationSummaries
+
+    // --- USAGE BREAKER LIMIT ---
+    private val _usageBreakerLimit = MutableStateFlow(15)
+    val usageBreakerLimit: StateFlow<Int> = _usageBreakerLimit.asStateFlow()
 
     // --- HIDDEN PACKAGES STATE ---
     private val _hiddenPackages = MutableStateFlow<Set<String>>(emptySet())
@@ -127,7 +146,29 @@ class LauncherViewModel(
         loadSelectedMusicPackages()
     }
 
-    // --- APP USAGE TRACKING & RECENTLY INSTALLED ---
+    // --- CALENDAR AGENDA MANAGEMENT ---
+    fun loadCalendarEvents() {
+        viewModelScope.launch {
+            _upcomingEvents.value = calendarRepository.getUpcomingEvents()
+        }
+    }
+
+    // --- USAGE BREAKER & LAUNCH TRACKING ---
+    fun getAppLaunchCountToday(packageName: String): Int {
+        val todayDate = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+        return prefs.getInt("launch_${packageName}_$todayDate", 0)
+    }
+
+    fun incrementAppLaunchCount(packageName: String): Boolean {
+        val todayDate = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+        val key = "launch_${packageName}_$todayDate"
+        val count = prefs.getInt(key, 0) + 1
+        prefs.edit().putInt(key, count).apply()
+
+        trackAppLaunch(packageName)
+        return count > _usageBreakerLimit.value
+    }
+
     fun trackAppLaunch(packageName: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val countKey = "launch_count_$packageName"
