@@ -6,7 +6,6 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -57,6 +56,8 @@ import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.services.NotificationSummaryModel
 import com.niagaraclone.launcher.services.ScreenLockService
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.components.AddToCategorySheet
+import com.niagaraclone.launcher.ui.components.AppCustomizationSheet
 import com.niagaraclone.launcher.ui.components.CalendarAgendaSheet
 import com.niagaraclone.launcher.ui.components.CascadiaButtonMenuSheet
 import com.niagaraclone.launcher.ui.components.FabActionSelectionSheet
@@ -135,8 +136,10 @@ fun HomeScreen(
     var showFabMenuSheet by remember { mutableStateOf(false) }
     var showFabEditActionSheet by remember { mutableStateOf(false) }
     var isSwipeActionEdit by remember { mutableStateOf(false) }
-    var selectedNotificationForReply by remember { mutableStateOf<NotificationSummaryModel?>(null) }
     var showRecentlyInstalledDialog by remember { mutableStateOf(false) }
+
+    var selectedAppForCustomization by remember { mutableStateOf<AppModel?>(null) }
+    var selectedAppForCategory by remember { mutableStateOf<AppModel?>(null) }
 
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -382,13 +385,10 @@ fun HomeScreen(
                         onClick = {
                             context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) }
                         },
-                        onLongClick = { },
+                        onLongClick = { selectedAppForCustomization = app },
                         onSwipeRight = { yOffset ->
                             popupYOffset = yOffset
                             activePopUpApp = app
-                        },
-                        onQuickReplyClick = { notification ->
-                            selectedNotificationForReply = notification
                         }
                     )
                 }
@@ -404,13 +404,10 @@ fun HomeScreen(
                                 notificationSummary = appNotification,
                                 accentColor = accentColor,
                                 onClick = { context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) } },
-                                onLongClick = { },
+                                onLongClick = { selectedAppForCustomization = app },
                                 onSwipeRight = { yOffset ->
                                     popupYOffset = yOffset
                                     activePopUpApp = app
-                                },
-                                onQuickReplyClick = { notification ->
-                                    selectedNotificationForReply = notification
                                 }
                             )
                         }
@@ -446,7 +443,7 @@ fun HomeScreen(
             }
         }
 
-        // --- WAVE SIDE INDEXER FOR APP DRAWER WITH NOTIFICATION DOTS & GESTURE EXCLUSION ---
+        // --- WAVE SIDE INDEXER FOR APP DRAWER WITH NOTIFICATION DOTS & DUAL-EDGE EXCLUSION ---
         WaveSideIndex(
             isIndexerVisible = isIndexerVisible,
             notificationLetters = notificationLetters,
@@ -536,6 +533,27 @@ fun HomeScreen(
             )
         }
 
+        selectedAppForCustomization?.let { app ->
+            AppCustomizationSheet(
+                app = app,
+                viewModel = viewModel,
+                onDismiss = { selectedAppForCustomization = null },
+                onOpenSettings = onOpenSettings,
+                onOpenCategorySheet = {
+                    selectedAppForCategory = app
+                    selectedAppForCustomization = null
+                }
+            )
+        }
+
+        selectedAppForCategory?.let { app ->
+            AddToCategorySheet(
+                app = app,
+                viewModel = viewModel,
+                onDismiss = { selectedAppForCategory = null }
+            )
+        }
+
         activePopUpApp?.let { parentApp ->
             val subApps = remember(parentApp) { viewModel.getFolderSubApps(parentApp.packageName) }
 
@@ -588,41 +606,6 @@ fun HomeScreen(
                 onDismiss = { showFabEditActionSheet = false }
             )
         }
-
-        selectedNotificationForReply?.let { notification ->
-            var replyText by remember { mutableStateOf("") }
-            AlertDialog(
-                onDismissRequest = { selectedNotificationForReply = null },
-                title = { Text(text = notification.title.ifEmpty { "Notification" }, color = Color.White) },
-                text = {
-                    Column {
-                        Text(text = notification.text, color = Color.Gray, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = replyText,
-                            onValueChange = { replyText = it },
-                            placeholder = { Text("Quick reply...", color = Color.Gray) },
-                            textStyle = LocalTextStyle.current.copy(color = Color.White),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                },
-                confirmButton = {
-                    IconButton(onClick = {
-                        context.packageManager.getLaunchIntentForPackage(notification.packageName)?.let { context.startActivity(it) }
-                        selectedNotificationForReply = null
-                    }) {
-                        Icon(Icons.Default.Send, contentDescription = "Send", tint = accentColor)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { selectedNotificationForReply = null }) {
-                        Text("Cancel", color = Color.Gray)
-                    }
-                },
-                containerColor = Color.Black
-            )
-        }
     }
 }
 
@@ -656,11 +639,11 @@ private fun FavoriteAppRow(
     accentColor: Color = Color(0xFF4DD0E1),
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onSwipeRight: (Float) -> Unit,
-    onQuickReplyClick: (NotificationSummaryModel) -> Unit
+    onSwipeRight: (Float) -> Unit
 ) {
     var bottomY by remember { mutableFloatStateOf(0f) }
     var isExpanded by remember { mutableStateOf(false) }
+    var inlineReplyText by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -720,7 +703,7 @@ private fun FavoriteAppRow(
             }
         }
 
-        // --- IN-PLACE SYSTEM NOTIFICATION EXPANSION ---
+        // --- IN-PLACE SYSTEM NOTIFICATION EXPANSION WITH DIRECT REPLY & SYSTEM SYNC DISMISSAL ---
         if (isExpanded && notificationSummary != null) {
             Surface(
                 shape = RoundedCornerShape(12.dp),
@@ -737,31 +720,58 @@ private fun FavoriteAppRow(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Button(
-                            onClick = { onQuickReplyClick(notificationSummary) },
-                            colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Text(text = "Reply", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
+                        OutlinedTextField(
+                            value = inlineReplyText,
+                            onValueChange = { inlineReplyText = it },
+                            placeholder = { Text("Direct reply...", color = Color.Gray, fontSize = 12.sp) },
+                            singleLine = true,
+                            textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 13.sp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                        )
 
+                        IconButton(
+                            onClick = {
+                                if (inlineReplyText.isNotBlank()) {
+                                    MediaNotificationListener.sendDirectReply(notificationSummary.id, inlineReplyText)
+                                    inlineReplyText = ""
+                                    isExpanded = false
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Send, contentDescription = "Send Direct Reply", tint = accentColor)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         OutlinedButton(
                             onClick = onClick,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp)
                         ) {
-                            Text(text = "Open App", color = Color.White, fontSize = 12.sp)
+                            Text(text = "Open App", color = Color.White, fontSize = 11.sp)
                         }
 
+                        Spacer(modifier = Modifier.width(8.dp))
+
                         TextButton(
-                            onClick = { isExpanded = false },
-                            modifier = Modifier.height(32.dp)
+                            onClick = {
+                                MediaNotificationListener.dismissNotification(notificationSummary.id)
+                                isExpanded = false
+                            },
+                            modifier = Modifier.height(28.dp)
                         ) {
-                            Text(text = "Dismiss", color = Color.Gray, fontSize = 12.sp)
+                            Text(text = "Dismiss", color = Color.Gray, fontSize = 11.sp)
                         }
                     }
                 }
