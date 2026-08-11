@@ -157,7 +157,7 @@ fun WaveSideIndex(
                 .pointerInput(Unit) { createEdgePointerInput(false) }
         )
 
-        // --- 3. INDEXER ARC RENDER (Anchored Right) ---
+        // --- 3. INDEXER ARC RENDER (Niagara Ergonomic Padding) ---
         if (isIndexerVisible || isDragging) {
             val currentY = touchY
 
@@ -165,7 +165,7 @@ fun WaveSideIndex(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .fillMaxHeight()
-                    .padding(top = 90.dp, bottom = 40.dp, end = 12.dp),
+                    .padding(top = 165.dp, bottom = 85.dp, end = 12.dp),
                 verticalArrangement = Arrangement.SpaceEvenly,
                 horizontalAlignment = Alignment.End
             ) {
