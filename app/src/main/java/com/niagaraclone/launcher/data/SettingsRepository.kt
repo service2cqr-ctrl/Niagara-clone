@@ -202,6 +202,12 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun reorderWidgetIds(newList: List<Int>) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_WIDGET_IDS] = newList.take(4).joinToString(",")
+        }
+    }
+
     suspend fun snapshot(): Map<Preferences.Key<*>, Any> {
         return context.dataStore.data.first().asMap()
     }
