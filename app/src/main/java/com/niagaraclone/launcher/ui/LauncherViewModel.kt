@@ -75,26 +75,21 @@ class LauncherViewModel(
     private val _notificationPermissionGranted = MutableStateFlow(false)
     val notificationPermissionGranted: StateFlow<Boolean> = _notificationPermissionGranted.asStateFlow()
 
-    // --- CALENDAR & NOTIFICATION STATES ---
     private val _upcomingEvents = MutableStateFlow<List<CalendarEventModel>>(emptyList())
     val upcomingEvents: StateFlow<List<CalendarEventModel>> = _upcomingEvents.asStateFlow()
 
     val notificationCounts: StateFlow<Map<String, Int>> = MediaNotificationListener.activeNotificationCounts
     val notificationSummaries: StateFlow<List<NotificationSummaryModel>> = MediaNotificationListener.notificationSummaries
 
-    // --- USAGE BREAKER LIMIT ---
     private val _usageBreakerLimit = MutableStateFlow(15)
     val usageBreakerLimit: StateFlow<Int> = _usageBreakerLimit.asStateFlow()
 
-    // --- HIDDEN PACKAGES STATE ---
     private val _hiddenPackages = MutableStateFlow<Set<String>>(emptySet())
     val hiddenPackages: StateFlow<Set<String>> = _hiddenPackages.asStateFlow()
 
-    // --- MUSIC APPS SELECTION STATE ---
     private val _selectedMusicPackages = MutableStateFlow<Set<String>>(emptySet())
     val selectedMusicPackages: StateFlow<Set<String>> = _selectedMusicPackages.asStateFlow()
 
-    // --- LIVE WEATHER STATES ---
     private val _liveWeather = MutableStateFlow<WeatherData?>(null)
     val liveWeather: StateFlow<WeatherData?> = _liveWeather.asStateFlow()
 
@@ -126,7 +121,6 @@ class LauncherViewModel(
         }
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = MediaWidgetTheme.FROSTED_GLASS)
 
-    // Weather Preference Flows
     val weatherEnabled: StateFlow<Boolean> = repository.weatherEnabled
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = true)
 
@@ -139,7 +133,6 @@ class LauncherViewModel(
     val weatherTempUnit: StateFlow<String> = repository.weatherTempUnit
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = "CELSIUS")
 
-    // --- DISPLAY & GESTURE PREFERENCE FLOWS ---
     val clockStyle: StateFlow<String> = repository.clockStyle
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = "DIGITAL_BOLD")
 
@@ -155,7 +148,6 @@ class LauncherViewModel(
     val showBatteryPercentage: StateFlow<Boolean> = repository.showBatteryPercentage
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = true)
 
-    // --- CASCADIA FAB ACTION PREFERENCE FLOWS ---
     val cascadiaButtonEnabled: StateFlow<Boolean> = repository.cascadiaButtonEnabled
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = true)
 
@@ -171,9 +163,11 @@ class LauncherViewModel(
     val fabSwipePackage: StateFlow<String?> = repository.fabSwipePackage
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = null)
 
-    // --- THIRD-PARTY ICON PACK FLOW ---
     val selectedIconPack: StateFlow<String?> = repository.selectedIconPack
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = null)
+
+    val customAppLabels: StateFlow<Map<String, String>> = repository.customAppLabels
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyMap())
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -199,7 +193,13 @@ class LauncherViewModel(
         }
     }
 
-    // --- APP SHORTCUTS RETRIEVAL & EXECUTION ---
+    fun setCustomAppLabel(packageName: String, newLabel: String) {
+        viewModelScope.launch {
+            repository.setCustomAppLabel(packageName, newLabel)
+            refreshApps()
+        }
+    }
+
     fun getAppShortcuts(packageName: String): List<AppShortcutModel> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return emptyList()
         val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as? LauncherApps ?: return emptyList()
@@ -245,7 +245,6 @@ class LauncherViewModel(
         }
     }
 
-    // --- SETTERS ---
     fun setClockStyle(style: String) = viewModelScope.launch { repository.setClockStyle(style) }
     fun setAccentColor(colorArgb: Int) = viewModelScope.launch { repository.setAccentColor(colorArgb) }
     fun setQuickLockEnabled(enabled: Boolean) = viewModelScope.launch { repository.setQuickLockEnabled(enabled) }
@@ -262,7 +261,6 @@ class LauncherViewModel(
         viewModelScope.launch { repository.setFabSwipeAction(actionType, packageName) }
     }
 
-    // --- POP-UP FOLDER MANAGERS ---
     fun getFolderSubApps(parentPackage: String): List<AppModel> {
         val savedPackages = prefs.getStringSet("folder_sub_apps_$parentPackage", null)
         return if (!savedPackages.isNullOrEmpty()) {
@@ -277,7 +275,6 @@ class LauncherViewModel(
         prefs.edit().putStringSet("folder_sub_apps_$parentPackage", subPackages).apply()
     }
 
-    // --- CALENDAR AGENDA MANAGEMENT ---
     fun loadCalendarEvents() {
         viewModelScope.launch {
             _upcomingEvents.value = calendarRepository.getUpcomingEvents()
@@ -309,7 +306,6 @@ class LauncherViewModel(
         }
     }
 
-    // --- USAGE BREAKER & LAUNCH TRACKING ---
     fun getAppLaunchCountToday(packageName: String): Int {
         val todayDate = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
         return prefs.getInt("launch_${packageName}_$todayDate", 0)
@@ -642,6 +638,7 @@ class LauncherViewModel(
             val pm = context.packageManager
             val iconPackManager = IconPackManager(context)
             val currentPack = repository.selectedIconPack.first()
+            val labelMap = repository.customAppLabels.first()
 
             val mainIntent = Intent(Intent.ACTION_MAIN, null).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
 
@@ -660,9 +657,11 @@ class LauncherViewModel(
                     iconPackManager.loadIconFromPack(currentPack, packageName)
                 } else null
 
+                val displayLabel = labelMap[packageName] ?: resolveInfo.loadLabel(pm).toString()
+
                 AppModel(
                     packageName = packageName,
-                    label = resolveInfo.loadLabel(pm).toString(),
+                    label = displayLabel,
                     icon = customIcon ?: resolveInfo.loadIcon(pm)
                 )
             }.sortedBy { it.label.lowercase() }
