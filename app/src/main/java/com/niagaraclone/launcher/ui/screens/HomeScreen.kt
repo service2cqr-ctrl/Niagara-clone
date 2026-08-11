@@ -25,34 +25,23 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.UnfoldMore
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,31 +49,24 @@ import androidx.compose.ui.window.Popup
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
-import com.niagaraclone.launcher.services.AudioConnectionReceiver
 import com.niagaraclone.launcher.services.MediaNotificationListener
+import com.niagaraclone.launcher.services.NotificationSummaryModel
 import com.niagaraclone.launcher.services.ScreenLockService
 import com.niagaraclone.launcher.ui.LauncherViewModel
-import com.niagaraclone.launcher.ui.components.AutoMusicPopUpCard
 import com.niagaraclone.launcher.ui.components.CalendarAgendaSheet
 import com.niagaraclone.launcher.ui.components.CascadiaButtonMenuSheet
 import com.niagaraclone.launcher.ui.components.FabActionSelectionSheet
 import com.niagaraclone.launcher.ui.components.MediaPlayerCard
-import com.niagaraclone.launcher.ui.components.NotificationSummarySheet
 import com.niagaraclone.launcher.ui.components.PopUpFolderCard
-import com.niagaraclone.launcher.ui.components.UsageBreakerDialog
-import com.niagaraclone.launcher.ui.components.WaveSideIndex
-import com.niagaraclone.launcher.ui.components.WeatherBottomSheet
 import com.niagaraclone.launcher.ui.components.WidgetStackView
 import com.niagaraclone.launcher.ui.components.rememberCurrentTimeState
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 private val AppModel.firstLetter: Char
     get() = label.firstOrNull()?.uppercaseChar() ?: '#'
-
-private fun openNotificationAccessSettings(context: Context) {
-    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-    context.startActivity(intent)
-}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -111,7 +93,6 @@ fun HomeScreen(
 
     val batteryStatus by viewModel.batteryStatus.collectAsState()
     val isDefaultLauncher by viewModel.isDefaultLauncher.collectAsState()
-    val isBannerDismissedSession by viewModel.isBannerDismissedSession.collectAsState()
 
     val rawShowMediaWidget by viewModel.showMediaWidget.collectAsState()
     val mediaWidgetTheme by viewModel.mediaWidgetTheme.collectAsState()
@@ -124,27 +105,28 @@ fun HomeScreen(
 
     val mediaState by MediaNotificationListener.mediaState.collectAsState()
 
-    // --- DISPLAY & FAB GESTURE STATES ---
     val clockStyle by viewModel.clockStyle.collectAsState()
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
     val quickLockEnabled by viewModel.quickLockEnabled.collectAsState()
     val showBatteryPercentage by viewModel.showBatteryPercentage.collectAsState()
     val cascadiaButtonEnabled by viewModel.cascadiaButtonEnabled.collectAsState()
+
     val fabTapActionType by viewModel.fabTapActionType.collectAsState()
     val fabTapPackage by viewModel.fabTapPackage.collectAsState()
+    val fabSwipeActionType by viewModel.fabSwipeActionType.collectAsState()
+    val fabSwipePackage by viewModel.fabSwipePackage.collectAsState()
+
     val accentColor = Color(accentColorArgb)
 
-    // --- CALENDAR & NOTIFICATION STATES ---
     val notificationCounts by viewModel.notificationCounts.collectAsState()
     val upcomingEvents by viewModel.upcomingEvents.collectAsState()
     val notificationSummaries by viewModel.notificationSummaries.collectAsState()
 
     var showAgendaSheet by remember { mutableStateOf(false) }
-    var showNotificationSummarySheet by remember { mutableStateOf(false) }
-    var showClockStyleSheet by remember { mutableStateOf(false) }
     var showFabMenuSheet by remember { mutableStateOf(false) }
     var showFabEditActionSheet by remember { mutableStateOf(false) }
-    var pendingAppToLaunch by remember { mutableStateOf<AppModel?>(null) }
+    var isSwipeActionEdit by remember { mutableStateOf(false) }
+    var selectedNotificationForReply by remember { mutableStateOf<NotificationSummaryModel?>(null) }
 
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -163,12 +145,12 @@ fun HomeScreen(
         visibleApps.firstOrNull { it.packageName == fabTapPackage }
     }
 
-    var isWidgetMenuOpen by remember { mutableStateOf(false) }
-    var isWeatherSheetOpen by remember { mutableStateOf(false) }
-    var isEditingWidget by remember { mutableStateOf(false) }
-    var appForMenu by remember { mutableStateOf<AppModel?>(null) }
-    var showPermissionDialog by remember { mutableStateOf(false) }
+    val assignedFabSwipeApp = remember(visibleApps, fabSwipePackage) {
+        visibleApps.firstOrNull { it.packageName == fabSwipePackage }
+    }
 
+    var isWidgetMenuOpen by remember { mutableStateOf(false) }
+    var isEditingWidget by remember { mutableStateOf(false) }
     var activePopUpApp by remember { mutableStateOf<AppModel?>(null) }
     var popupYOffset by remember { mutableFloatStateOf(0f) }
 
@@ -194,8 +176,8 @@ fun HomeScreen(
         visibleApps.groupBy { it.firstLetter }.toSortedMap()
     }
 
-    val handleFabTap: () -> Unit = {
-        when (fabTapActionType) {
+    val executeAction: (String, AppModel?) -> Unit = { actionType, targetApp ->
+        when (actionType) {
             "SEARCH" -> onOpenSearch()
             "AGENDA" -> {
                 val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
@@ -211,7 +193,7 @@ fun HomeScreen(
             }
             "LOCK" -> ScreenLockService.lockScreen()
             "APP" -> {
-                assignedFabApp?.let { app ->
+                targetApp?.let { app ->
                     val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
                     intent?.let { context.startActivity(it) }
                 }
@@ -266,33 +248,53 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.height(4.dp))
 
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            if (clockStyle != "DIGITAL_HEADER") {
-                                Text(
-                                    text = currentDate.ifEmpty { "Wed 5 Aug" },
-                                    color = Color.White.copy(alpha = 0.9f),
-                                    fontSize = 16.sp,
-                                    modifier = Modifier.clickable {
-                                        val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
-                                        if (hasPermission) {
-                                            viewModel.loadCalendarEvents()
-                                            showAgendaSheet = true
-                                        } else {
-                                            calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
-                                        }
+                            Text(
+                                text = currentDate.ifEmpty { "Wed 5 Aug" },
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = 16.sp,
+                                modifier = Modifier.clickable {
+                                    val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
+                                    if (hasPermission) {
+                                        viewModel.loadCalendarEvents()
+                                        showAgendaSheet = true
+                                    } else {
+                                        calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
                                     }
+                                }
+                            )
+                            if (showBatteryPercentage) Text(text = batteryStatus, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                            if (weatherEnabled) Text(text = liveTempDisplay, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                        }
+
+                        // --- INLINE AGENDA PREVIEW ---
+                        if (upcomingEvents.isNotEmpty()) {
+                            val nextEvent = upcomingEvents.first()
+                            val eventTime = if (nextEvent.isAllDay) "All day" else SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(nextEvent.startTimeMillis))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable {
+                                    viewModel.loadCalendarEvents()
+                                    showAgendaSheet = true
+                                }
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(accentColor, CircleShape)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "$eventTime • ${nextEvent.title}",
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
-                            if (showBatteryPercentage) Text(text = batteryStatus, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
-                            if (weatherEnabled) Text(text = liveTempDisplay, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp, modifier = Modifier.clickable { isWeatherSheetOpen = true })
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
-
-                    if (!isDefaultLauncher && !isBannerDismissedSession) {
-                        SwipeableDefaultLauncherBanner(onSetDefault = onRequestSetDefaultLauncher, onDismiss = { viewModel.dismissBannerForSession() })
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
 
                     mediaState?.let { media ->
                         if (showMediaWidget && media.isPlaying && media.title.isNotEmpty()) {
@@ -329,15 +331,20 @@ fun HomeScreen(
 
             LazyColumn(state = listState, modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(favorites) { app ->
+                    val appNotification = notificationSummaries.firstOrNull { it.packageName == app.packageName }
                     FavoriteAppRow(
                         app = app,
                         badgeCount = notificationCounts[app.packageName] ?: 0,
+                        latestNotificationText = appNotification?.text?.ifEmpty { appNotification.title },
                         accentColor = accentColor,
                         onClick = {
-                            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                            intent?.let { context.startActivity(it) }
+                            if (appNotification != null) {
+                                selectedNotificationForReply = appNotification
+                            } else {
+                                context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) }
+                            }
                         },
-                        onLongClick = { appForMenu = app },
+                        onLongClick = { },
                         onSwipeRight = { yOffset ->
                             popupYOffset = yOffset
                             activePopUpApp = app
@@ -349,12 +356,14 @@ fun HomeScreen(
                     groupedApps.forEach { (letter, appGroup) ->
                         item { Text(text = letter.toString(), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)) }
                         items(appGroup) { app ->
+                            val appNotification = notificationSummaries.firstOrNull { it.packageName == app.packageName }
                             FavoriteAppRow(
                                 app = app,
                                 badgeCount = notificationCounts[app.packageName] ?: 0,
+                                latestNotificationText = appNotification?.text,
                                 accentColor = accentColor,
                                 onClick = { context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) } },
-                                onLongClick = { appForMenu = app },
+                                onLongClick = { },
                                 onSwipeRight = { yOffset ->
                                     popupYOffset = yOffset
                                     activePopUpApp = app
@@ -366,8 +375,10 @@ fun HomeScreen(
             }
         }
 
-        // --- CASCADIA (NIAGARA) FAB BUTTON ---
+        // --- CASCADIA FAB BUTTON WITH DIRECT VERTICAL DRAG SHORTCUT ---
         if (cascadiaButtonEnabled && !isDrawerExpanded) {
+            var totalDragY by remember { mutableFloatStateOf(0f) }
+
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -378,8 +389,23 @@ fun HomeScreen(
                     color = accentColor,
                     modifier = Modifier
                         .size(56.dp)
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDragEnd = {
+                                    if (totalDragY < -40f) {
+                                        executeAction(fabSwipeActionType, assignedFabSwipeApp)
+                                    }
+                                    totalDragY = 0f
+                                },
+                                onDragCancel = { totalDragY = 0f },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    totalDragY += dragAmount.y
+                                }
+                            )
+                        }
                         .combinedClickable(
-                            onClick = handleFabTap,
+                            onClick = { executeAction(fabTapActionType, assignedFabApp) },
                             onLongClick = { showFabMenuSheet = true }
                         )
                 ) {
@@ -404,6 +430,26 @@ fun HomeScreen(
         }
 
         // --- OVERLAYS & SHEETS ---
+        activePopUpApp?.let { parentApp ->
+            val subApps = remember(parentApp) { viewModel.getFolderSubApps(parentApp.packageName) }
+
+            Popup(
+                alignment = Alignment.TopStart,
+                offset = IntOffset(0, (popupYOffset - 120f).coerceAtLeast(0f).roundToInt()),
+                onDismissRequest = { activePopUpApp = null }
+            ) {
+                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                    PopUpFolderCard(
+                        viewModel = viewModel,
+                        parentPackage = parentApp.packageName,
+                        folderName = parentApp.label,
+                        subApps = subApps,
+                        onDismiss = { activePopUpApp = null }
+                    )
+                }
+            }
+        }
+
         if (showAgendaSheet) {
             CalendarAgendaSheet(
                 viewModel = viewModel,
@@ -415,7 +461,14 @@ fun HomeScreen(
         if (showFabMenuSheet) {
             CascadiaButtonMenuSheet(
                 viewModel = viewModel,
-                onEditTapAction = { showFabEditActionSheet = true },
+                onEditTapAction = {
+                    isSwipeActionEdit = false
+                    showFabEditActionSheet = true
+                },
+                onEditSwipeAction = {
+                    isSwipeActionEdit = true
+                    showFabEditActionSheet = true
+                },
                 onOpenSettings = onOpenSettings,
                 onDismiss = { showFabMenuSheet = false }
             )
@@ -425,14 +478,43 @@ fun HomeScreen(
             FabActionSelectionSheet(
                 viewModel = viewModel,
                 apps = visibleApps,
+                isSwipeAction = isSwipeActionEdit,
                 onDismiss = { showFabEditActionSheet = false }
             )
         }
 
-        if (showNotificationSummarySheet) {
-            NotificationSummarySheet(
-                summaries = notificationSummaries,
-                onDismiss = { showNotificationSummarySheet = false }
+        selectedNotificationForReply?.let { notification ->
+            var replyText by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = { selectedNotificationForReply = null },
+                title = { Text(text = notification.title.ifEmpty { "Notification" }, color = Color.White) },
+                text = {
+                    Column {
+                        Text(text = notification.text, color = Color.Gray, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = replyText,
+                            onValueChange = { replyText = it },
+                            placeholder = { Text("Quick reply...", color = Color.Gray) },
+                            textStyle = LocalTextStyle.current.copy(color = Color.White),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    IconButton(onClick = {
+                        context.packageManager.getLaunchIntentForPackage(notification.packageName)?.let { context.startActivity(it) }
+                        selectedNotificationForReply = null
+                    }) {
+                        Icon(Icons.Default.Send, contentDescription = "Send", tint = accentColor)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { selectedNotificationForReply = null }) {
+                        Text("Cancel", color = Color.Gray)
+                    }
+                },
+                containerColor = Color.Black
             )
         }
     }
@@ -464,6 +546,7 @@ private fun ClockHeaderDisplay(
 private fun FavoriteAppRow(
     app: AppModel,
     badgeCount: Int = 0,
+    latestNotificationText: String? = null,
     accentColor: Color = Color(0xFF4DD0E1),
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -495,46 +578,24 @@ private fun FavoriteAppRow(
             )
             Spacer(modifier = Modifier.width(16.dp))
         } ?: Spacer(modifier = Modifier.width(44.dp))
-        Text(text = app.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = app.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            if (!latestNotificationText.isNullOrEmpty()) {
+                Text(
+                    text = latestNotificationText,
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    maxLines = 1
+                )
+            }
+        }
 
         if (badgeCount > 0) {
-            Spacer(modifier = Modifier.weight(1f))
             Surface(shape = CircleShape, color = accentColor, modifier = Modifier.padding(start = 8.dp)) {
                 Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), contentAlignment = Alignment.Center) {
                     Text(text = if (badgeCount > 99) "99+" else badgeCount.toString(), color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SwipeableDefaultLauncherBanner(onSetDefault: () -> Unit, onDismiss: () -> Unit) {
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .offset { IntOffset(offsetX.roundToInt(), 0) }
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragEnd = { if (offsetX > 200f || offsetX < -200f) onDismiss() else offsetX = 0f },
-                    onDragCancel = { offsetX = 0f },
-                    onDrag = { change, dragAmount -> change.consume(); offsetX += dragAmount.x }
-                )
-            }
-            .padding(vertical = 4.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Surface(shape = CircleShape, color = Color(0xFFE5A93C), modifier = Modifier.size(36.dp)) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(imageVector = Icons.Default.Home, contentDescription = "Home", tint = Color.Black, modifier = Modifier.size(20.dp))
-                }
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(text = "Welcome back! Set Cascadia Launcher as your home screen?", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(text = "Set as home screen", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, textDecoration = TextDecoration.Underline, modifier = Modifier.clickable { onSetDefault() })
             }
         }
     }
