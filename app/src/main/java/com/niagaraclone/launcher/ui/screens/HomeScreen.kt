@@ -1,12 +1,12 @@
 package com.niagaraclone.launcher.ui.screens
 
 import android.Manifest
+import android.app.AlarmClock
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.provider.AlarmClock
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -498,7 +498,7 @@ fun HomeScreen(
 
                     if (widgetIds.isNotEmpty()) {
                         WidgetStackView(
-                            widgetIds = widgetIds,
+                            widgetIds = widgetIds.toList(),
                             widgetHeightDp = widgetHeight,
                             appWidgetHost = appWidgetHost,
                             appWidgetManager = appWidgetManager,
@@ -658,6 +658,7 @@ fun HomeScreen(
             }
         }
 
+        // --- OVERLAYS & SHEETS ---
         if (isWidgetMenuOpen) {
             WidgetMenuSheet(
                 viewModel = viewModel,
