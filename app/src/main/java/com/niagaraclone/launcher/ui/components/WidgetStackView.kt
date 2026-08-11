@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -14,13 +15,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -35,94 +40,121 @@ fun WidgetStackView(
     modifier: Modifier = Modifier
 ) {
     var showWidgetOptionsDialog by remember { mutableStateOf<Int?>(null) }
+    var liveHeight by remember(widgetHeightDp) { mutableFloatStateOf(widgetHeightDp) }
+    val density = LocalDensity.current
 
     if (widgetIds.isEmpty()) return
 
     val pagerState = rememberPagerState(pageCount = { widgetIds.size })
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(widgetHeightDp.dp)
-            .clip(RoundedCornerShape(16.dp))
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // --- 1. SWIPEABLE WIDGET PAGER ---
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
-            val widgetId = widgetIds[page]
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(liveHeight.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF141414))
+        ) {
+            // --- 1. SWIPEABLE WIDGET PAGER ---
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val widgetId = widgetIds[page]
 
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .combinedClickable(
-                        onClick = {},
-                        onLongClick = { showWidgetOptionsDialog = widgetId }
-                    )
-            ) {
-                // Host Native AppWidgetHostView via AndroidView
-                AndroidView(
-                    factory = { context ->
-                        val widgetInfo = appWidgetManager.getAppWidgetInfo(widgetId)
-                        if (widgetInfo != null) {
-                            appWidgetHost.createView(context, widgetId, widgetInfo)
-                        } else {
-                            // Fallback view if widget info fails to load
-                            android.view.View(context)
-                        }
-                    },
-                    update = { view ->
-                        view.layoutParams = android.view.ViewGroup.LayoutParams(
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = { showWidgetOptionsDialog = widgetId }
                         )
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-
-        // --- 2. PAGINATION DOTS INDICATOR (Only shown if 2+ widgets exist) ---
-        if (widgetIds.size > 1) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 6.dp)
-                    .background(Color.Black.copy(alpha = 0.4f), shape = RoundedCornerShape(12.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                repeat(widgetIds.size) { index ->
-                    val isSelected = pagerState.currentPage == index
-                    val dotWidth by animateDpAsState(
-                        targetValue = if (isSelected) 14.dp else 6.dp,
-                        label = "dot_width"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .height(6.dp)
-                            .width(dotWidth)
-                            .clip(CircleShape)
-                            .background(
-                                if (isSelected) Color(0xFF4DD0E1)
-                                else Color.White.copy(alpha = 0.5f)
+                ) {
+                    AndroidView(
+                        factory = { context ->
+                            val widgetInfo = appWidgetManager.getAppWidgetInfo(widgetId)
+                            if (widgetInfo != null) {
+                                appWidgetHost.createView(context, widgetId, widgetInfo)
+                            } else {
+                                android.view.View(context)
+                            }
+                        },
+                        update = { view ->
+                            view.layoutParams = android.view.ViewGroup.LayoutParams(
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT
                             )
+                        },
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
+
+            // --- 2. PAGINATION DOTS INDICATOR (Only shown if 2+ widgets exist) ---
+            if (widgetIds.size > 1) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 6.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), shape = RoundedCornerShape(12.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    repeat(widgetIds.size) { index ->
+                        val isSelected = pagerState.currentPage == index
+                        val dotWidth by animateDpAsState(
+                            targetValue = if (isSelected) 14.dp else 6.dp,
+                            label = "dot_width"
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .height(6.dp)
+                                .width(dotWidth)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isSelected) Color(0xFF4DD0E1)
+                                    else Color.White.copy(alpha = 0.5f)
+                                )
+                        )
+                    }
+                }
+            }
+        }
+
+        // --- 3. LIVE HEIGHT RESIZE HANDLE ---
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(18.dp)
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures { change, dragAmount ->
+                        change.consume()
+                        liveHeight = (liveHeight + (dragAmount / density.density)).coerceIn(100f, 420f)
+                    }
+                }
+        ) {
+            Icon(
+                imageVector = Icons.Default.DragHandle,
+                contentDescription = "Resize Stack",
+                tint = Color.White.copy(alpha = 0.35f),
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 
-    // --- 3. WIDGET OPTIONS DIALOG (ON LONG PRESS) ---
+    // --- 4. WIDGET OPTIONS DIALOG (ON LONG PRESS) ---
     showWidgetOptionsDialog?.let { targetWidgetId ->
         AlertDialog(
             onDismissRequest = { showWidgetOptionsDialog = null },
             containerColor = Color(0xFF1E1E1E),
             title = {
-                Text(text = "Widget Options", color = Color.White)
+                Text(text = "Widget Options", color = Color.White, fontSize = 18.sp)
             },
             text = {
                 Column {
