@@ -147,6 +147,9 @@ class LauncherViewModel(
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = true)
 
     // --- CASCADIA FAB ACTION PREFERENCE FLOWS ---
+    val cascadiaButtonEnabled: StateFlow<Boolean> = repository.cascadiaButtonEnabled
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = true)
+
     val fabTapActionType: StateFlow<String> = repository.fabTapActionType
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = "DIAL")
 
@@ -176,6 +179,7 @@ class LauncherViewModel(
     fun setHapticFeedbackEnabled(enabled: Boolean) = viewModelScope.launch { repository.setHapticFeedbackEnabled(enabled) }
     fun setRotationEnabled(enabled: Boolean) = viewModelScope.launch { repository.setRotationEnabled(enabled) }
     fun setShowBatteryPercentage(show: Boolean) = viewModelScope.launch { repository.setShowBatteryPercentage(show) }
+    fun setCascadiaButtonEnabled(enabled: Boolean) = viewModelScope.launch { repository.setCascadiaButtonEnabled(enabled) }
 
     fun setFabTapAction(actionType: String, packageName: String? = null) {
         viewModelScope.launch {
@@ -320,6 +324,7 @@ class LauncherViewModel(
                 put("hapticFeedbackEnabled", hapticFeedbackEnabled.value)
                 put("rotationEnabled", rotationEnabled.value)
                 put("showBatteryPercentage", showBatteryPercentage.value)
+                put("cascadiaButtonEnabled", cascadiaButtonEnabled.value)
                 put("fabTapActionType", fabTapActionType.value)
                 put("fabTapPackage", fabTapPackage.value ?: "")
             }
@@ -362,6 +367,7 @@ class LauncherViewModel(
             if (json.has("hapticFeedbackEnabled")) setHapticFeedbackEnabled(json.getBoolean("hapticFeedbackEnabled"))
             if (json.has("rotationEnabled")) setRotationEnabled(json.getBoolean("rotationEnabled"))
             if (json.has("showBatteryPercentage")) setShowBatteryPercentage(json.getBoolean("showBatteryPercentage"))
+            if (json.has("cascadiaButtonEnabled")) setCascadiaButtonEnabled(json.getBoolean("cascadiaButtonEnabled"))
             if (json.has("fabTapActionType")) {
                 val pkg = if (json.has("fabTapPackage")) json.getString("fabTapPackage").ifEmpty { null } else null
                 setFabTapAction(json.getString("fabTapActionType"), pkg)
