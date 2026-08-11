@@ -61,7 +61,9 @@ import com.niagaraclone.launcher.ui.components.AddToCategorySheet
 import com.niagaraclone.launcher.ui.components.AppCustomizationSheet
 import com.niagaraclone.launcher.ui.components.CalendarAgendaSheet
 import com.niagaraclone.launcher.ui.components.CascadiaButtonMenuSheet
+import com.niagaraclone.launcher.ui.components.EditPopUpFolderSheet
 import com.niagaraclone.launcher.ui.components.FabActionSelectionSheet
+import com.niagaraclone.launcher.ui.components.INDEX_ITEMS
 import com.niagaraclone.launcher.ui.components.MediaPlayerCard
 import com.niagaraclone.launcher.ui.components.PopUpFolderCard
 import com.niagaraclone.launcher.ui.components.SmartSearchSheet
@@ -144,6 +146,7 @@ fun HomeScreen(
 
     var selectedAppForCustomization by remember { mutableStateOf<AppModel?>(null) }
     var selectedAppForCategory by remember { mutableStateOf<AppModel?>(null) }
+    var editingFolderApp by remember { mutableStateOf<AppModel?>(null) }
 
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -202,15 +205,33 @@ fun HomeScreen(
         visibleApps.groupBy { it.firstLetter }.toSortedMap()
     }
 
-    val letterIndexMap = remember(favorites, groupedApps) {
+    // --- SMART INDEX MAP WITH MISSING LETTER FALLBACK & END FOOTER TARGETING ---
+    val (letterIndexMap, totalDrawerItemCount) = remember(favorites, groupedApps) {
         val map = mutableMapOf<String, Int>()
         map["⭐"] = 0
         var currentIndex = favorites.size
+
         groupedApps.forEach { (letter, appList) ->
             map[letter.toString()] = currentIndex
             currentIndex += 1 + appList.size
         }
-        map
+
+        val totalCount = currentIndex + 1 // +1 for Footer item
+
+        var lastKnownIndex = 0
+        INDEX_ITEMS.forEach { char ->
+            if (map.containsKey(char)) {
+                lastKnownIndex = map[char]!!
+            } else {
+                if (char == "#") {
+                    map["#"] = (totalCount - 1).coerceAtLeast(0)
+                } else {
+                    map[char] = lastKnownIndex
+                }
+            }
+        }
+
+        Pair(map, totalCount)
     }
 
     LaunchedEffect(activeLetter, isDrawerExpanded) {
@@ -252,7 +273,6 @@ fun HomeScreen(
         }
     }
 
-    // --- STARTUP PERMISSIONS FLOW ---
     if (!hasCompletedStartupCheck) {
         StartupPermissionsDialog(
             viewModel = viewModel,
@@ -323,7 +343,6 @@ fun HomeScreen(
                             if (weatherEnabled) Text(text = liveTempDisplay, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
                         }
 
-                        // --- INLINE AGENDA PREVIEW ---
                         AnimatedVisibility(visible = calendarPreviewEnabled && upcomingEvents.isNotEmpty()) {
                             val nextEvent = upcomingEvents.firstOrNull()
                             if (nextEvent != null) {
@@ -427,12 +446,11 @@ fun HomeScreen(
                         }
                     }
 
-                    // --- APP DRAWER FOOTER ---
                     item {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 24.dp, bottom = 96.dp)
+                                .padding(top = 24.dp, bottom = 160.dp)
                         ) {
                             Text(
                                 text = "Cascadia Launcher",
@@ -457,7 +475,6 @@ fun HomeScreen(
             }
         }
 
-        // --- WAVE SIDE INDEXER FOR APP DRAWER WITH DUAL-EDGE TOUCH (LEFT & RIGHT) ---
         WaveSideIndex(
             isIndexerVisible = isIndexerVisible,
             notificationLetters = notificationLetters,
@@ -484,7 +501,6 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // --- CASCADIA FAB BUTTON ---
         if (cascadiaButtonEnabled && !isDrawerExpanded) {
             var totalDragY by remember { mutableFloatStateOf(0f) }
 
@@ -538,7 +554,6 @@ fun HomeScreen(
             }
         }
 
-        // --- OVERLAYS & SHEETS ---
         if (showSmartSearchSheet) {
             SmartSearchSheet(
                 viewModel = viewModel,
@@ -556,6 +571,10 @@ fun HomeScreen(
                 onOpenCategorySheet = {
                     selectedAppForCategory = app
                     selectedAppForCustomization = null
+                },
+                onOpenEditFolderSheet = {
+                    editingFolderApp = app
+                    selectedAppForCustomization = null
                 }
             )
         }
@@ -568,7 +587,15 @@ fun HomeScreen(
             )
         }
 
-        // --- POP-UP FOLDER WITH FOCUSABLE TOUCH DISMISSAL ---
+        editingFolderApp?.let { parentApp ->
+            EditPopUpFolderSheet(
+                parentApp = parentApp,
+                viewModel = viewModel,
+                allApps = visibleApps,
+                onDismiss = { editingFolderApp = null }
+            )
+        }
+
         activePopUpApp?.let { parentApp ->
             val subApps = remember(parentApp) { viewModel.getFolderSubApps(parentApp.packageName) }
 
@@ -624,6 +651,51 @@ fun HomeScreen(
                 apps = visibleApps,
                 isSwipeAction = isSwipeActionEdit,
                 onDismiss = { showFabEditActionSheet = false }
+            )
+        }
+
+        if (showRecentlyInstalledDialog) {
+            val recentApps = remember { viewModel.getRecentlyInstalledApps() }
+
+            AlertDialog(
+                onDismissRequest = { showRecentlyInstalledDialog = false },
+                title = { Text("Recently Installed Apps", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = {
+                    if (recentApps.isEmpty()) {
+                        Text("No newly installed apps in the last 30 days.", color = Color.Gray)
+                    } else {
+                        LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                            items(recentApps) { app ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) }
+                                            showRecentlyInstalledDialog = false
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    app.icon?.let { icon ->
+                                        Image(
+                                            bitmap = icon.toBitmap(width = 36, height = 36).asImageBitmap(),
+                                            contentDescription = app.label,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                    }
+                                    Text(text = app.label, color = Color.White, fontSize = 15.sp)
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showRecentlyInstalledDialog = false }) {
+                        Text("Close", color = Color(0xFF4DD0E1))
+                    }
+                },
+                containerColor = Color(0xFF1E1E1E)
             )
         }
     }
@@ -723,7 +795,6 @@ private fun FavoriteAppRow(
             }
         }
 
-        // --- IN-PLACE SYSTEM NOTIFICATION EXPANSION WITH DIRECT REPLY & SYSTEM SYNC DISMISSAL ---
         if (isExpanded && notificationSummary != null) {
             Surface(
                 shape = RoundedCornerShape(12.dp),
