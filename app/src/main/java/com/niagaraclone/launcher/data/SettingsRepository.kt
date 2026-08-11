@@ -21,7 +21,7 @@ import org.json.JSONObject
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
-enum class MediaWidgetTheme { MATCH_ACCENT, ALBUM_ART, DARK }
+enum class MediaWidgetTheme { MATCH_ACCENT, ALBUM_ART, DARK, FROSTED_GLASS, LIGHT }
 
 data class LiveWeatherModel(
     val temperatureCelsius: Float = 28f,
@@ -80,11 +80,13 @@ class SettingsRepository(private val context: Context) {
     val showMediaWidget: StateFlow<Boolean> = context.dataStore.data.map { it[SHOW_MEDIA_WIDGET_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
     val mediaWidgetTheme: StateFlow<MediaWidgetTheme> = context.dataStore.data.map {
         when (it[MEDIA_WIDGET_THEME_KEY]) {
-            "ALBUM_ART" -> MediaWidgetTheme.ALBUM_ART
+            "LIGHT" -> MediaWidgetTheme.LIGHT
             "DARK" -> MediaWidgetTheme.DARK
-            else -> MediaWidgetTheme.MATCH_ACCENT
+            "MATCH_ACCENT" -> MediaWidgetTheme.MATCH_ACCENT
+            "ALBUM_ART" -> MediaWidgetTheme.ALBUM_ART
+            else -> MediaWidgetTheme.FROSTED_GLASS
         }
-    }.stateIn(scope, SharingStarted.Eagerly, MediaWidgetTheme.MATCH_ACCENT)
+    }.stateIn(scope, SharingStarted.Eagerly, MediaWidgetTheme.FROSTED_GLASS)
 
     val quickLockEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[QUICK_LOCK_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
     val showBatteryPercentage: StateFlow<Boolean> = context.dataStore.data.map { it[SHOW_BATTERY_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
