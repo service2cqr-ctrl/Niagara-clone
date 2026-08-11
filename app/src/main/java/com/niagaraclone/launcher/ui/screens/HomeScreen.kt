@@ -120,6 +120,13 @@ fun HomeScreen(
 
     val mediaState by MediaNotificationListener.mediaState.collectAsState()
 
+    // --- DISPLAY & GESTURE STATES ---
+    val clockStyle by viewModel.clockStyle.collectAsState()
+    val accentColorArgb by viewModel.accentColorArgb.collectAsState()
+    val quickLockEnabled by viewModel.quickLockEnabled.collectAsState()
+    val showBatteryPercentage by viewModel.showBatteryPercentage.collectAsState()
+    val accentColor = Color(accentColorArgb)
+
     // --- CALENDAR & NOTIFICATION STATES ---
     val notificationCounts by viewModel.notificationCounts.collectAsState()
     val upcomingEvents by viewModel.upcomingEvents.collectAsState()
@@ -127,6 +134,7 @@ fun HomeScreen(
 
     var showAgendaSheet by remember { mutableStateOf(false) }
     var showNotificationSummarySheet by remember { mutableStateOf(false) }
+    var showClockStyleSheet by remember { mutableStateOf(false) }
     var pendingAppToLaunch by remember { mutableStateOf<AppModel?>(null) }
 
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
@@ -185,7 +193,6 @@ fun HomeScreen(
     var isDrawerExpanded by remember { mutableStateOf(false) }
     var isIndexerVisible by remember { mutableStateOf(false) }
     var activeLetter by remember { mutableStateOf<String?>(null) }
-    var showBattery by remember { mutableStateOf(true) }
 
     val favorites = remember(visibleApps, favoritePackages) {
         visibleApps.filter { favoritePackages.contains(it.packageName) }
@@ -234,10 +241,12 @@ fun HomeScreen(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onDoubleTap = {
-                        val isLocked = ScreenLockService.lockScreen()
-                        if (!isLocked) {
-                            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                            context.startActivity(intent)
+                        if (quickLockEnabled) {
+                            val isLocked = ScreenLockService.lockScreen()
+                            if (!isLocked) {
+                                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                context.startActivity(intent)
+                            }
                         }
                     },
                     onTap = {
@@ -276,10 +285,13 @@ fun HomeScreen(
                                 onLongClick = { isWidgetMenuOpen = true }
                             )
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = timeHours, color = Color(0xFF4DD0E1), fontSize = 72.sp, fontWeight = FontWeight.Bold)
-                            Text(text = timeMinutes, color = Color.White, fontSize = 72.sp, fontWeight = FontWeight.Bold)
-                        }
+                        ClockHeaderDisplay(
+                            clockStyle = clockStyle,
+                            timeHours = timeHours,
+                            timeMinutes = timeMinutes,
+                            currentDate = currentDate,
+                            accentColor = accentColor
+                        )
 
                         Spacer(modifier = Modifier.height(4.dp))
 
@@ -287,25 +299,27 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(
-                                text = currentDate.ifEmpty { "Wed 5 Aug" },
-                                color = Color.White.copy(alpha = 0.9f),
-                                fontSize = 16.sp,
-                                modifier = Modifier.clickable {
-                                    val hasPermission = ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.READ_CALENDAR
-                                    ) == PackageManager.PERMISSION_GRANTED
+                            if (clockStyle != "DIGITAL_HEADER") {
+                                Text(
+                                    text = currentDate.ifEmpty { "Wed 5 Aug" },
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.clickable {
+                                        val hasPermission = ContextCompat.checkSelfPermission(
+                                            context,
+                                            Manifest.permission.READ_CALENDAR
+                                        ) == PackageManager.PERMISSION_GRANTED
 
-                                    if (hasPermission) {
-                                        viewModel.loadCalendarEvents()
-                                        showAgendaSheet = true
-                                    } else {
-                                        calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+                                        if (hasPermission) {
+                                            viewModel.loadCalendarEvents()
+                                            showAgendaSheet = true
+                                        } else {
+                                            calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+                                        }
                                     }
-                                }
-                            )
-                            if (showBattery) {
+                                )
+                            }
+                            if (showBatteryPercentage) {
                                 Text(text = batteryStatus, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
                             }
                             if (weatherEnabled) {
@@ -389,6 +403,7 @@ fun HomeScreen(
                     FavoriteAppRow(
                         app = app,
                         badgeCount = notificationCounts[app.packageName] ?: 0,
+                        accentColor = accentColor,
                         onClick = { handleAppLaunch(app) },
                         onLongClick = { appForMenu = app },
                         onSwipeRight = { yOffset ->
@@ -413,6 +428,7 @@ fun HomeScreen(
                             FavoriteAppRow(
                                 app = app,
                                 badgeCount = notificationCounts[app.packageName] ?: 0,
+                                accentColor = accentColor,
                                 onClick = { handleAppLaunch(app) },
                                 onLongClick = { appForMenu = app },
                                 onSwipeRight = { yOffset ->
@@ -491,22 +507,16 @@ fun HomeScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = { showRecentlyInstalledDialog = false }) {
-                        Text("Close", color = Color(0xFF4DD0E1))
+                        Text("Close", color = accentColor)
                     }
                 },
                 containerColor = Color.Black
             )
         }
 
-        // --- Dynamic Overlay Pop-up Card with Real Operational Apps ---
+        // --- Dynamic Overlay Pop-up Card with Persistent Sub-Apps ---
         activePopUpApp?.let { parentApp ->
-            val subApps = remember(visibleApps, parentApp) {
-                val categoryMatch = visibleApps.filter {
-                    it.packageName != parentApp.packageName &&
-                    it.label.take(3).equals(parentApp.label.take(3), ignoreCase = true)
-                }
-                if (categoryMatch.isNotEmpty()) categoryMatch.take(4) else visibleApps.filter { it.packageName != parentApp.packageName }.take(4)
-            }
+            val subApps = remember(parentApp) { viewModel.getFolderSubApps(parentApp.packageName) }
 
             Popup(
                 alignment = Alignment.TopStart,
@@ -547,7 +557,7 @@ fun HomeScreen(
         if (!isDrawerExpanded) {
             FloatingActionButton(
                 onClick = { onOpenSearch() },
-                containerColor = Color(0xFF4DD0E1),
+                containerColor = accentColor,
                 contentColor = Color.Black,
                 shape = CircleShape,
                 modifier = Modifier
@@ -571,6 +581,48 @@ fun HomeScreen(
             NotificationSummarySheet(
                 summaries = notificationSummaries,
                 onDismiss = { showNotificationSummarySheet = false }
+            )
+        }
+
+        if (showClockStyleSheet) {
+            AlertDialog(
+                onDismissRequest = { showClockStyleSheet = false },
+                title = { Text("Clock Style", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        listOf(
+                            "DIGITAL_BOLD" to "Digital Bold (Default)",
+                            "DIGITAL_MINIMAL" to "Digital Minimal",
+                            "DIGITAL_HEADER" to "Header Style"
+                        ).forEach { (styleKey, label) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.setClockStyle(styleKey)
+                                        showClockStyleSheet = false
+                                    }
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = (clockStyle == styleKey),
+                                    onClick = {
+                                        viewModel.setClockStyle(styleKey)
+                                        showClockStyleSheet = false
+                                    },
+                                    colors = RadioButtonDefaults.colors(selectedColor = accentColor)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = label, color = Color.White, fontSize = 16.sp)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showClockStyleSheet = false }) { Text("Cancel", color = accentColor) }
+                },
+                containerColor = Color.Black
             )
         }
 
@@ -602,7 +654,14 @@ fun HomeScreen(
                         .padding(horizontal = 20.dp, vertical = 12.dp)
                 ) {
                     Text(text = "Niagara widget", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 16.dp))
-                    BottomSheetRow(icon = Icons.Outlined.Schedule, title = "Clock style", onClick = { isWidgetMenuOpen = false })
+                    BottomSheetRow(
+                        icon = Icons.Outlined.Schedule,
+                        title = "Clock style",
+                        onClick = {
+                            isWidgetMenuOpen = false
+                            showClockStyleSheet = true
+                        }
+                    )
                     BottomSheetRow(
                         icon = Icons.Outlined.CalendarToday,
                         title = "Calendar Agenda",
@@ -664,7 +723,12 @@ fun HomeScreen(
                         }
                     )
 
-                    BottomSheetSwitchRow(icon = null, title = "Show Battery Percentage", checked = showBattery, onCheckedChange = { showBattery = it })
+                    BottomSheetSwitchRow(
+                        icon = null,
+                        title = "Show Battery Percentage",
+                        checked = showBatteryPercentage,
+                        onCheckedChange = { viewModel.setShowBatteryPercentage(it) }
+                    )
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
@@ -685,7 +749,7 @@ fun HomeScreen(
                 text = { Text(text = "To display live track info and album art, Cascadia Launcher requires Notification Access in system settings.", color = Color.White.copy(alpha = 0.8f)) },
                 confirmButton = {
                     TextButton(onClick = { showPermissionDialog = false; openNotificationAccessSettings(context) }) {
-                        Text(text = "Open Settings", color = Color(0xFF4DD0E1))
+                        Text(text = "Open Settings", color = accentColor)
                     }
                 },
                 dismissButton = { TextButton(onClick = { showPermissionDialog = false }) { Text(text = "Cancel", color = Color.Gray) } },
@@ -697,6 +761,7 @@ fun HomeScreen(
             AppLongPressMenu(
                 app = app,
                 isFavorite = favoritePackages.contains(app.packageName),
+                accentColor = accentColor,
                 onDismiss = { appForMenu = null },
                 onToggleFavorite = { viewModel.toggleFavorite(app.packageName); appForMenu = null },
                 onAppInfo = {
@@ -714,11 +779,43 @@ fun HomeScreen(
     }
 }
 
+@Composable
+private fun ClockHeaderDisplay(
+    clockStyle: String,
+    timeHours: String,
+    timeMinutes: String,
+    currentDate: String,
+    accentColor: Color
+) {
+    when (clockStyle) {
+        "DIGITAL_MINIMAL" -> {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = "$timeHours:$timeMinutes", color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.Normal)
+            }
+        }
+        "DIGITAL_HEADER" -> {
+            Column {
+                Text(text = currentDate.uppercase(), color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = "$timeHours:$timeMinutes", color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+        else -> { // DIGITAL_BOLD
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = timeHours, color = accentColor, fontSize = 72.sp, fontWeight = FontWeight.Bold)
+                Text(text = timeMinutes, color = Color.White, fontSize = 72.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FavoriteAppRow(
     app: AppModel,
     badgeCount: Int = 0,
+    accentColor: Color = Color(0xFF4DD0E1),
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onSwipeRight: (Float) -> Unit
@@ -757,7 +854,7 @@ private fun FavoriteAppRow(
             Spacer(modifier = Modifier.weight(1f))
             Surface(
                 shape = CircleShape,
-                color = Color(0xFF4DD0E1),
+                color = accentColor,
                 modifier = Modifier.padding(start = 8.dp)
             ) {
                 Box(
@@ -876,13 +973,21 @@ private fun BottomSheetSwitchRow(icon: ImageVector?, title: String, subtitle: St
 }
 
 @Composable
-private fun AppLongPressMenu(app: AppModel, isFavorite: Boolean, onDismiss: () -> Unit, onToggleFavorite: () -> Unit, onAppInfo: () -> Unit, onUninstall: () -> Unit) {
+private fun AppLongPressMenu(
+    app: AppModel,
+    isFavorite: Boolean,
+    accentColor: Color = Color(0xFF4DD0E1),
+    onDismiss: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onAppInfo: () -> Unit,
+    onUninstall: () -> Unit
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = app.label, color = Color.White) },
         text = {
             Column {
-                TextButton(onClick = onToggleFavorite, modifier = Modifier.fillMaxWidth()) { Text(text = if (isFavorite) "Remove from favorites" else "Add to favorites", color = Color(0xFF4DD0E1)) }
+                TextButton(onClick = onToggleFavorite, modifier = Modifier.fillMaxWidth()) { Text(text = if (isFavorite) "Remove from favorites" else "Add to favorites", color = accentColor) }
                 TextButton(onClick = onAppInfo, modifier = Modifier.fillMaxWidth()) { Text(text = "App info", color = Color.White) }
                 TextButton(onClick = onUninstall, modifier = Modifier.fillMaxWidth()) { Text(text = "Uninstall", color = Color(0xFFEF4444)) }
             }
