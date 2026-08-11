@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -24,11 +25,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.exp
+import kotlin.math.cos
 import kotlin.math.roundToInt
 
-val INDEX_ITEMS = listOf("⭐") + ('A'..'Z').map { it.toString() } + listOf("o")
+val INDEX_ITEMS = listOf("⭐") + ('A'..'Z').map { it.toString() } + listOf("#")
 
 @Composable
 fun WaveSideIndex(
@@ -43,8 +45,8 @@ fun WaveSideIndex(
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
 
-    var componentHeightPx by remember { mutableFloatStateOf(1f) }
-    var componentWidthPx by remember { mutableFloatStateOf(1f) }
+    var containerHeightPx by remember { mutableFloatStateOf(1f) }
+    var containerWidthPx by remember { mutableFloatStateOf(1f) }
 
     var isDragging by remember { mutableStateOf(false) }
     var touchY by remember { mutableStateOf<Float?>(null) }
@@ -52,13 +54,15 @@ fun WaveSideIndex(
     var dragStartX by remember { mutableFloatStateOf(0f) }
     var lastSelectedIndex by remember { mutableIntStateOf(-1) }
 
+    val itemCenterYMap = remember { mutableStateMapOf<Int, Float>() }
+
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .width(280.dp) // Wide gesture touch target
+            .fillMaxWidth()
             .onGloballyPositioned { coordinates ->
-                componentHeightPx = coordinates.size.height.toFloat()
-                componentWidthPx = coordinates.size.width.toFloat()
+                containerHeightPx = coordinates.size.height.toFloat()
+                containerWidthPx = coordinates.size.width.toFloat()
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -66,23 +70,34 @@ fun WaveSideIndex(
                     isDragging = true
                     dragStartX = down.position.x
                     touchX = down.position.x
-                    touchY = down.position.y.coerceIn(0f, componentHeightPx)
+                    touchY = down.position.y.coerceIn(0f, containerHeightPx)
 
                     onTouchStart()
 
-                    val topPaddingPx = with(density) { 140.dp.toPx() }
-                    val bottomPaddingPx = with(density) { 40.dp.toPx() }
-                    val usableHeightPx = (componentHeightPx - topPaddingPx - bottomPaddingPx).coerceAtLeast(1f)
-                    val adjustedY = (down.position.y - topPaddingPx).coerceIn(0f, usableHeightPx)
+                    fun updateSelection(yPx: Float) {
+                        var closestIdx = 0
+                        var minDistance = Float.MAX_VALUE
 
-                    val initialFraction = adjustedY / usableHeightPx
-                    val initialIndex = (initialFraction * (INDEX_ITEMS.size - 1)).roundToInt().coerceIn(INDEX_ITEMS.indices)
+                        INDEX_ITEMS.indices.forEach { idx ->
+                            val centerY = itemCenterYMap[idx] ?: run {
+                                val fallbackFraction = (idx + 0.5f) / INDEX_ITEMS.size
+                                fallbackFraction * containerHeightPx
+                            }
+                            val dist = abs(yPx - centerY)
+                            if (dist < minDistance) {
+                                minDistance = dist
+                                closestIdx = idx
+                            }
+                        }
 
-                    if (initialIndex != lastSelectedIndex) {
-                        lastSelectedIndex = initialIndex
-                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onCharSelected(INDEX_ITEMS[initialIndex])
+                        if (closestIdx != lastSelectedIndex) {
+                            lastSelectedIndex = closestIdx
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onCharSelected(INDEX_ITEMS[closestIdx])
+                        }
                     }
+
+                    updateSelection(down.position.y)
 
                     do {
                         val event = awaitPointerEvent()
@@ -90,17 +105,8 @@ fun WaveSideIndex(
                         if (change.pressed) {
                             change.consume()
                             touchX = change.position.x
-                            touchY = change.position.y.coerceIn(0f, componentHeightPx)
-
-                            val currentAdjustedY = (change.position.y - topPaddingPx).coerceIn(0f, usableHeightPx)
-                            val fraction = currentAdjustedY / usableHeightPx
-                            val targetIndex = (fraction * (INDEX_ITEMS.size - 1)).roundToInt().coerceIn(INDEX_ITEMS.indices)
-
-                            if (targetIndex != lastSelectedIndex) {
-                                lastSelectedIndex = targetIndex
-                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onCharSelected(INDEX_ITEMS[targetIndex])
-                            }
+                            touchY = change.position.y.coerceIn(0f, containerHeightPx)
+                            updateSelection(change.position.y)
                         }
                     } while (event.changes.any { it.pressed })
 
@@ -123,79 +129,103 @@ fun WaveSideIndex(
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .padding(top = 140.dp, bottom = 40.dp, end = 20.dp),
+                    .padding(top = 90.dp, bottom = 40.dp, end = 16.dp),
                 verticalArrangement = Arrangement.SpaceEvenly,
                 horizontalAlignment = Alignment.End
             ) {
                 INDEX_ITEMS.forEachIndexed { index, char ->
-                    val topPaddingPx = with(density) { 140.dp.toPx() }
-                    val usableHeightPx = componentHeightPx - with(density) { 180.dp.toPx() }
-                    val itemY = topPaddingPx + (index.toFloat() / (INDEX_ITEMS.size - 1)) * usableHeightPx
+                    val itemCenterY = itemCenterYMap[index] ?: 0f
+                    val distance = if (currentY != null) abs(currentY - itemCenterY) else Float.MAX_VALUE
 
-                    val distance = if (currentY != null) abs(currentY - itemY) else Float.MAX_VALUE
-                    val gaussianFactor = exp(-((distance * distance) / (2 * 5000f)))
-
-                    // Asymmetric Displacement Physics
-                    val isRightToLeftDrag = dragStartX > (componentWidthPx / 2f)
-                    val maxDisplacementPx = if (isRightToLeftDrag) {
-                        (componentWidthPx - touchX).coerceIn(0f, with(density) { 180.dp.toPx() })
+                    // --- RAISED COSINE WAVE FORMULA FOR SMOOTH CIRCULAR ARC ---
+                    // Broad influence radius (180dp) spans ~12 letters above/below touch point
+                    val influenceRadiusPx = with(density) { 180.dp.toPx() }
+                    val circularArcFactor = if (distance < influenceRadiusPx) {
+                        0.5f * (1f + cos((distance / influenceRadiusPx) * PI.toFloat()))
                     } else {
-                        (touchX - dragStartX).coerceIn(0f, with(density) { 100.dp.toPx() })
+                        0f
                     }
 
-                    val targetTranslationX = -1f * (maxDisplacementPx * gaussianFactor)
-                    val targetScale = 1.0f + (0.75f * gaussianFactor)
+                    // Asymmetric Drag Physics
+                    val isRightToLeft = dragStartX > (containerWidthPx * 0.5f)
+                    val pullDistancePx = if (isRightToLeft) {
+                        (containerWidthPx - touchX).coerceAtLeast(0f)
+                    } else {
+                        (touchX - dragStartX).coerceAtLeast(0f)
+                    }
+
+                    val maxDisplacementLimit = if (isRightToLeft) {
+                        with(density) { 220.dp.toPx() }
+                    } else {
+                        with(density) { 100.dp.toPx() }
+                    }
+
+                    val actualMaxDisplacement = pullDistancePx.coerceIn(with(density) { 40.dp.toPx() }, maxDisplacementLimit)
+                    val targetTranslationX = -1f * (actualMaxDisplacement * circularArcFactor)
+                    val targetScale = 1.0f + (0.85f * circularArcFactor)
 
                     val animatedOffset by animateFloatAsState(
                         targetValue = targetTranslationX,
-                        animationSpec = spring(stiffness = 500f, dampingRatio = 0.65f),
+                        animationSpec = spring(stiffness = 450f, dampingRatio = 0.7f),
                         label = "wave_offset"
                     )
 
                     val animatedScale by animateFloatAsState(
                         targetValue = targetScale,
-                        animationSpec = spring(stiffness = 500f, dampingRatio = 0.65f),
+                        animationSpec = spring(stiffness = 450f, dampingRatio = 0.7f),
                         label = "wave_scale"
                     )
 
-                    val isSelected = (currentY != null && distance < 28f) || char == activeChar
+                    val isSelected = index == lastSelectedIndex || char == activeChar
 
                     Text(
                         text = char,
                         style = TextStyle(
                             shadow = Shadow(
-                                color = Color.Black.copy(alpha = 0.5f),
-                                blurRadius = 4f
+                                color = Color.Black.copy(alpha = 0.6f),
+                                blurRadius = 6f
                             )
                         ),
                         color = if (isSelected) accentColor else Color.White.copy(alpha = 0.85f),
-                        fontSize = if (isSelected) 16.sp else 12.sp,
+                        fontSize = 13.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        modifier = Modifier.graphicsLayer {
-                            translationX = animatedOffset
-                            scaleX = animatedScale
-                            scaleY = animatedScale
-                        }
+                        modifier = Modifier
+                            .onGloballyPositioned { coords ->
+                                val bounds = coords.boundsInParent()
+                                itemCenterYMap[index] = bounds.top + bounds.height / 2f
+                            }
+                            .graphicsLayer {
+                                translationX = animatedOffset
+                                scaleX = animatedScale
+                                scaleY = animatedScale
+                            }
                     )
                 }
             }
         }
 
-        // Floating Active Letter Badge Tracking Touch Height
+        // Circular active letter preview badge tracking touch height
         if (isDragging && touchY != null) {
             val currentActiveChar = if (lastSelectedIndex in INDEX_ITEMS.indices) INDEX_ITEMS[lastSelectedIndex] else "⭐"
             val badgeOffsetY = ((touchY ?: 0f) - with(density) { 28.dp.toPx() }).roundToInt()
 
+            val isRightToLeft = dragStartX > (containerWidthPx * 0.5f)
+            val pullDistancePx = if (isRightToLeft) (containerWidthPx - touchX).coerceAtLeast(0f) else (touchX - dragStartX).coerceAtLeast(0f)
+            val maxLimit = if (isRightToLeft) with(density) { 220.dp.toPx() } else with(density) { 100.dp.toPx() }
+            val apexXDisplacement = pullDistancePx.coerceIn(with(density) { 40.dp.toPx() }, maxLimit)
+
+            val badgeOffsetX = - (apexXDisplacement + with(density) { 52.dp.toPx() })
+
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset { IntOffset(x = -with(density) { 72.dp.toPx() }.roundToInt(), y = badgeOffsetY) }
+                    .offset { IntOffset(x = badgeOffsetX.roundToInt(), y = badgeOffsetY) }
             ) {
                 Surface(
                     shape = CircleShape,
                     color = accentColor,
-                    shadowElevation = 8.dp,
-                    modifier = Modifier.size(52.dp)
+                    shadowElevation = 10.dp,
+                    modifier = Modifier.size(54.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
