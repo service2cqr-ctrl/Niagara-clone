@@ -9,11 +9,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
@@ -39,6 +37,7 @@ private enum class WidgetSubPage {
 fun WidgetMenuSheet(
     viewModel: LauncherViewModel,
     onAddWidgetClick: () -> Unit,
+    onMoveWidgetClick: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenEditFavorites: () -> Unit,
     onDismiss: () -> Unit
@@ -109,6 +108,16 @@ fun WidgetMenuSheet(
                             onClick = {
                                 onDismiss()
                                 onAddWidgetClick()
+                            }
+                        )
+
+                        WidgetMenuItemRow(
+                            icon = Icons.Outlined.UnfoldMore,
+                            title = "Move Widget",
+                            subtitle = "Adjust header vertical position",
+                            onClick = {
+                                onDismiss()
+                                onMoveWidgetClick()
                             }
                         )
 
