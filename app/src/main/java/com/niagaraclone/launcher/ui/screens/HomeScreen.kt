@@ -1,6 +1,7 @@
 package com.niagaraclone.launcher.ui.screens
 
 import android.Manifest
+import android.app.AlarmClock
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
@@ -73,6 +74,7 @@ import com.niagaraclone.launcher.ui.components.PopUpFolderCard
 import com.niagaraclone.launcher.ui.components.SmartSearchSheet
 import com.niagaraclone.launcher.ui.components.StartupPermissionsDialog
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
+import com.niagaraclone.launcher.ui.components.WidgetMenuSheet
 import com.niagaraclone.launcher.ui.components.WidgetStackView
 import com.niagaraclone.launcher.ui.components.rememberCurrentTimeState
 import java.text.SimpleDateFormat
@@ -148,6 +150,7 @@ fun HomeScreen(
     var showFabEditActionSheet by remember { mutableStateOf(false) }
     var isSwipeActionEdit by remember { mutableStateOf(false) }
     var showRecentlyInstalledDialog by remember { mutableStateOf(false) }
+    var isWidgetMenuOpen by remember { mutableStateOf(false) }
 
     var selectedAppForCustomization by remember { mutableStateOf<AppModel?>(null) }
     var selectedAppForCategory by remember { mutableStateOf<AppModel?>(null) }
@@ -158,8 +161,21 @@ fun HomeScreen(
     var activeLetter by remember { mutableStateOf<String?>(null) }
     var activePopUpApp by remember { mutableStateOf<AppModel?>(null) }
 
+    val openClockApp = {
+        try {
+            val intent = Intent(AlarmClock.ACTION_SHOW_ALARMS).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            try {
+                val intent = context.packageManager.getLaunchIntentForPackage("com.google.android.deskclock")
+                intent?.let { context.startActivity(it) }
+            } catch (e2: Exception) {}
+        }
+    }
+
     val isAnyOverlayActive = isDrawerExpanded ||
             activePopUpApp != null ||
+            isWidgetMenuOpen ||
             showSmartSearchSheet ||
             showAgendaSheet ||
             showFabMenuSheet ||
@@ -182,13 +198,13 @@ fun HomeScreen(
         }
     }
 
-    // --- SYSTEM BACK GESTURE HANDLER ---
     BackHandler(enabled = isAnyOverlayActive) {
         when {
             selectedAppForCategory != null -> selectedAppForCategory = null
             selectedAppForCustomization != null -> selectedAppForCustomization = null
             editingFolderApp != null -> editingFolderApp = null
             activePopUpApp != null -> activePopUpApp = null
+            isWidgetMenuOpen -> isWidgetMenuOpen = false
             showSmartSearchSheet -> showSmartSearchSheet = false
             showAgendaSheet -> showAgendaSheet = false
             showFabEditActionSheet -> showFabEditActionSheet = false
@@ -230,7 +246,6 @@ fun HomeScreen(
         }.toSet()
     }
 
-    var isWidgetMenuOpen by remember { mutableStateOf(false) }
     var isEditingWidget by remember { mutableStateOf(false) }
     var popupYOffset by remember { mutableFloatStateOf(0f) }
 
@@ -360,7 +375,10 @@ fun HomeScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .combinedClickable(onClick = {}, onLongClick = { isWidgetMenuOpen = true })
+                            .combinedClickable(
+                                onClick = { openClockApp() },
+                                onLongClick = { isWidgetMenuOpen = true }
+                            )
                     ) {
                         ClockHeaderDisplay(
                             clockStyle = clockStyle,
@@ -600,6 +618,19 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+
+        // --- OVERLAYS & SHEETS ---
+        if (isWidgetMenuOpen) {
+            WidgetMenuSheet(
+                viewModel = viewModel,
+                onAddWidgetClick = onAddWidgetClick,
+                onOpenSettings = onOpenSettings,
+                onOpenEditFavorites = {
+                    isDrawerExpanded = true
+                },
+                onDismiss = { isWidgetMenuOpen = false }
+            )
         }
 
         if (showSmartSearchSheet) {
