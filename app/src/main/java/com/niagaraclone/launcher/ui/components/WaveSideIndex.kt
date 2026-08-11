@@ -2,6 +2,7 @@ package com.niagaraclone.launcher.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
@@ -36,6 +37,7 @@ val INDEX_ITEMS = listOf("⭐") + ('A'..'Z').map { it.toString() } + listOf("#")
 fun WaveSideIndex(
     modifier: Modifier = Modifier,
     activeChar: String? = null,
+    notificationLetters: Set<String> = emptySet(),
     isIndexerVisible: Boolean = false,
     onTouchStart: () -> Unit = {},
     onCharSelected: (String) -> Unit = {},
@@ -58,7 +60,7 @@ fun WaveSideIndex(
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .width(40.dp) // Restricted to right edge strip so it does not block Home Screen taps
+            .width(40.dp) // Restricted touch strip to preserve home screen interaction
             .onGloballyPositioned { coordinates ->
                 containerHeightPx = coordinates.size.height.toFloat()
             }
@@ -135,7 +137,7 @@ fun WaveSideIndex(
                     val itemCenterY = itemCenterYMap[index] ?: 0f
                     val distance = if (currentY != null) abs(currentY - itemCenterY) else Float.MAX_VALUE
 
-                    // Smooth Raised Cosine Wave Arc Physics: cos^2(pi * d / (2 * R))
+                    // Smooth Raised Cosine Wave Physics: cos^2(pi * d / (2 * R))
                     val influenceRadiusPx = with(density) { 180.dp.toPx() }
                     val circularArcFactor = if (distance < influenceRadiusPx) {
                         val cosVal = cos((PI.toFloat() * distance) / (2f * influenceRadiusPx))
@@ -144,7 +146,7 @@ fun WaveSideIndex(
                         0f
                     }
 
-                    // Horizontal displacement tracking leftward drag
+                    // Horizontal displacement tracking leftward pull
                     val pullDistancePx = (dragStartX - touchX).coerceAtLeast(0f)
                     val maxLimitPx = with(density) { 200.dp.toPx() }
                     val actualMaxDisplacement = pullDistancePx.coerceIn(with(density) { 36.dp.toPx() }, maxLimitPx)
@@ -165,18 +167,11 @@ fun WaveSideIndex(
                     )
 
                     val isSelected = index == lastSelectedIndex || char == activeChar
+                    val hasNotification = notificationLetters.contains(char)
 
-                    Text(
-                        text = char,
-                        style = TextStyle(
-                            shadow = Shadow(
-                                color = Color.Black.copy(alpha = 0.6f),
-                                blurRadius = 6f
-                            )
-                        ),
-                        color = if (isSelected) accentColor else Color.White.copy(alpha = 0.85f),
-                        fontSize = 13.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.End,
                         modifier = Modifier
                             .onGloballyPositioned { coords ->
                                 val bounds = coords.boundsInParent()
@@ -187,12 +182,35 @@ fun WaveSideIndex(
                                 scaleX = animatedScale
                                 scaleY = animatedScale
                             }
-                    )
+                    ) {
+                        // Dynamic Notification Dot directly on indexer
+                        if (hasNotification) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(end = 4.dp)
+                                    .size(5.dp)
+                                    .background(accentColor, CircleShape)
+                            )
+                        }
+
+                        Text(
+                            text = char,
+                            style = TextStyle(
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = 0.6f),
+                                    blurRadius = 6f
+                                )
+                            ),
+                            color = if (isSelected) accentColor else Color.White.copy(alpha = 0.85f),
+                            fontSize = 13.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
                 }
             }
         }
 
-        // Floating active letter preview badge tracking touch height
+        // Active letter circle preview badge tracking touch height
         if (isDragging && touchY != null) {
             val currentActiveChar = if (lastSelectedIndex in INDEX_ITEMS.indices) INDEX_ITEMS[lastSelectedIndex] else "⭐"
             val badgeOffsetY = ((touchY ?: 0f) - with(density) { 28.dp.toPx() }).roundToInt()
