@@ -6,18 +6,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.outlined.Shortcut
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,219 +19,99 @@ import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PopUpFolderCard(
+fun EditPopUpFolderSheet(
+    parentApp: AppModel,
     viewModel: LauncherViewModel,
-    parentPackage: String,
-    folderName: String,
-    subApps: List<AppModel>,
+    allApps: List<AppModel>,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
-    var showEditDialog by remember { mutableStateOf(false) }
-
-    val shortcuts = remember(parentPackage) {
-        viewModel.getAppShortcuts(parentPackage)
+    val existingSubApps = remember(parentApp) {
+        viewModel.getFolderSubApps(parentApp.packageName).map { it.packageName }.toSet()
     }
+    val selectedPackages = remember { mutableStateOf(existingSubApps) }
 
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = Color(0xFF181818),
-        modifier = Modifier
-            .fillMaxWidth(0.92f)
-            .padding(vertical = 8.dp)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF141414),
+        contentColor = Color.White,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 12.dp)
+        ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp)
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit",
-                        tint = Color.Gray,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = folderName,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-
-                IconButton(
-                    onClick = { showEditDialog = true },
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Edit Sub Apps",
-                        tint = Color(0xFF4DD0E1)
-                    )
-                }
-            }
-
-            // --- SUB-APPS SECTION ---
-            if (subApps.isNotEmpty()) {
-                subApps.forEach { app ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                viewModel.trackAppLaunch(app.packageName)
-                                val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                                intent?.let { context.startActivity(it) }
-                                onDismiss()
-                            }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        app.icon?.let { iconDrawable ->
-                            Image(
-                                bitmap = iconDrawable.toBitmap(width = 36, height = 36).asImageBitmap(),
-                                contentDescription = app.label,
-                                modifier = Modifier.size(26.dp)
-                            )
-                            Spacer(modifier = Modifier.width(14.dp))
-                        }
-                        Text(text = app.label, color = Color.White, fontSize = 15.sp)
-                    }
-                }
-            }
-
-            // --- APP SHORTCUTS SECTION ---
-            if (shortcuts.isNotEmpty()) {
-                if (subApps.isNotEmpty()) {
-                    HorizontalDivider(
-                        color = Color.White.copy(alpha = 0.1f),
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-
                 Text(
-                    text = "Shortcuts",
-                    color = Color(0xFF4DD0E1),
-                    fontSize = 12.sp,
+                    text = "Edit ${parentApp.label} Pop-up",
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 6.dp)
+                    color = Color.White
                 )
 
-                shortcuts.forEach { shortcut ->
+                TextButton(
+                    onClick = {
+                        viewModel.setFolderSubApps(parentApp.packageName, selectedPackages.value)
+                        onDismiss()
+                    }
+                ) {
+                    Text("Save", color = Color(0xFF4DD0E1), fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+            ) {
+                items(allApps.filter { it.packageName != parentApp.packageName }) { app ->
+                    val isChecked = selectedPackages.value.contains(app.packageName)
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                viewModel.launchAppShortcut(shortcut.shortcutInfo)
-                                onDismiss()
+                                val updated = selectedPackages.value.toMutableSet()
+                                if (isChecked) updated.remove(app.packageName) else updated.add(app.packageName)
+                                selectedPackages.value = updated
                             }
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        shortcut.icon?.let { iconDrawable ->
+                        app.icon?.let { icon ->
                             Image(
-                                bitmap = iconDrawable.toBitmap(width = 36, height = 36).asImageBitmap(),
-                                contentDescription = shortcut.label,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(14.dp))
-                        } ?: run {
-                            Icon(
-                                imageVector = Icons.Outlined.Shortcut,
-                                contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.size(22.dp)
+                                bitmap = icon.toBitmap(width = 36, height = 36).asImageBitmap(),
+                                contentDescription = app.label,
+                                modifier = Modifier.size(28.dp)
                             )
                             Spacer(modifier = Modifier.width(16.dp))
                         }
                         Text(
-                            text = shortcut.label,
-                            color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 14.sp
+                            text = app.label,
+                            fontSize = 15.sp,
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Checkbox(
+                            checked = isChecked,
+                            onCheckedChange = { checked ->
+                                val updated = selectedPackages.value.toMutableSet()
+                                if (checked == true) updated.add(app.packageName) else updated.remove(app.packageName)
+                                selectedPackages.value = updated
+                            },
+                            colors = CheckboxDefaults.colors(checkedColor = Color(0xFF4DD0E1))
                         )
                     }
                 }
             }
-
-            if (subApps.isEmpty() && shortcuts.isEmpty()) {
-                Text(
-                    text = "Tap + to add sub-apps",
-                    color = Color.Gray,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
         }
-    }
-
-    if (showEditDialog) {
-        val allApps by viewModel.apps.collectAsState()
-        val currentSelected = remember { mutableStateListOf<String>().apply { addAll(subApps.map { it.packageName }) } }
-
-        AlertDialog(
-            onDismissRequest = { showEditDialog = false },
-            title = { Text("Edit Folder Apps", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = {
-                LazyColumn(modifier = Modifier.height(280.dp)) {
-                    items(allApps.filter { it.packageName != parentPackage }) { app ->
-                        val isChecked = currentSelected.contains(app.packageName)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    if (isChecked) {
-                                        currentSelected.remove(app.packageName)
-                                    } else if (currentSelected.size < 6) {
-                                        currentSelected.add(app.packageName)
-                                    }
-                                }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            app.icon?.let { icon ->
-                                Image(
-                                    bitmap = icon.toBitmap(width = 32, height = 32).asImageBitmap(),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                            }
-                            Text(
-                                text = app.label,
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (isChecked) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = Color(0xFF4DD0E1)
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.setFolderSubApps(parentPackage, currentSelected.toSet())
-                    showEditDialog = false
-                }) {
-                    Text("Save", color = Color(0xFF4DD0E1))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEditDialog = false }) {
-                    Text("Cancel", color = Color.Gray)
-                }
-            },
-            containerColor = Color.Black
-        )
     }
 }
