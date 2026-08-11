@@ -45,8 +45,9 @@ class SettingsRepository(private val context: Context) {
         val KEY_ROTATION_ENABLED = booleanPreferencesKey("rotation_enabled")
         val KEY_SHOW_BATTERY_PERCENTAGE = booleanPreferencesKey("show_battery_percentage")
 
-        // Cascadia (FAB) Button Action Keys
-        val KEY_FAB_TAP_ACTION_TYPE = stringPreferencesKey("fab_tap_action_type") // "DIAL", "APP", "SEARCH", "AGENDA", "VOICE_ASSISTANT", "LOCK"
+        // Cascadia (FAB) Button Persistence Keys
+        val KEY_CASCADIA_BUTTON_ENABLED = booleanPreferencesKey("cascadia_button_enabled")
+        val KEY_FAB_TAP_ACTION_TYPE = stringPreferencesKey("fab_tap_action_type")
         val KEY_FAB_TAP_PACKAGE = stringPreferencesKey("fab_tap_package")
     }
 
@@ -127,6 +128,10 @@ class SettingsRepository(private val context: Context) {
         prefs[KEY_SHOW_BATTERY_PERCENTAGE] ?: true
     }
 
+    val cascadiaButtonEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_CASCADIA_BUTTON_ENABLED] ?: true
+    }
+
     val fabTapActionType: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[KEY_FAB_TAP_ACTION_TYPE] ?: "DIAL"
     }
@@ -152,6 +157,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setHapticFeedbackEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_HAPTIC_FEEDBACK_ENABLED] = enabled } }
     suspend fun setRotationEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_ROTATION_ENABLED] = enabled } }
     suspend fun setShowBatteryPercentage(show: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_SHOW_BATTERY_PERCENTAGE] = show } }
+
+    suspend fun setCascadiaButtonEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_CASCADIA_BUTTON_ENABLED] = enabled }
+    }
 
     suspend fun setFabTapAction(actionType: String, packageName: String? = null) {
         context.dataStore.edit { prefs ->
