@@ -65,6 +65,7 @@ import com.niagaraclone.launcher.ui.components.FabActionSelectionSheet
 import com.niagaraclone.launcher.ui.components.MediaPlayerCard
 import com.niagaraclone.launcher.ui.components.PopUpFolderCard
 import com.niagaraclone.launcher.ui.components.SmartSearchSheet
+import com.niagaraclone.launcher.ui.components.StartupPermissionsDialog
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
 import com.niagaraclone.launcher.ui.components.WidgetStackView
 import com.niagaraclone.launcher.ui.components.rememberCurrentTimeState
@@ -91,6 +92,8 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
+
+    var hasCompletedStartupCheck by remember { mutableStateOf(false) }
 
     val apps by viewModel.apps.collectAsState()
     val hiddenPackages by viewModel.hiddenPackages.collectAsState()
@@ -247,6 +250,16 @@ fun HomeScreen(
                 context.startActivity(intent)
             }
         }
+    }
+
+    // --- STARTUP PERMISSIONS FLOW ---
+    if (!hasCompletedStartupCheck) {
+        StartupPermissionsDialog(
+            viewModel = viewModel,
+            onComplete = {
+                hasCompletedStartupCheck = true
+            }
+        )
     }
 
     Box(
