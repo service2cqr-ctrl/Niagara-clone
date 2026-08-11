@@ -129,6 +129,7 @@ fun HomeScreen(
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
     val quickLockEnabled by viewModel.quickLockEnabled.collectAsState()
     val showBatteryPercentage by viewModel.showBatteryPercentage.collectAsState()
+    val cascadiaButtonEnabled by viewModel.cascadiaButtonEnabled.collectAsState()
     val fabTapActionType by viewModel.fabTapActionType.collectAsState()
     val fabTapPackage by viewModel.fabTapPackage.collectAsState()
     val accentColor = Color(accentColorArgb)
@@ -167,7 +168,6 @@ fun HomeScreen(
     var isEditingWidget by remember { mutableStateOf(false) }
     var appForMenu by remember { mutableStateOf<AppModel?>(null) }
     var showPermissionDialog by remember { mutableStateOf(false) }
-    var showRecentlyInstalledDialog by remember { mutableStateOf(false) }
 
     var activePopUpApp by remember { mutableStateOf<AppModel?>(null) }
     var popupYOffset by remember { mutableFloatStateOf(0f) }
@@ -185,8 +185,6 @@ fun HomeScreen(
     }
 
     var isDrawerExpanded by remember { mutableStateOf(false) }
-    var isIndexerVisible by remember { mutableStateOf(false) }
-    var activeLetter by remember { mutableStateOf<String?>(null) }
 
     val favorites = remember(visibleApps, favoritePackages) {
         visibleApps.filter { favoritePackages.contains(it.packageName) }
@@ -369,7 +367,7 @@ fun HomeScreen(
         }
 
         // --- CASCADIA (NIAGARA) FAB BUTTON ---
-        if (!isDrawerExpanded) {
+        if (cascadiaButtonEnabled && !isDrawerExpanded) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
