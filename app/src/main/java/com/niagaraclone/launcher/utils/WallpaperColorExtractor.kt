@@ -11,12 +11,16 @@ object WallpaperColorExtractor {
     fun getDynamicAccentColor(context: Context): Int {
         val wallpaperManager = WallpaperManager.getInstance(context)
 
-        // 1. Android 12+ Material You Wallpaper Color
+        // 1. Android 12+ (API 31+) Native Material You Wallpaper Color
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val wallpaperColors = wallpaperManager.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
-            val primaryColor = wallpaperColors?.primaryColor?.toArgb()
-            if (primaryColor != null && primaryColor != 0) {
-                return primaryColor
+            try {
+                val wallpaperColors = wallpaperManager.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
+                val primaryColor = wallpaperColors?.primaryColor?.toArgb()
+                if (primaryColor != null && primaryColor != 0) {
+                    return primaryColor
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
 
