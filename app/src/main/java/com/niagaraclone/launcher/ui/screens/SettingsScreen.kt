@@ -226,6 +226,7 @@ private fun ProductivitySettingsContent(
     val hapticFeedbackEnabled by viewModel.hapticFeedbackEnabled.collectAsState()
     val rotationEnabled by viewModel.rotationEnabled.collectAsState()
     val showBatteryPercentage by viewModel.showBatteryPercentage.collectAsState()
+    val cascadiaButtonEnabled by viewModel.cascadiaButtonEnabled.collectAsState()
 
     var showMediaThemeDialog by remember { mutableStateOf(false) }
 
@@ -325,7 +326,12 @@ private fun ProductivitySettingsContent(
         )
 
         SectionHeader("Shortcuts & Gestures")
-        ToggleSettingRow("Cascadia Button", "Run quick actions from your home screen", false) {}
+        ToggleSettingRow(
+            title = "Cascadia Button",
+            subtitle = "Run quick actions from your home screen",
+            checked = cascadiaButtonEnabled,
+            onCheckedChange = { viewModel.setCascadiaButtonEnabled(it) }
+        )
         ToggleSettingRow(
             title = "Quick Lock",
             subtitle = "Double-tap empty home screen space to lock phone",
