@@ -201,4 +201,17 @@ class SettingsRepository(private val context: Context) {
             }
         }
     }
+
+    suspend fun snapshot(): Map<Preferences.Key<*>, Any> {
+        return context.dataStore.data.first().asMap()
+    }
+
+    suspend fun restore(values: Map<String, String>) {
+        context.dataStore.edit { prefs ->
+            values.forEach { (keyName, valueStr) ->
+                val key = stringPreferencesKey(keyName)
+                prefs[key] = valueStr
+            }
+        }
+    }
 }
