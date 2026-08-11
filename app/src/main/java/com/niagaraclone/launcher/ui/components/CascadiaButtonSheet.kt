@@ -1,12 +1,10 @@
 package com.niagaraclone.launcher.ui.components
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -25,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,6 +35,7 @@ import com.niagaraclone.launcher.ui.LauncherViewModel
 fun CascadiaButtonMenuSheet(
     viewModel: LauncherViewModel,
     onEditTapAction: () -> Unit,
+    onEditSwipeAction: () -> Unit,
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -68,7 +66,7 @@ fun CascadiaButtonMenuSheet(
                 title = "Edit swipe up action",
                 onClick = {
                     onDismiss()
-                    onEditTapAction()
+                    onEditSwipeAction()
                 }
             )
 
@@ -97,10 +95,11 @@ fun CascadiaButtonMenuSheet(
 fun FabActionSelectionSheet(
     viewModel: LauncherViewModel,
     apps: List<AppModel>,
+    isSwipeAction: Boolean = false,
     onDismiss: () -> Unit
 ) {
-    val fabTapActionType by viewModel.fabTapActionType.collectAsState()
-    val fabTapPackage by viewModel.fabTapPackage.collectAsState()
+    val fabActionType by (if (isSwipeAction) viewModel.fabSwipeActionType else viewModel.fabTapActionType).collectAsState()
+    val fabPackage by (if (isSwipeAction) viewModel.fabSwipePackage else viewModel.fabTapPackage).collectAsState()
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
     val accentColor = Color(accentColorArgb)
 
@@ -116,7 +115,7 @@ fun FabActionSelectionSheet(
                 .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
             Text(
-                text = "Select Action",
+                text = if (isSwipeAction) "Select Swipe Up Action" else "Select Tap Action",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
@@ -135,10 +134,10 @@ fun FabActionSelectionSheet(
                     ActionOptionRow(
                         title = "Phone",
                         icon = Icons.Default.Phone,
-                        isSelected = fabTapActionType == "DIAL",
+                        isSelected = fabActionType == "DIAL",
                         accentColor = accentColor,
                         onClick = {
-                            viewModel.setFabTapAction("DIAL")
+                            if (isSwipeAction) viewModel.setFabSwipeAction("DIAL") else viewModel.setFabTapAction("DIAL")
                             onDismiss()
                         }
                     )
@@ -148,10 +147,10 @@ fun FabActionSelectionSheet(
                     ActionOptionRow(
                         title = "Search",
                         icon = Icons.Default.Search,
-                        isSelected = fabTapActionType == "SEARCH",
+                        isSelected = fabActionType == "SEARCH",
                         accentColor = accentColor,
                         onClick = {
-                            viewModel.setFabTapAction("SEARCH")
+                            if (isSwipeAction) viewModel.setFabSwipeAction("SEARCH") else viewModel.setFabTapAction("SEARCH")
                             onDismiss()
                         }
                     )
@@ -161,10 +160,10 @@ fun FabActionSelectionSheet(
                     ActionOptionRow(
                         title = "Your agenda",
                         icon = Icons.Outlined.CalendarToday,
-                        isSelected = fabTapActionType == "AGENDA",
+                        isSelected = fabActionType == "AGENDA",
                         accentColor = accentColor,
                         onClick = {
-                            viewModel.setFabTapAction("AGENDA")
+                            if (isSwipeAction) viewModel.setFabSwipeAction("AGENDA") else viewModel.setFabTapAction("AGENDA")
                             onDismiss()
                         }
                     )
@@ -174,10 +173,10 @@ fun FabActionSelectionSheet(
                     ActionOptionRow(
                         title = "Voice Assistant",
                         icon = Icons.Outlined.Mic,
-                        isSelected = fabTapActionType == "VOICE_ASSISTANT",
+                        isSelected = fabActionType == "VOICE_ASSISTANT",
                         accentColor = accentColor,
                         onClick = {
-                            viewModel.setFabTapAction("VOICE_ASSISTANT")
+                            if (isSwipeAction) viewModel.setFabSwipeAction("VOICE_ASSISTANT") else viewModel.setFabTapAction("VOICE_ASSISTANT")
                             onDismiss()
                         }
                     )
@@ -187,10 +186,10 @@ fun FabActionSelectionSheet(
                     ActionOptionRow(
                         title = "Lock screen",
                         icon = Icons.Default.Lock,
-                        isSelected = fabTapActionType == "LOCK",
+                        isSelected = fabActionType == "LOCK",
                         accentColor = accentColor,
                         onClick = {
-                            viewModel.setFabTapAction("LOCK")
+                            if (isSwipeAction) viewModel.setFabSwipeAction("LOCK") else viewModel.setFabTapAction("LOCK")
                             onDismiss()
                         }
                     )
@@ -201,12 +200,12 @@ fun FabActionSelectionSheet(
                 }
 
                 items(apps) { app ->
-                    val isAppSelected = fabTapActionType == "APP" && fabTapPackage == app.packageName
+                    val isAppSelected = fabActionType == "APP" && fabPackage == app.packageName
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                viewModel.setFabTapAction("APP", app.packageName)
+                                if (isSwipeAction) viewModel.setFabSwipeAction("APP", app.packageName) else viewModel.setFabTapAction("APP", app.packageName)
                                 onDismiss()
                             }
                             .padding(vertical = 8.dp),
