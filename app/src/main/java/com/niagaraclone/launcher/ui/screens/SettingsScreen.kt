@@ -8,9 +8,11 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -86,6 +88,7 @@ fun SettingsScreen(
                 }
             )
             SettingsPage.THEMES -> ThemesSettingsContent(
+                viewModel = viewModel,
                 onBack = { currentPage = SettingsPage.MAIN }
             )
             SettingsPage.PRO -> CascadiaProContent(
@@ -219,6 +222,11 @@ private fun ProductivitySettingsContent(
     val isPermissionGranted by viewModel.notificationPermissionGranted.collectAsState()
     val isMediaWidgetActive = rawMediaWidgetEnabled && isPermissionGranted
 
+    val quickLockEnabled by viewModel.quickLockEnabled.collectAsState()
+    val hapticFeedbackEnabled by viewModel.hapticFeedbackEnabled.collectAsState()
+    val rotationEnabled by viewModel.rotationEnabled.collectAsState()
+    val showBatteryPercentage by viewModel.showBatteryPercentage.collectAsState()
+
     var showMediaThemeDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -230,7 +238,7 @@ private fun ProductivitySettingsContent(
         SubPageHeader(title = "Productivity", onBack = onBack)
 
         SectionHeader("Instant Access")
-        ToggleSettingRow("Quick Replies", "Reply right from your home screen", false)
+        ToggleSettingRow("Quick Replies", "Reply right from your home screen", false) {}
         
         ClickableSettingRow(
             icon = Icons.Outlined.CalendarMonth,
@@ -238,7 +246,7 @@ private fun ProductivitySettingsContent(
             subtitle = "Open your calendar agenda by tapping the date",
             onClick = { showCalendarDialog = true }
         )
-        ToggleSettingRow("Calendar Preview", "See upcoming events on your home screen", false)
+        ToggleSettingRow("Calendar Preview", "See upcoming events on your home screen", false) {}
         
         ClickableSettingRow(
             icon = Icons.Outlined.WbSunny,
@@ -289,8 +297,8 @@ private fun ProductivitySettingsContent(
         )
 
         SectionHeader("Digital Wellbeing")
-        ToggleSettingRow("Usage Breaker", "Get reminders to take breaks", false)
-        ToggleSettingRow("Notification Summary", "Bundle notifications to reduce distractions", false)
+        ToggleSettingRow("Usage Breaker", "Get reminders to take breaks", false) {}
+        ToggleSettingRow("Notification Summary", "Bundle notifications to reduce distractions", false) {}
 
         SectionHeader("App Organization")
         ClickableSettingRow(
@@ -305,8 +313,8 @@ private fun ProductivitySettingsContent(
             subtitle = "Group apps to keep your app list tidy",
             onClick = { }
         )
-        ToggleSettingRow("Suggest Often-Used Apps", "Directly access often-used apps from your favorites", false)
-        ToggleSettingRow("Sort All Apps List By Usage", "Prioritize most-used apps for each letter", false)
+        ToggleSettingRow("Suggest Often-Used Apps", "Directly access often-used apps from your favorites", false) {}
+        ToggleSettingRow("Sort All Apps List By Usage", "Prioritize most-used apps for each letter", false) {}
 
         SectionHeader("Smart Search")
         ClickableSettingRow(
@@ -317,8 +325,13 @@ private fun ProductivitySettingsContent(
         )
 
         SectionHeader("Shortcuts & Gestures")
-        ToggleSettingRow("Cascadia Button", "Run quick actions from your home screen", false)
-        ToggleSettingRow("Quick Lock", "Double-tap the home screen to lock your phone", false)
+        ToggleSettingRow("Cascadia Button", "Run quick actions from your home screen", false) {}
+        ToggleSettingRow(
+            title = "Quick Lock",
+            subtitle = "Double-tap empty home screen space to lock phone",
+            checked = quickLockEnabled,
+            onCheckedChange = { viewModel.setQuickLockEnabled(it) }
+        )
 
         SectionHeader("Advanced")
         ClickableSettingRow(
@@ -333,9 +346,24 @@ private fun ProductivitySettingsContent(
             subtitle = null,
             onClick = onMoveWidgetClick
         )
-        ToggleSettingRow("Show Battery Percentage", null, true)
-        ToggleSettingRow("Allow Home Screen Rotation", "When device is rotated", false)
-        ToggleSettingRow("Allow Haptic Feedback", "Follow system", true)
+        ToggleSettingRow(
+            title = "Show Battery Percentage",
+            subtitle = "Display battery level next to date",
+            checked = showBatteryPercentage,
+            onCheckedChange = { viewModel.setShowBatteryPercentage(it) }
+        )
+        ToggleSettingRow(
+            title = "Allow Home Screen Rotation",
+            subtitle = "When device is rotated",
+            checked = rotationEnabled,
+            onCheckedChange = { viewModel.setRotationEnabled(it) }
+        )
+        ToggleSettingRow(
+            title = "Allow Haptic Feedback",
+            subtitle = "Follow system settings",
+            checked = hapticFeedbackEnabled,
+            onCheckedChange = { viewModel.setHapticFeedbackEnabled(it) }
+        )
     }
 
     if (isWeatherSheetOpen) {
@@ -440,7 +468,7 @@ private fun ProductivitySettingsContent(
                 Column {
                     Text("Check your plans and upcoming events by tapping the date", color = Color.Gray, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(16.dp))
-                    ToggleSettingRow("Show date", null, false)
+                    ToggleSettingRow("Show date", null, false) {}
                     TextButton(onClick = { }) {
                         Icon(Icons.Outlined.FilterList, contentDescription = null, tint = Color(0xFF4DD0E1))
                         Spacer(Modifier.width(8.dp))
@@ -462,7 +490,22 @@ private fun ProductivitySettingsContent(
 // 3. THEMES PAGE
 // -----------------------------------------------------------------------------
 @Composable
-private fun ThemesSettingsContent(onBack: () -> Unit) {
+private fun ThemesSettingsContent(
+    viewModel: LauncherViewModel,
+    onBack: () -> Unit
+) {
+    val accentColorArgb by viewModel.accentColorArgb.collectAsState()
+    var showColorPicker by remember { mutableStateOf(false) }
+
+    val colorPresets = listOf(
+        0xFF4DD0E1.toInt() to "Teal (Default)",
+        0xFF3B82F6.toInt() to "Blue",
+        0xFF8B5CF6.toInt() to "Purple",
+        0xFF10B981.toInt() to "Emerald",
+        0xFFF59E0B.toInt() to "Amber",
+        0xFFF43F5E.toInt() to "Rose"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -471,6 +514,12 @@ private fun ThemesSettingsContent(onBack: () -> Unit) {
     ) {
         SubPageHeader(title = "Themes", onBack = onBack)
 
+        ClickableSettingRow(
+            icon = Icons.Outlined.Palette,
+            title = "Accent Color",
+            subtitle = "Customize home screen clock and accent colors",
+            onClick = { showColorPicker = true }
+        )
         ClickableSettingRow(
             icon = Icons.Outlined.AddCircleOutline,
             title = "Create Theme",
@@ -500,6 +549,44 @@ private fun ThemesSettingsContent(onBack: () -> Unit) {
             title = "Community Themes",
             subtitle = "Discover themes made by our community",
             onClick = { }
+        )
+    }
+
+    if (showColorPicker) {
+        AlertDialog(
+            onDismissRequest = { showColorPicker = false },
+            title = { Text("Choose Accent Color", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    colorPresets.forEach { (colorVal, name) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setAccentColor(colorVal)
+                                    showColorPicker = false
+                                }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .background(Color(colorVal), CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(text = name, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                            if (accentColorArgb == colorVal) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = Color(colorVal))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showColorPicker = false }) { Text("Close", color = Color(accentColorArgb)) }
+            },
+            containerColor = Color.Black
         )
     }
 }
@@ -755,13 +842,14 @@ private fun SettingsCategoryItem(
 private fun ToggleSettingRow(
     title: String,
     subtitle: String?,
-    initialValue: Boolean
+    initialValue: Boolean = false,
+    checked: Boolean = initialValue,
+    onCheckedChange: (Boolean) -> Unit
 ) {
-    var checked by remember { mutableStateOf(initialValue) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { checked = !checked }
+            .clickable { onCheckedChange(!checked) }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -773,7 +861,7 @@ private fun ToggleSettingRow(
         }
         Switch(
             checked = checked,
-            onCheckedChange = { checked = it },
+            onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.Black,
                 checkedTrackColor = Color(0xFF4DD0E1)
