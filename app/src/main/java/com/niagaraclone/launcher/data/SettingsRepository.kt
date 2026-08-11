@@ -55,6 +55,9 @@ class SettingsRepository(private val context: Context) {
         // Productivity & Search Preference Keys
         val KEY_CALENDAR_PREVIEW_ENABLED = booleanPreferencesKey("calendar_preview_enabled")
         val KEY_SEARCH_CONTACTS_ENABLED = booleanPreferencesKey("search_contacts_enabled")
+
+        // Third-Party Icon Pack Keys
+        val KEY_SELECTED_ICON_PACK = stringPreferencesKey("selected_icon_pack")
     }
 
     val theme: Flow<AppTheme> = context.dataStore.data.map { prefs ->
@@ -162,6 +165,10 @@ class SettingsRepository(private val context: Context) {
         prefs[KEY_SEARCH_CONTACTS_ENABLED] ?: true
     }
 
+    val selectedIconPack: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SELECTED_ICON_PACK]
+    }
+
     suspend fun setTheme(theme: AppTheme) { context.dataStore.edit { prefs -> prefs[KEY_THEME] = theme.name } }
     suspend fun setAccentColor(colorArgb: Int) { context.dataStore.edit { prefs -> prefs[KEY_ACCENT_COLOR] = colorArgb } }
     suspend fun setFavorites(packages: List<String>) { context.dataStore.edit { prefs -> prefs[KEY_FAVORITES] = packages.joinToString(",") } }
@@ -182,6 +189,16 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCascadiaButtonEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_CASCADIA_BUTTON_ENABLED] = enabled } }
     suspend fun setCalendarPreviewEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_CALENDAR_PREVIEW_ENABLED] = enabled } }
     suspend fun setSearchContactsEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_SEARCH_CONTACTS_ENABLED] = enabled } }
+
+    suspend fun setSelectedIconPack(packageName: String?) {
+        context.dataStore.edit { prefs ->
+            if (packageName != null) {
+                prefs[KEY_SELECTED_ICON_PACK] = packageName
+            } else {
+                prefs.remove(KEY_SELECTED_ICON_PACK)
+            }
+        }
+    }
 
     suspend fun setFabTapAction(actionType: String, packageName: String? = null) {
         context.dataStore.edit { prefs ->
