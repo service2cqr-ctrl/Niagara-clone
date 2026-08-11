@@ -11,6 +11,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
+import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
 import android.os.BatteryManager
@@ -31,11 +32,13 @@ import com.niagaraclone.launcher.data.WeatherRepository
 import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.services.NotificationSummaryModel
 import com.niagaraclone.launcher.ui.components.MediaWidgetTheme
+import com.niagaraclone.launcher.utils.IconPackManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -45,6 +48,8 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class LauncherViewModel(
     val repository: SettingsRepository,
@@ -166,6 +171,10 @@ class LauncherViewModel(
     val fabSwipePackage: StateFlow<String?> = repository.fabSwipePackage
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = null)
 
+    // --- THIRD-PARTY ICON PACK FLOW ---
+    val selectedIconPack: StateFlow<String?> = repository.selectedIconPack
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = null)
+
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             intent?.let { updateBatteryState(it) }
@@ -181,6 +190,13 @@ class LauncherViewModel(
         fetchLiveWeatherForCurrentMode()
         loadSelectedMusicPackages()
         loadCalendarEvents()
+    }
+
+    fun setSelectedIconPack(packageName: String?) {
+        viewModelScope.launch {
+            repository.setSelectedIconPack(packageName)
+            refreshApps()
+        }
     }
 
     // --- APP SHORTCUTS RETRIEVAL & EXECUTION ---
@@ -390,6 +406,7 @@ class LauncherViewModel(
                 put("fabTapPackage", fabTapPackage.value ?: "")
                 put("fabSwipeActionType", fabSwipeActionType.value)
                 put("fabSwipePackage", fabSwipePackage.value ?: "")
+                put("selectedIconPack", selectedIconPack.value ?: "")
 
                 val foldersObj = JSONObject()
                 folderPrefs.forEach { (parentPkg, subPkgs) ->
@@ -472,6 +489,11 @@ class LauncherViewModel(
                 setFabSwipeAction(json.getString("fabSwipeActionType"), pkg)
             }
 
+            if (json.has("selectedIconPack")) {
+                val pack = json.getString("selectedIconPack").ifEmpty { null }
+                setSelectedIconPack(pack)
+            }
+
             if (json.has("folderSubApps")) {
                 val foldersObj = json.getJSONObject("folderSubApps")
                 val editor = prefs.edit()
@@ -538,24 +560,35 @@ class LauncherViewModel(
     @SuppressLint("MissingPermission")
     suspend fun scanAndFetchLocationWeather(): String = withContext(Dispatchers.IO) {
         val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-        var detectedCity = "Vadodara"
+        var detectedCity = weatherCityName.value
 
         try {
-            val lastKnownLocation = locationManager?.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                ?: locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            val provider = when {
+                locationManager?.isProviderEnabled(LocationManager.NETWORK_PROVIDER) == true -> LocationManager.NETWORK_PROVIDER
+                locationManager?.isProviderEnabled(LocationManager.GPS_PROVIDER) == true -> LocationManager.GPS_PROVIDER
+                else -> null
+            }
 
-            if (lastKnownLocation != null) {
-                val data = weatherRepository.fetchLiveWeather(lastKnownLocation.latitude, lastKnownLocation.longitude)
-                if (data != null) {
-                    _liveWeather.value = data
-                    detectedCity = data.cityName
-                    setWeatherCityName(data.cityName)
-                }
-            } else {
-                val data = weatherRepository.fetchLiveWeather(22.3072, 73.1812)
-                if (data != null) {
-                    _liveWeather.value = data
-                    detectedCity = data.cityName
+            if (provider != null) {
+                val lastLocation = locationManager?.getLastKnownLocation(provider)
+                val location = lastLocation ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    var singleLoc: Location? = null
+                    val latch = CountDownLatch(1)
+                    locationManager?.getCurrentLocation(provider, null, context.mainExecutor) { loc ->
+                        singleLoc = loc
+                        latch.countDown()
+                    }
+                    latch.await(3, TimeUnit.SECONDS)
+                    singleLoc
+                } else null
+
+                if (location != null) {
+                    val data = weatherRepository.fetchLiveWeather(location.latitude, location.longitude)
+                    if (data != null) {
+                        _liveWeather.value = data
+                        detectedCity = data.cityName
+                        setWeatherCityName(data.cityName)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -607,6 +640,9 @@ class LauncherViewModel(
     fun refreshApps() {
         viewModelScope.launch(Dispatchers.IO) {
             val pm = context.packageManager
+            val iconPackManager = IconPackManager(context)
+            val currentPack = repository.selectedIconPack.first()
+
             val mainIntent = Intent(Intent.ACTION_MAIN, null).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
 
             val resolveInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -619,10 +655,15 @@ class LauncherViewModel(
             val installedApps = resolveInfos.mapNotNull { resolveInfo ->
                 val packageName = resolveInfo.activityInfo.packageName
                 if (packageName == context.packageName) return@mapNotNull null
+
+                val customIcon = if (!currentPack.isNullOrEmpty()) {
+                    iconPackManager.loadIconFromPack(currentPack, packageName)
+                } else null
+
                 AppModel(
                     packageName = packageName,
                     label = resolveInfo.loadLabel(pm).toString(),
-                    icon = resolveInfo.loadIcon(pm)
+                    icon = customIcon ?: resolveInfo.loadIcon(pm)
                 )
             }.sortedBy { it.label.lowercase() }
 
