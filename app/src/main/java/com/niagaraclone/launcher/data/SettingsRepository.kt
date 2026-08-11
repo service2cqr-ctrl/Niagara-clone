@@ -24,32 +24,30 @@ class SettingsRepository(private val context: Context) {
         val KEY_ACCENT_COLOR = intPreferencesKey("accent_color")
         val KEY_FAVORITES = stringPreferencesKey("favorites")
         val KEY_HIDDEN_APPS = stringPreferencesKey("hidden_apps")
-        val KEY_ICON_PACK = stringPreferencesKey("icon_pack")
-        val KEY_SWIPE_UP_APP = stringPreferencesKey("swipe_up_app")
-        val KEY_SWIPE_DOWN_APP = stringPreferencesKey("swipe_down_app")
-        val KEY_DOUBLE_TAP_APP = stringPreferencesKey("double_tap_app")
-        val KEY_WALLPAPER_ZOOM = stringPreferencesKey("wallpaper_zoom")
-        val KEY_FONT_FAMILY = stringPreferencesKey("font_family")
         val KEY_HOME_OFFSET_Y = floatPreferencesKey("home_offset_y")
         val KEY_WIDGET_HEIGHT = floatPreferencesKey("widget_height")
         val KEY_WIDGET_IDS = stringPreferencesKey("widget_ids_list")
 
-        // Media Widget Persistence Keys
+        // Media Widget Keys
         val KEY_SHOW_MEDIA_WIDGET = booleanPreferencesKey("show_media_widget")
         val KEY_MEDIA_WIDGET_THEME = stringPreferencesKey("media_widget_theme")
 
-        // Weather Persistence Keys
+        // Weather Keys
         val KEY_WEATHER_ENABLED = booleanPreferencesKey("weather_enabled")
-        val KEY_WEATHER_LOCATION_MODE = stringPreferencesKey("weather_location_mode") // "AUTO" or "FIXED"
+        val KEY_WEATHER_LOCATION_MODE = stringPreferencesKey("weather_location_mode")
         val KEY_WEATHER_CITY_NAME = stringPreferencesKey("weather_city_name")
-        val KEY_WEATHER_TEMP_UNIT = stringPreferencesKey("weather_temp_unit") // "CELSIUS" or "FAHRENHEIT"
+        val KEY_WEATHER_TEMP_UNIT = stringPreferencesKey("weather_temp_unit")
 
-        // Display & Gesture Persistence Keys
+        // Display & Gesture Keys
         val KEY_CLOCK_STYLE = stringPreferencesKey("clock_style")
         val KEY_QUICK_LOCK_ENABLED = booleanPreferencesKey("quick_lock_enabled")
         val KEY_HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic_feedback_enabled")
         val KEY_ROTATION_ENABLED = booleanPreferencesKey("rotation_enabled")
         val KEY_SHOW_BATTERY_PERCENTAGE = booleanPreferencesKey("show_battery_percentage")
+
+        // Cascadia (FAB) Button Action Keys
+        val KEY_FAB_TAP_ACTION_TYPE = stringPreferencesKey("fab_tap_action_type") // "DIAL", "APP", "SEARCH", "AGENDA", "VOICE_ASSISTANT", "LOCK"
+        val KEY_FAB_TAP_PACKAGE = stringPreferencesKey("fab_tap_package")
     }
 
     val theme: Flow<AppTheme> = context.dataStore.data.map { prefs ->
@@ -71,10 +69,6 @@ class SettingsRepository(private val context: Context) {
         if (raw.isBlank()) emptySet() else raw.split(",").toSet()
     }
 
-    val iconPackPackage: Flow<String?> = context.dataStore.data.map { prefs ->
-        prefs[KEY_ICON_PACK]
-    }
-
     val homeOffsetY: Flow<Float> = context.dataStore.data.map { prefs ->
         prefs[KEY_HOME_OFFSET_Y] ?: 0f
     }
@@ -83,14 +77,12 @@ class SettingsRepository(private val context: Context) {
         prefs[KEY_WIDGET_HEIGHT] ?: 180f
     }
 
-    // --- WIDGET STACK FLOW ---
     val widgetIds: Flow<List<Int>> = context.dataStore.data.map { prefs ->
         val raw = prefs[KEY_WIDGET_IDS] ?: ""
         if (raw.isBlank()) emptyList()
         else raw.split(",").mapNotNull { it.toIntOrNull() }
     }
 
-    // --- MEDIA WIDGET FLOWS ---
     val showMediaWidget: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[KEY_SHOW_MEDIA_WIDGET] ?: true
     }
@@ -99,7 +91,6 @@ class SettingsRepository(private val context: Context) {
         prefs[KEY_MEDIA_WIDGET_THEME] ?: "FROSTED_GLASS"
     }
 
-    // --- WEATHER FLOWS ---
     val weatherEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[KEY_WEATHER_ENABLED] ?: true
     }
@@ -116,7 +107,6 @@ class SettingsRepository(private val context: Context) {
         prefs[KEY_WEATHER_TEMP_UNIT] ?: "CELSIUS"
     }
 
-    // --- DISPLAY & GESTURE FLOWS ---
     val clockStyle: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[KEY_CLOCK_STYLE] ?: "DIGITAL_BOLD"
     }
@@ -137,92 +127,46 @@ class SettingsRepository(private val context: Context) {
         prefs[KEY_SHOW_BATTERY_PERCENTAGE] ?: true
     }
 
-    suspend fun setTheme(theme: AppTheme) {
-        context.dataStore.edit { prefs -> prefs[KEY_THEME] = theme.name }
+    val fabTapActionType: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_FAB_TAP_ACTION_TYPE] ?: "DIAL"
     }
 
-    suspend fun setAccentColor(colorArgb: Int) {
-        context.dataStore.edit { prefs -> prefs[KEY_ACCENT_COLOR] = colorArgb }
+    val fabTapPackage: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_FAB_TAP_PACKAGE]
     }
 
-    suspend fun setFavorites(packages: List<String>) {
-        context.dataStore.edit { prefs -> prefs[KEY_FAVORITES] = packages.joinToString(",") }
-    }
+    suspend fun setTheme(theme: AppTheme) { context.dataStore.edit { prefs -> prefs[KEY_THEME] = theme.name } }
+    suspend fun setAccentColor(colorArgb: Int) { context.dataStore.edit { prefs -> prefs[KEY_ACCENT_COLOR] = colorArgb } }
+    suspend fun setFavorites(packages: List<String>) { context.dataStore.edit { prefs -> prefs[KEY_FAVORITES] = packages.joinToString(",") } }
+    suspend fun setHiddenApps(packages: Set<String>) { context.dataStore.edit { prefs -> prefs[KEY_HIDDEN_APPS] = packages.joinToString(",") } }
+    suspend fun setHomeOffsetY(offsetY: Float) { context.dataStore.edit { prefs -> prefs[KEY_HOME_OFFSET_Y] = offsetY } }
+    suspend fun setWidgetHeight(height: Float) { context.dataStore.edit { prefs -> prefs[KEY_WIDGET_HEIGHT] = height } }
+    suspend fun setShowMediaWidget(show: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_SHOW_MEDIA_WIDGET] = show } }
+    suspend fun setMediaWidgetThemeName(themeName: String) { context.dataStore.edit { prefs -> prefs[KEY_MEDIA_WIDGET_THEME] = themeName } }
+    suspend fun setWeatherEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_WEATHER_ENABLED] = enabled } }
+    suspend fun setWeatherLocationMode(mode: String) { context.dataStore.edit { prefs -> prefs[KEY_WEATHER_LOCATION_MODE] = mode } }
+    suspend fun setWeatherCityName(cityName: String) { context.dataStore.edit { prefs -> prefs[KEY_WEATHER_CITY_NAME] = cityName } }
+    suspend fun setWeatherTempUnit(unit: String) { context.dataStore.edit { prefs -> prefs[KEY_WEATHER_TEMP_UNIT] = unit } }
+    suspend fun setClockStyle(style: String) { context.dataStore.edit { prefs -> prefs[KEY_CLOCK_STYLE] = style } }
+    suspend fun setQuickLockEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_QUICK_LOCK_ENABLED] = enabled } }
+    suspend fun setHapticFeedbackEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_HAPTIC_FEEDBACK_ENABLED] = enabled } }
+    suspend fun setRotationEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_ROTATION_ENABLED] = enabled } }
+    suspend fun setShowBatteryPercentage(show: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_SHOW_BATTERY_PERCENTAGE] = show } }
 
-    suspend fun setHiddenApps(packages: Set<String>) {
-        context.dataStore.edit { prefs -> prefs[KEY_HIDDEN_APPS] = packages.joinToString(",") }
-    }
-
-    suspend fun setIconPack(packageName: String?) {
+    suspend fun setFabTapAction(actionType: String, packageName: String? = null) {
         context.dataStore.edit { prefs ->
-            if (packageName == null) prefs.remove(KEY_ICON_PACK) else prefs[KEY_ICON_PACK] = packageName
+            prefs[KEY_FAB_TAP_ACTION_TYPE] = actionType
+            if (packageName != null) {
+                prefs[KEY_FAB_TAP_PACKAGE] = packageName
+            } else {
+                prefs.remove(KEY_FAB_TAP_PACKAGE)
+            }
         }
     }
 
-    suspend fun setHomeOffsetY(offsetY: Float) {
-        context.dataStore.edit { prefs -> prefs[KEY_HOME_OFFSET_Y] = offsetY }
-    }
-
-    suspend fun setWidgetHeight(height: Float) {
-        context.dataStore.edit { prefs -> prefs[KEY_WIDGET_HEIGHT] = height }
-    }
-
-    // --- MEDIA WIDGET SETTERS ---
-    suspend fun setShowMediaWidget(show: Boolean) {
-        context.dataStore.edit { prefs -> prefs[KEY_SHOW_MEDIA_WIDGET] = show }
-    }
-
-    suspend fun setMediaWidgetThemeName(themeName: String) {
-        context.dataStore.edit { prefs -> prefs[KEY_MEDIA_WIDGET_THEME] = themeName }
-    }
-
-    // --- WEATHER SETTERS ---
-    suspend fun setWeatherEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs -> prefs[KEY_WEATHER_ENABLED] = enabled }
-    }
-
-    suspend fun setWeatherLocationMode(mode: String) {
-        context.dataStore.edit { prefs -> prefs[KEY_WEATHER_LOCATION_MODE] = mode }
-    }
-
-    suspend fun setWeatherCityName(cityName: String) {
-        context.dataStore.edit { prefs -> prefs[KEY_WEATHER_CITY_NAME] = cityName }
-    }
-
-    suspend fun setWeatherTempUnit(unit: String) {
-        context.dataStore.edit { prefs -> prefs[KEY_WEATHER_TEMP_UNIT] = unit }
-    }
-
-    // --- DISPLAY & GESTURE SETTERS ---
-    suspend fun setClockStyle(style: String) {
-        context.dataStore.edit { prefs -> prefs[KEY_CLOCK_STYLE] = style }
-    }
-
-    suspend fun setQuickLockEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs -> prefs[KEY_QUICK_LOCK_ENABLED] = enabled }
-    }
-
-    suspend fun setHapticFeedbackEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs -> prefs[KEY_HAPTIC_FEEDBACK_ENABLED] = enabled }
-    }
-
-    suspend fun setRotationEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs -> prefs[KEY_ROTATION_ENABLED] = enabled }
-    }
-
-    suspend fun setShowBatteryPercentage(show: Boolean) {
-        context.dataStore.edit { prefs -> prefs[KEY_SHOW_BATTERY_PERCENTAGE] = show }
-    }
-
-    // --- WIDGET STACK HELPER METHODS ---
     suspend fun addWidgetId(widgetId: Int) {
         context.dataStore.edit { prefs ->
-            val currentList = prefs[KEY_WIDGET_IDS]
-                ?.split(",")
-                ?.mapNotNull { it.toIntOrNull() }
-                ?.toMutableList() ?: mutableListOf()
-
-            // Enforce max 4 widgets in stack limit
+            val currentList = prefs[KEY_WIDGET_IDS]?.split(",")?.mapNotNull { it.toIntOrNull() }?.toMutableList() ?: mutableListOf()
             if (currentList.size < 4 && !currentList.contains(widgetId)) {
                 currentList.add(widgetId)
                 prefs[KEY_WIDGET_IDS] = currentList.joinToString(",")
@@ -232,32 +176,9 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun removeWidgetId(widgetId: Int) {
         context.dataStore.edit { prefs ->
-            val currentList = prefs[KEY_WIDGET_IDS]
-                ?.split(",")
-                ?.mapNotNull { it.toIntOrNull() }
-                ?.toMutableList() ?: mutableListOf()
-
+            val currentList = prefs[KEY_WIDGET_IDS]?.split(",")?.mapNotNull { it.toIntOrNull() }?.toMutableList() ?: mutableListOf()
             if (currentList.remove(widgetId)) {
                 prefs[KEY_WIDGET_IDS] = currentList.joinToString(",")
-            }
-        }
-    }
-
-    suspend fun reorderWidgetIds(newList: List<Int>) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_WIDGET_IDS] = newList.take(4).joinToString(",")
-        }
-    }
-
-    suspend fun snapshot(): Map<Preferences.Key<*>, Any> {
-        return context.dataStore.data.first().asMap()
-    }
-
-    suspend fun restore(values: Map<String, String>) {
-        context.dataStore.edit { prefs ->
-            values.forEach { (keyName, valueStr) ->
-                val key = stringPreferencesKey(keyName)
-                prefs[key] = valueStr
             }
         }
     }
