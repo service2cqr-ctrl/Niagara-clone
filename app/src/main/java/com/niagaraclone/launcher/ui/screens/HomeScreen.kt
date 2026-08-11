@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Refresh
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.*
@@ -64,6 +66,8 @@ import com.niagaraclone.launcher.services.ScreenLockService
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.AutoMusicPopUpCard
 import com.niagaraclone.launcher.ui.components.CalendarAgendaSheet
+import com.niagaraclone.launcher.ui.components.CascadiaButtonMenuSheet
+import com.niagaraclone.launcher.ui.components.FabActionSelectionSheet
 import com.niagaraclone.launcher.ui.components.MediaPlayerCard
 import com.niagaraclone.launcher.ui.components.NotificationSummarySheet
 import com.niagaraclone.launcher.ui.components.PopUpFolderCard
@@ -120,11 +124,13 @@ fun HomeScreen(
 
     val mediaState by MediaNotificationListener.mediaState.collectAsState()
 
-    // --- DISPLAY & GESTURE STATES ---
+    // --- DISPLAY & FAB GESTURE STATES ---
     val clockStyle by viewModel.clockStyle.collectAsState()
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
     val quickLockEnabled by viewModel.quickLockEnabled.collectAsState()
     val showBatteryPercentage by viewModel.showBatteryPercentage.collectAsState()
+    val fabTapActionType by viewModel.fabTapActionType.collectAsState()
+    val fabTapPackage by viewModel.fabTapPackage.collectAsState()
     val accentColor = Color(accentColorArgb)
 
     // --- CALENDAR & NOTIFICATION STATES ---
@@ -135,6 +141,8 @@ fun HomeScreen(
     var showAgendaSheet by remember { mutableStateOf(false) }
     var showNotificationSummarySheet by remember { mutableStateOf(false) }
     var showClockStyleSheet by remember { mutableStateOf(false) }
+    var showFabMenuSheet by remember { mutableStateOf(false) }
+    var showFabEditActionSheet by remember { mutableStateOf(false) }
     var pendingAppToLaunch by remember { mutableStateOf<AppModel?>(null) }
 
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
@@ -146,20 +154,12 @@ fun HomeScreen(
         }
     }
 
-    // --- AUDIO CONNECTION & MUSIC LAUNCHER STATES ---
-    val isAudioConnected by AudioConnectionReceiver.isAudioDeviceConnected.collectAsState()
-    val selectedMusicPackages by viewModel.selectedMusicPackages.collectAsState()
-
     val visibleApps = remember(apps, hiddenPackages) {
         apps.filter { !hiddenPackages.contains(it.packageName) }
     }
 
-    val musicLauncherApps = remember(visibleApps, selectedMusicPackages) {
-        if (selectedMusicPackages.isNotEmpty()) {
-            visibleApps.filter { selectedMusicPackages.contains(it.packageName) }
-        } else {
-            viewModel.getAutoDetectedMusicApps().filter { !hiddenPackages.contains(it.packageName) }
-        }
+    val assignedFabApp = remember(visibleApps, fabTapPackage) {
+        visibleApps.firstOrNull { it.packageName == fabTapPackage }
     }
 
     var isWidgetMenuOpen by remember { mutableStateOf(false) }
@@ -169,11 +169,9 @@ fun HomeScreen(
     var showPermissionDialog by remember { mutableStateOf(false) }
     var showRecentlyInstalledDialog by remember { mutableStateOf(false) }
 
-    // Dynamic Pop-up Variables
     var activePopUpApp by remember { mutableStateOf<AppModel?>(null) }
     var popupYOffset by remember { mutableFloatStateOf(0f) }
 
-    // Real-Time System Time Receiver (12-hour format)
     val (currentTime, currentDate) = rememberCurrentTimeState(timeFormatPattern = "h:mm", dateFormatPattern = "EEE d MMM")
     val timeParts = remember(currentTime) { currentTime.split(":") }
     val timeHours = timeParts.getOrNull(0) ?: "10"
@@ -184,10 +182,6 @@ fun HomeScreen(
         val icon = liveWeather?.conditionIcon ?: "☀️"
         val deg = if (tempUnit == "CELSIUS") "${c.roundToInt()}°" else "${(c * 9 / 5 + 32).roundToInt()}°"
         "$icon $deg"
-    }
-
-    LaunchedEffect(isEditingWidgetExternal) {
-        if (isEditingWidgetExternal) isEditingWidget = true
     }
 
     var isDrawerExpanded by remember { mutableStateOf(false) }
@@ -202,35 +196,32 @@ fun HomeScreen(
         visibleApps.groupBy { it.firstLetter }.toSortedMap()
     }
 
-    val letterIndexMap = remember(favorites, groupedApps) {
-        val map = mutableMapOf<String, Int>()
-        map["⭐"] = 0
-        var currentIndex = favorites.size
-        groupedApps.forEach { (letter, appList) ->
-            map[letter.toString()] = currentIndex
-            currentIndex += 1 + appList.size
-        }
-        map["o"] = currentIndex
-        map
-    }
-
-    LaunchedEffect(activeLetter, isDrawerExpanded) {
-        val letter = activeLetter ?: return@LaunchedEffect
-        if (letter == "⭐") {
-            listState.scrollToItem(0)
-        } else if (isDrawerExpanded) {
-            val targetIdx = letterIndexMap[letter] ?: 0
-            listState.scrollToItem(targetIdx)
-        }
-    }
-
-    val handleAppLaunch: (AppModel) -> Unit = { app ->
-        val breached = viewModel.incrementAppLaunchCount(app.packageName)
-        if (breached) {
-            pendingAppToLaunch = app
-        } else {
-            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-            intent?.let { context.startActivity(it) }
+    val handleFabTap: () -> Unit = {
+        when (fabTapActionType) {
+            "SEARCH" -> onOpenSearch()
+            "AGENDA" -> {
+                val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
+                if (hasPermission) {
+                    viewModel.loadCalendarEvents()
+                    showAgendaSheet = true
+                } else {
+                    calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+                }
+            }
+            "VOICE_ASSISTANT" -> {
+                try { context.startActivity(Intent(Intent.ACTION_VOICE_COMMAND).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }) } catch (e: Exception) {}
+            }
+            "LOCK" -> ScreenLockService.lockScreen()
+            "APP" -> {
+                assignedFabApp?.let { app ->
+                    val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                    intent?.let { context.startActivity(it) }
+                }
+            }
+            else -> {
+                val intent = Intent(Intent.ACTION_DIAL).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                context.startActivity(intent)
+            }
         }
     }
 
@@ -244,14 +235,11 @@ fun HomeScreen(
                         if (quickLockEnabled) {
                             val isLocked = ScreenLockService.lockScreen()
                             if (!isLocked) {
-                                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                context.startActivity(intent)
+                                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                             }
                         }
                     },
-                    onTap = {
-                        if (isEditingWidget) isEditingWidget = false
-                    }
+                    onTap = { if (isEditingWidget) isEditingWidget = false }
                 )
             }
     ) {
@@ -262,28 +250,12 @@ fun HomeScreen(
         ) {
             if (!isDrawerExpanded) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    if (homeLayoutOffsetY > 0f) {
-                        Spacer(modifier = Modifier.height(homeLayoutOffsetY.dp))
-                    }
-
-                    if (isEditingWidget) {
-                        AdjustmentControlBar(
-                            onReset = { viewModel.updateHomeOffsetY(0f) },
-                            onDrag = { deltaY ->
-                                val newOffset = (homeLayoutOffsetY + deltaY).coerceIn(-100f, 200f)
-                                viewModel.updateHomeOffsetY(newOffset)
-                            }
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
+                    if (homeLayoutOffsetY > 0f) Spacer(modifier = Modifier.height(homeLayoutOffsetY.dp))
 
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .combinedClickable(
-                                onClick = {},
-                                onLongClick = { isWidgetMenuOpen = true }
-                            )
+                            .combinedClickable(onClick = {}, onLongClick = { isWidgetMenuOpen = true })
                     ) {
                         ClockHeaderDisplay(
                             clockStyle = clockStyle,
@@ -295,21 +267,14 @@ fun HomeScreen(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (clockStyle != "DIGITAL_HEADER") {
                                 Text(
                                     text = currentDate.ifEmpty { "Wed 5 Aug" },
                                     color = Color.White.copy(alpha = 0.9f),
                                     fontSize = 16.sp,
                                     modifier = Modifier.clickable {
-                                        val hasPermission = ContextCompat.checkSelfPermission(
-                                            context,
-                                            Manifest.permission.READ_CALENDAR
-                                        ) == PackageManager.PERMISSION_GRANTED
-
+                                        val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
                                         if (hasPermission) {
                                             viewModel.loadCalendarEvents()
                                             showAgendaSheet = true
@@ -319,31 +284,18 @@ fun HomeScreen(
                                     }
                                 )
                             }
-                            if (showBatteryPercentage) {
-                                Text(text = batteryStatus, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
-                            }
-                            if (weatherEnabled) {
-                                Text(
-                                    text = liveTempDisplay,
-                                    color = Color.White.copy(alpha = 0.9f),
-                                    fontSize = 16.sp,
-                                    modifier = Modifier.clickable { isWeatherSheetOpen = true }
-                                )
-                            }
+                            if (showBatteryPercentage) Text(text = batteryStatus, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                            if (weatherEnabled) Text(text = liveTempDisplay, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp, modifier = Modifier.clickable { isWeatherSheetOpen = true })
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     if (!isDefaultLauncher && !isBannerDismissedSession) {
-                        SwipeableDefaultLauncherBanner(
-                            onSetDefault = onRequestSetDefaultLauncher,
-                            onDismiss = { viewModel.dismissBannerForSession() }
-                        )
+                        SwipeableDefaultLauncherBanner(onSetDefault = onRequestSetDefaultLauncher, onDismiss = { viewModel.dismissBannerForSession() })
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
-                    // --- ONLY SHOW ACTIVE PLAYING MEDIA CARD ---
                     mediaState?.let { media ->
                         if (showMediaWidget && media.isPlaying && media.title.isNotEmpty()) {
                             MediaPlayerCard(
@@ -352,15 +304,8 @@ fun HomeScreen(
                                 artistName = media.artist,
                                 isPlaying = media.isPlaying,
                                 widgetTheme = mediaWidgetTheme,
-                                onPlayPauseToggle = {
-                                    val controller = MediaNotificationListener.activeController
-                                    if (media.isPlaying) controller?.transportControls?.pause() else controller?.transportControls?.play()
-                                },
-                                onOpenApp = {
-                                    viewModel.trackAppLaunch(media.packageName)
-                                    val launchIntent = context.packageManager.getLaunchIntentForPackage(media.packageName)
-                                    launchIntent?.let { context.startActivity(it) }
-                                },
+                                onPlayPauseToggle = { MediaNotificationListener.activeController?.transportControls?.let { if (media.isPlaying) it.pause() else it.play() } },
+                                onOpenApp = { context.packageManager.getLaunchIntentForPackage(media.packageName)?.let { context.startActivity(it) } },
                                 onNextTrack = { MediaNotificationListener.activeController?.transportControls?.skipToNext() },
                                 onPreviousTrack = { MediaNotificationListener.activeController?.transportControls?.skipToPrevious() },
                                 modifier = Modifier.fillMaxWidth()
@@ -375,7 +320,7 @@ fun HomeScreen(
                             widgetHeightDp = widgetHeight,
                             appWidgetHost = appWidgetHost,
                             appWidgetManager = appWidgetManager,
-                            onRemoveWidget = { id -> viewModel.removeWidgetId(id) },
+                            onRemoveWidget = { viewModel.removeWidgetId(it) },
                             onAddWidgetClick = onAddWidgetClick,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -384,27 +329,16 @@ fun HomeScreen(
                 }
             }
 
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                // --- INLINE MUSIC APP ROW ON AUDIO CONNECT ---
-                if (!isDrawerExpanded && isAudioConnected && musicLauncherApps.isNotEmpty() && mediaState?.isPlaying != true) {
-                    item {
-                        AutoMusicPopUpCard(
-                            musicApps = musicLauncherApps,
-                            onDismiss = { }
-                        )
-                    }
-                }
-
+            LazyColumn(state = listState, modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(favorites) { app ->
                     FavoriteAppRow(
                         app = app,
                         badgeCount = notificationCounts[app.packageName] ?: 0,
                         accentColor = accentColor,
-                        onClick = { handleAppLaunch(app) },
+                        onClick = {
+                            val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                            intent?.let { context.startActivity(it) }
+                        },
                         onLongClick = { appForMenu = app },
                         onSwipeRight = { yOffset ->
                             popupYOffset = yOffset
@@ -415,21 +349,13 @@ fun HomeScreen(
 
                 if (isDrawerExpanded) {
                     groupedApps.forEach { (letter, appGroup) ->
-                        item {
-                            Text(
-                                text = letter.toString(),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
-                            )
-                        }
+                        item { Text(text = letter.toString(), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)) }
                         items(appGroup) { app ->
                             FavoriteAppRow(
                                 app = app,
                                 badgeCount = notificationCounts[app.packageName] ?: 0,
                                 accentColor = accentColor,
-                                onClick = { handleAppLaunch(app) },
+                                onClick = { context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) } },
                                 onLongClick = { appForMenu = app },
                                 onSwipeRight = { yOffset ->
                                     popupYOffset = yOffset
@@ -438,142 +364,70 @@ fun HomeScreen(
                             )
                         }
                     }
-
-                    // --- APP DRAWER FOOTER ---
-                    item {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 24.dp, bottom = 96.dp)
-                        ) {
-                            Text(
-                                text = "Cascadia Launcher",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(bottom = 12.dp)
-                            )
-                            DrawerFooterRow(
-                                icon = Icons.Default.History,
-                                title = "Recently installed",
-                                onClick = { showRecentlyInstalledDialog = true }
-                            )
-                            DrawerFooterRow(
-                                icon = Icons.Default.Settings,
-                                title = "Cascadia settings",
-                                onClick = onOpenSettings
-                            )
-                        }
-                    }
                 }
             }
         }
 
-        // --- Recently Installed Apps Dialog ---
-        if (showRecentlyInstalledDialog) {
-            val recentApps = remember { viewModel.getRecentlyInstalledApps() }
-            AlertDialog(
-                onDismissRequest = { showRecentlyInstalledDialog = false },
-                title = { Text("Recently Installed Apps", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
-                text = {
-                    if (recentApps.isEmpty()) {
-                        Text("No apps installed in the last 30 days.", color = Color.Gray)
-                    } else {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(recentApps) { app ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            handleAppLaunch(app)
-                                            showRecentlyInstalledDialog = false
-                                        }
-                                        .padding(vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    app.icon?.let { icon ->
-                                        Image(
-                                            bitmap = icon.toBitmap(width = 36, height = 36).asImageBitmap(),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(28.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                    }
-                                    Text(text = app.label, color = Color.White, fontSize = 15.sp)
-                                }
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showRecentlyInstalledDialog = false }) {
-                        Text("Close", color = accentColor)
-                    }
-                },
-                containerColor = Color.Black
-            )
-        }
-
-        // --- Dynamic Overlay Pop-up Card with Persistent Sub-Apps ---
-        activePopUpApp?.let { parentApp ->
-            val subApps = remember(parentApp) { viewModel.getFolderSubApps(parentApp.packageName) }
-
-            Popup(
-                alignment = Alignment.TopStart,
-                offset = IntOffset(0, popupYOffset.roundToInt()),
-                onDismissRequest = { activePopUpApp = null }
-            ) {
-                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-                    PopUpFolderCard(
-                        folderName = parentApp.label,
-                        subApps = subApps,
-                        onDismiss = { activePopUpApp = null }
-                    )
-                }
-            }
-        }
-
-        WaveSideIndex(
-            isIndexerVisible = isIndexerVisible,
-            onTouchStart = { isIndexerVisible = true; isDrawerExpanded = true },
-            onCharSelected = { char ->
-                activeLetter = char
-                isDrawerExpanded = (char != "⭐")
-            },
-            onDragEnd = { lastChar ->
-                if (lastChar == "⭐") {
-                    isDrawerExpanded = false
-                    isIndexerVisible = false
-                    activeLetter = null
-                } else {
-                    isDrawerExpanded = true
-                    isIndexerVisible = true
-                }
-            },
-            modifier = Modifier.align(Alignment.CenterEnd)
-        )
-
-        // --- CASCADIA QUICK ACTION TRIGGER BUTTON ---
+        // --- CASCADIA (NIAGARA) FAB BUTTON ---
         if (!isDrawerExpanded) {
-            FloatingActionButton(
-                onClick = { onOpenSearch() },
-                containerColor = accentColor,
-                contentColor = Color.Black,
-                shape = CircleShape,
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(bottom = 50.dp, end = 50.dp)
-                    .size(56.dp)
             ) {
-                Icon(imageVector = Icons.Default.Search, contentDescription = "Quick Search Action")
+                Surface(
+                    shape = CircleShape,
+                    color = accentColor,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .combinedClickable(
+                            onClick = handleFabTap,
+                            onLongClick = { showFabMenuSheet = true }
+                        )
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        when {
+                            fabTapActionType == "APP" && assignedFabApp?.icon != null -> {
+                                Image(
+                                    bitmap = assignedFabApp.icon!!.toBitmap(width = 36, height = 36).asImageBitmap(),
+                                    contentDescription = assignedFabApp.label,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                            fabTapActionType == "SEARCH" -> Icon(Icons.Default.Search, contentDescription = null, tint = Color.Black)
+                            fabTapActionType == "AGENDA" -> Icon(Icons.Outlined.CalendarToday, contentDescription = null, tint = Color.Black)
+                            fabTapActionType == "VOICE_ASSISTANT" -> Icon(Icons.Outlined.Mic, contentDescription = null, tint = Color.Black)
+                            fabTapActionType == "LOCK" -> Icon(Icons.Default.Lock, contentDescription = null, tint = Color.Black)
+                            else -> Icon(Icons.Default.Phone, contentDescription = null, tint = Color.Black)
+                        }
+                    }
+                }
             }
         }
 
         // --- OVERLAYS & SHEETS ---
         if (showAgendaSheet) {
             CalendarAgendaSheet(
+                viewModel = viewModel,
                 events = upcomingEvents,
                 onDismiss = { showAgendaSheet = false }
+            )
+        }
+
+        if (showFabMenuSheet) {
+            CascadiaButtonMenuSheet(
+                viewModel = viewModel,
+                onEditTapAction = { showFabEditActionSheet = true },
+                onOpenSettings = onOpenSettings,
+                onDismiss = { showFabMenuSheet = false }
+            )
+        }
+
+        if (showFabEditActionSheet) {
+            FabActionSelectionSheet(
+                viewModel = viewModel,
+                apps = visibleApps,
+                onDismiss = { showFabEditActionSheet = false }
             )
         }
 
@@ -581,199 +435,6 @@ fun HomeScreen(
             NotificationSummarySheet(
                 summaries = notificationSummaries,
                 onDismiss = { showNotificationSummarySheet = false }
-            )
-        }
-
-        if (showClockStyleSheet) {
-            AlertDialog(
-                onDismissRequest = { showClockStyleSheet = false },
-                title = { Text("Clock Style", color = Color.White, fontWeight = FontWeight.Bold) },
-                text = {
-                    Column {
-                        listOf(
-                            "DIGITAL_BOLD" to "Digital Bold (Default)",
-                            "DIGITAL_MINIMAL" to "Digital Minimal",
-                            "DIGITAL_HEADER" to "Header Style"
-                        ).forEach { (styleKey, label) ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        viewModel.setClockStyle(styleKey)
-                                        showClockStyleSheet = false
-                                    }
-                                    .padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = (clockStyle == styleKey),
-                                    onClick = {
-                                        viewModel.setClockStyle(styleKey)
-                                        showClockStyleSheet = false
-                                    },
-                                    colors = RadioButtonDefaults.colors(selectedColor = accentColor)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = label, color = Color.White, fontSize = 16.sp)
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showClockStyleSheet = false }) { Text("Cancel", color = accentColor) }
-                },
-                containerColor = Color.Black
-            )
-        }
-
-        pendingAppToLaunch?.let { app ->
-            val count = viewModel.getAppLaunchCountToday(app.packageName)
-            UsageBreakerDialog(
-                appName = app.label,
-                launchCount = count,
-                onContinue = {
-                    val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                    intent?.let { context.startActivity(it) }
-                    pendingAppToLaunch = null
-                },
-                onDismiss = { pendingAppToLaunch = null }
-            )
-        }
-
-        // Widget Long Press Bottom Sheet
-        if (isWidgetMenuOpen) {
-            ModalBottomSheet(
-                onDismissRequest = { isWidgetMenuOpen = false },
-                containerColor = Color.Black,
-                contentColor = Color.White,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 12.dp)
-                ) {
-                    Text(text = "Niagara widget", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 16.dp))
-                    BottomSheetRow(
-                        icon = Icons.Outlined.Schedule,
-                        title = "Clock style",
-                        onClick = {
-                            isWidgetMenuOpen = false
-                            showClockStyleSheet = true
-                        }
-                    )
-                    BottomSheetRow(
-                        icon = Icons.Outlined.CalendarToday,
-                        title = "Calendar Agenda",
-                        subtitle = "Show upcoming events",
-                        onClick = {
-                            isWidgetMenuOpen = false
-                            val hasPermission = ContextCompat.checkSelfPermission(
-                                context,
-                                Manifest.permission.READ_CALENDAR
-                            ) == PackageManager.PERMISSION_GRANTED
-
-                            if (hasPermission) {
-                                viewModel.loadCalendarEvents()
-                                showAgendaSheet = true
-                            } else {
-                                calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
-                            }
-                        }
-                    )
-
-                    BottomSheetRow(
-                        icon = Icons.Default.Notifications,
-                        title = "Notification Summary",
-                        subtitle = "View bundled unread notifications",
-                        onClick = {
-                            isWidgetMenuOpen = false
-                            showNotificationSummarySheet = true
-                        }
-                    )
-
-                    BottomSheetSwitchRow(
-                        icon = Icons.Outlined.WbSunny,
-                        title = "Weather",
-                        subtitle = "Location, Temperature units",
-                        checked = weatherEnabled,
-                        onCheckedChange = {
-                            isWidgetMenuOpen = false
-                            isWeatherSheetOpen = true
-                        }
-                    )
-
-                    if (widgetIds.size < 4) {
-                        BottomSheetRow(
-                            icon = Icons.Default.Add,
-                            title = if (widgetIds.isEmpty()) "Add Custom Widget" else "Add Widget to Stack (${widgetIds.size}/4)",
-                            onClick = { isWidgetMenuOpen = false; onAddWidgetClick() }
-                        )
-                    }
-
-                    BottomSheetRow(icon = Icons.Default.UnfoldMore, title = "Move Widget", onClick = { isWidgetMenuOpen = false; isEditingWidget = true })
-                    BottomSheetSwitchRow(
-                        icon = null,
-                        title = "Show media widget",
-                        subtitle = "While playing music",
-                        checked = showMediaWidget,
-                        onCheckedChange = { checked ->
-                            viewModel.setShowMediaWidget(checked)
-                            if (checked && !isPermissionGranted) showPermissionDialog = true
-                        }
-                    )
-
-                    BottomSheetSwitchRow(
-                        icon = null,
-                        title = "Show Battery Percentage",
-                        checked = showBatteryPercentage,
-                        onCheckedChange = { viewModel.setShowBatteryPercentage(it) }
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-            }
-        }
-
-        // Weather Interactive Sheet
-        if (isWeatherSheetOpen) {
-            WeatherBottomSheet(
-                viewModel = viewModel,
-                onDismiss = { isWeatherSheetOpen = false }
-            )
-        }
-
-        if (showPermissionDialog) {
-            AlertDialog(
-                onDismissRequest = { showPermissionDialog = false },
-                title = { Text(text = "Notification Access Needed", color = Color.White) },
-                text = { Text(text = "To display live track info and album art, Cascadia Launcher requires Notification Access in system settings.", color = Color.White.copy(alpha = 0.8f)) },
-                confirmButton = {
-                    TextButton(onClick = { showPermissionDialog = false; openNotificationAccessSettings(context) }) {
-                        Text(text = "Open Settings", color = accentColor)
-                    }
-                },
-                dismissButton = { TextButton(onClick = { showPermissionDialog = false }) { Text(text = "Cancel", color = Color.Gray) } },
-                containerColor = Color.Black
-            )
-        }
-
-        appForMenu?.let { app ->
-            AppLongPressMenu(
-                app = app,
-                isFavorite = favoritePackages.contains(app.packageName),
-                accentColor = accentColor,
-                onDismiss = { appForMenu = null },
-                onToggleFavorite = { viewModel.toggleFavorite(app.packageName); appForMenu = null },
-                onAppInfo = {
-                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply { data = Uri.fromParts("package", app.packageName, null) }
-                    context.startActivity(intent)
-                    appForMenu = null
-                },
-                onUninstall = {
-                    val intent = Intent(Intent.ACTION_DELETE).apply { data = Uri.fromParts("package", app.packageName, null) }
-                    context.startActivity(intent)
-                    appForMenu = null
-                }
             )
         }
     }
@@ -788,24 +449,14 @@ private fun ClockHeaderDisplay(
     accentColor: Color
 ) {
     when (clockStyle) {
-        "DIGITAL_MINIMAL" -> {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "$timeHours:$timeMinutes", color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.Normal)
-            }
+        "DIGITAL_MINIMAL" -> Row(verticalAlignment = Alignment.CenterVertically) { Text(text = "$timeHours:$timeMinutes", color = Color.White, fontSize = 54.sp) }
+        "DIGITAL_HEADER" -> Column {
+            Text(text = currentDate.uppercase(), color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) { Text(text = "$timeHours:$timeMinutes", color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Bold) }
         }
-        "DIGITAL_HEADER" -> {
-            Column {
-                Text(text = currentDate.uppercase(), color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "$timeHours:$timeMinutes", color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-        else -> { // DIGITAL_BOLD
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = timeHours, color = accentColor, fontSize = 72.sp, fontWeight = FontWeight.Bold)
-                Text(text = timeMinutes, color = Color.White, fontSize = 72.sp, fontWeight = FontWeight.Bold)
-            }
+        else -> Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text = timeHours, color = accentColor, fontSize = 72.sp, fontWeight = FontWeight.Bold)
+            Text(text = timeMinutes, color = Color.White, fontSize = 72.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -825,9 +476,7 @@ private fun FavoriteAppRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .onGloballyPositioned { coordinates ->
-                bottomY = coordinates.boundsInRoot().bottom
-            }
+            .onGloballyPositioned { coordinates -> bottomY = coordinates.boundsInRoot().bottom }
             .pointerInput(Unit) {
                 detectHorizontalDragGestures { change, dragAmount ->
                     if (dragAmount > 30f) {
@@ -852,21 +501,9 @@ private fun FavoriteAppRow(
 
         if (badgeCount > 0) {
             Spacer(modifier = Modifier.weight(1f))
-            Surface(
-                shape = CircleShape,
-                color = accentColor,
-                modifier = Modifier.padding(start = 8.dp)
-            ) {
-                Box(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (badgeCount > 99) "99+" else badgeCount.toString(),
-                        color = Color.Black,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+            Surface(shape = CircleShape, color = accentColor, modifier = Modifier.padding(start = 8.dp)) {
+                Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), contentAlignment = Alignment.Center) {
+                    Text(text = if (badgeCount > 99) "99+" else badgeCount.toString(), color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -874,12 +511,8 @@ private fun FavoriteAppRow(
 }
 
 @Composable
-private fun SwipeableDefaultLauncherBanner(
-    onSetDefault: () -> Unit,
-    onDismiss: () -> Unit
-) {
+private fun SwipeableDefaultLauncherBanner(onSetDefault: () -> Unit, onDismiss: () -> Unit) {
     var offsetX by remember { mutableFloatStateOf(0f) }
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -891,7 +524,6 @@ private fun SwipeableDefaultLauncherBanner(
                     onDrag = { change, dragAmount -> change.consume(); offsetX += dragAmount.x }
                 )
             }
-            .background(Color.Transparent)
             .padding(vertical = 4.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -904,95 +536,8 @@ private fun SwipeableDefaultLauncherBanner(
             Column {
                 Text(text = "Welcome back! Set Cascadia Launcher as your home screen?", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "Set as home screen",
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.clickable { onSetDefault() }
-                )
+                Text(text = "Set as home screen", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, textDecoration = TextDecoration.Underline, modifier = Modifier.clickable { onSetDefault() })
             }
         }
     }
-}
-
-// Helpers
-@Composable
-private fun DrawerFooterRow(icon: ImageVector, title: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(imageVector = icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(28.dp))
-        Spacer(modifier = Modifier.width(16.dp))
-        Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.White)
-    }
-}
-
-@Composable
-private fun AdjustmentControlBar(onReset: () -> Unit, onDrag: (Float) -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxWidth().height(32.dp).background(Color.Black.copy(alpha = 0.85f), shape = RoundedCornerShape(16.dp))
-            .pointerInput(Unit) { detectDragGestures { change, dragAmount -> change.consume(); onDrag(dragAmount.y / 2f) } }
-            .padding(horizontal = 12.dp), contentAlignment = Alignment.Center
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            IconButton(onClick = onReset, modifier = Modifier.size(24.dp)) { Icon(imageVector = Icons.Default.Refresh, contentDescription = "Reset", tint = Color.White) }
-            Box(modifier = Modifier.width(120.dp).height(2.5.dp).background(Color.White.copy(alpha = 0.6f), shape = RoundedCornerShape(1.dp)))
-            Icon(imageVector = Icons.Default.UnfoldMore, contentDescription = "Move", tint = Color.White, modifier = Modifier.size(18.dp))
-        }
-    }
-}
-
-@Composable
-private fun BottomSheetRow(icon: ImageVector?, title: String, subtitle: String? = null, onClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        icon?.let { Icon(imageVector = it, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(24.dp)); Spacer(modifier = Modifier.width(16.dp)) } ?: Spacer(modifier = Modifier.width(40.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 16.sp, color = Color.White)
-            subtitle?.let { Text(text = it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f)) }
-        }
-        Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))
-    }
-}
-
-@Composable
-private fun BottomSheetSwitchRow(icon: ImageVector?, title: String, subtitle: String? = null, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        icon?.let { Icon(imageVector = it, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(24.dp)); Spacer(modifier = Modifier.width(16.dp)) } ?: Spacer(modifier = Modifier.width(40.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 16.sp, color = Color.White)
-            subtitle?.let { Text(text = it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f)) }
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF4DD0E1)))
-    }
-}
-
-@Composable
-private fun AppLongPressMenu(
-    app: AppModel,
-    isFavorite: Boolean,
-    accentColor: Color = Color(0xFF4DD0E1),
-    onDismiss: () -> Unit,
-    onToggleFavorite: () -> Unit,
-    onAppInfo: () -> Unit,
-    onUninstall: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = app.label, color = Color.White) },
-        text = {
-            Column {
-                TextButton(onClick = onToggleFavorite, modifier = Modifier.fillMaxWidth()) { Text(text = if (isFavorite) "Remove from favorites" else "Add to favorites", color = accentColor) }
-                TextButton(onClick = onAppInfo, modifier = Modifier.fillMaxWidth()) { Text(text = "App info", color = Color.White) }
-                TextButton(onClick = onUninstall, modifier = Modifier.fillMaxWidth()) { Text(text = "Uninstall", color = Color(0xFFEF4444)) }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(text = "Cancel", color = Color.Gray) } },
-        containerColor = Color.Black
-    )
 }
