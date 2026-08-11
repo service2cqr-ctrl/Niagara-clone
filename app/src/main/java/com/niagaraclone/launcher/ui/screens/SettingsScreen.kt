@@ -123,7 +123,7 @@ fun SettingsScreen(
 }
 
 // -----------------------------------------------------------------------------
-// 1. MAIN SETTINGS HOME (COMMUNITY REMOVED)
+// 1. MAIN SETTINGS HOME
 // -----------------------------------------------------------------------------
 @Composable
 private fun MainSettingsContent(
@@ -238,8 +238,8 @@ private fun ProductivitySettingsContent(
     val showBatteryPercentage by viewModel.showBatteryPercentage.collectAsState()
     val cascadiaButtonEnabled by viewModel.cascadiaButtonEnabled.collectAsState()
 
-    val calendarPreviewEnabled by viewModel.repository.calendarPreviewEnabled.collectAsState(initial = true)
-    val searchContactsEnabled by viewModel.repository.searchContactsEnabled.collectAsState(initial = true)
+    val calendarPreviewEnabled by viewModel.repository.calendarPreviewEnabled.collectAsState()
+    val searchContactsEnabled by viewModel.repository.searchContactsEnabled.collectAsState()
 
     var showMediaThemeDialog by remember { mutableStateOf(false) }
 
@@ -568,7 +568,7 @@ private fun ProductivitySettingsContent(
 }
 
 // -----------------------------------------------------------------------------
-// 3. THEMES PAGE WITH THIRD-PARTY ICON PACK SELECTION (COMMUNITY REMOVED)
+// 3. THEMES PAGE
 // -----------------------------------------------------------------------------
 @Composable
 private fun ThemesSettingsContent(
@@ -611,7 +611,7 @@ private fun ThemesSettingsContent(
         ClickableSettingRow(
             icon = Icons.Outlined.GridOn,
             title = "Icon Pack",
-            subtitle = if (selectedIconPack.isNullOrEmpty()) "Default system icons" else "Custom icon pack active",
+            subtitle = if (selectedIconPack.isEmpty()) "Default system icons" else "Custom icon pack active",
             onClick = { showIconPackPicker = true }
         )
         ClickableSettingRow(
@@ -640,7 +640,6 @@ private fun ThemesSettingsContent(
         )
     }
 
-    // --- THIRD-PARTY ICON PACK SELECTION DIALOG ---
     if (showIconPackPicker) {
         AlertDialog(
             onDismissRequest = { showIconPackPicker = false },
@@ -651,13 +650,13 @@ private fun ThemesSettingsContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                viewModel.setSelectedIconPack(null)
+                                viewModel.setSelectedIconPack("SYSTEM")
                                 showIconPackPicker = false
                             }
                             .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = selectedIconPack.isNullOrEmpty(), onClick = null)
+                        RadioButton(selected = selectedIconPack == "SYSTEM" || selectedIconPack.isEmpty(), onClick = null)
                         Spacer(modifier = Modifier.width(12.dp))
                         Text("Default System Icons", color = Color.White, fontSize = 16.sp)
                     }
@@ -872,7 +871,15 @@ private fun BackupRestoreContent(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
         uri?.let {
-            val success = viewModel.exportBackupJson(context, it)
+            val jsonString = viewModel.exportBackupJson(context)
+            val success = try {
+                context.contentResolver.openOutputStream(it)?.use { stream ->
+                    stream.write(jsonString.toByteArray())
+                }
+                true
+            } catch (e: Exception) {
+                false
+            }
             Toast.makeText(context, if (success) "Backup saved successfully!" else "Failed to save backup", Toast.LENGTH_SHORT).show()
         }
     }
@@ -881,7 +888,14 @@ private fun BackupRestoreContent(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let {
-            val success = viewModel.importBackupJson(context, it)
+            val success = try {
+                val jsonString = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { reader ->
+                    reader.readText()
+                } ?: ""
+                viewModel.importBackupJson(context, jsonString)
+            } catch (e: Exception) {
+                false
+            }
             Toast.makeText(context, if (success) "Backup restored successfully!" else "Failed to restore backup", Toast.LENGTH_SHORT).show()
         }
     }
