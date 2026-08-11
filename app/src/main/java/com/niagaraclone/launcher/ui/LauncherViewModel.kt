@@ -93,7 +93,7 @@ class LauncherViewModel(
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = AppTheme.SYSTEM)
 
     val accentColorArgb: StateFlow<Int> = repository.accentColor
-        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = 0xFF3B82F6.toInt())
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = 0xFF4DD0E1.toInt())
 
     val favoritePackages: StateFlow<Set<String>> = repository.favorites
         .map { it.toSet() }
@@ -130,6 +130,22 @@ class LauncherViewModel(
     val weatherTempUnit: StateFlow<String> = repository.weatherTempUnit
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = "CELSIUS")
 
+    // --- DISPLAY & GESTURE PREFERENCE FLOWS ---
+    val clockStyle: StateFlow<String> = repository.clockStyle
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = "DIGITAL_BOLD")
+
+    val quickLockEnabled: StateFlow<Boolean> = repository.quickLockEnabled
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = true)
+
+    val hapticFeedbackEnabled: StateFlow<Boolean> = repository.hapticFeedbackEnabled
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = true)
+
+    val rotationEnabled: StateFlow<Boolean> = repository.rotationEnabled
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = false)
+
+    val showBatteryPercentage: StateFlow<Boolean> = repository.showBatteryPercentage
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = true)
+
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             intent?.let { updateBatteryState(it) }
@@ -144,6 +160,36 @@ class LauncherViewModel(
         refreshPermissions()
         fetchLiveWeatherForCurrentMode()
         loadSelectedMusicPackages()
+    }
+
+    // --- DISPLAY & GESTURE SETTERS ---
+    fun setClockStyle(style: String) = viewModelScope.launch { repository.setClockStyle(style) }
+    fun setAccentColor(colorArgb: Int) = viewModelScope.launch { repository.setAccentColor(colorArgb) }
+    fun setQuickLockEnabled(enabled: Boolean) = viewModelScope.launch { repository.setQuickLockEnabled(enabled) }
+    fun setHapticFeedbackEnabled(enabled: Boolean) = viewModelScope.launch { repository.setHapticFeedbackEnabled(enabled) }
+    fun setRotationEnabled(enabled: Boolean) = viewModelScope.launch { repository.setRotationEnabled(enabled) }
+    fun setShowBatteryPercentage(show: Boolean) = viewModelScope.launch { repository.setShowBatteryPercentage(show) }
+
+    // --- PERSISTENT POP-UP FOLDER MAPPING ---
+    fun getFolderSubApps(parentPackage: String): List<AppModel> {
+        val savedPackages = prefs.getStringSet("folder_sub_apps_$parentPackage", null)
+        return if (!savedPackages.isNullOrEmpty()) {
+            _apps.value.filter { savedPackages.contains(it.packageName) }
+        } else {
+            val visible = _apps.value.filter { !_hiddenPackages.value.contains(it.packageName) }
+            val parentApp = visible.firstOrNull { it.packageName == parentPackage }
+            val categoryMatch = if (parentApp != null) {
+                visible.filter {
+                    it.packageName != parentPackage && it.label.take(3).equals(parentApp.label.take(3), ignoreCase = true)
+                }
+            } else emptyList()
+
+            if (categoryMatch.isNotEmpty()) categoryMatch.take(4) else visible.filter { it.packageName != parentPackage }.take(4)
+        }
+    }
+
+    fun setFolderSubApps(parentPackage: String, subPackages: Set<String>) {
+        prefs.edit().putStringSet("folder_sub_apps_$parentPackage", subPackages).apply()
     }
 
     // --- CALENDAR AGENDA MANAGEMENT ---
@@ -230,6 +276,12 @@ class LauncherViewModel(
                 put("weatherLocationMode", weatherLocationMode.value)
                 put("weatherCityName", weatherCityName.value)
                 put("weatherTempUnit", weatherTempUnit.value)
+                put("clockStyle", clockStyle.value)
+                put("accentColor", accentColorArgb.value)
+                put("quickLockEnabled", quickLockEnabled.value)
+                put("hapticFeedbackEnabled", hapticFeedbackEnabled.value)
+                put("rotationEnabled", rotationEnabled.value)
+                put("showBatteryPercentage", showBatteryPercentage.value)
             }
             context.contentResolver.openOutputStream(uri)?.use { stream ->
                 stream.write(json.toString(4).toByteArray())
@@ -264,6 +316,12 @@ class LauncherViewModel(
             if (json.has("weatherEnabled")) setWeatherEnabled(json.getBoolean("weatherEnabled"))
             if (json.has("weatherCityName")) setWeatherCityName(json.getString("weatherCityName"))
             if (json.has("homeOffsetY")) updateHomeOffsetY(json.getDouble("homeOffsetY").toFloat())
+            if (json.has("clockStyle")) setClockStyle(json.getString("clockStyle"))
+            if (json.has("accentColor")) setAccentColor(json.getInt("accentColor"))
+            if (json.has("quickLockEnabled")) setQuickLockEnabled(json.getBoolean("quickLockEnabled"))
+            if (json.has("hapticFeedbackEnabled")) setHapticFeedbackEnabled(json.getBoolean("hapticFeedbackEnabled"))
+            if (json.has("rotationEnabled")) setRotationEnabled(json.getBoolean("rotationEnabled"))
+            if (json.has("showBatteryPercentage")) setShowBatteryPercentage(json.getBoolean("showBatteryPercentage"))
 
             true
         } catch (e: Exception) {
