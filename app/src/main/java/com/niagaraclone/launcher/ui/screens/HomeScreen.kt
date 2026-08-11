@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
@@ -554,13 +555,19 @@ fun HomeScreen(
             )
         }
 
+        // --- POP-UP FOLDER WITH FOCUSABLE TOUCH DISMISSAL ---
         activePopUpApp?.let { parentApp ->
             val subApps = remember(parentApp) { viewModel.getFolderSubApps(parentApp.packageName) }
 
             Popup(
                 alignment = Alignment.TopStart,
                 offset = IntOffset(0, (popupYOffset - 120f).coerceAtLeast(0f).roundToInt()),
-                onDismissRequest = { activePopUpApp = null }
+                onDismissRequest = { activePopUpApp = null },
+                properties = PopupProperties(
+                    focusable = true,
+                    dismissOnBackPress = true,
+                    dismissOnClickOutside = true
+                )
             ) {
                 Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
                     PopUpFolderCard(
