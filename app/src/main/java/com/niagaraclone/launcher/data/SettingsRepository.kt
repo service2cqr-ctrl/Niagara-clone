@@ -11,11 +11,12 @@ import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import com.niagaraclone.launcher.services.NotificationSummaryModel
+import com.niagaraclone.launcher.ui.theme.AppTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import org.json.JSONArray
 import org.json.JSONObject
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -28,9 +29,10 @@ data class LiveWeatherModel(
 )
 
 data class CalendarEventModel(
-    val id: Long,
-    val title: String,
-    val startTimeMillis: Long,
+    val id: Long = 0L,
+    val title: String = "",
+    val startTimeMillis: Long = 0L,
+    val endTimeMillis: Long = 0L,
     val isAllDay: Boolean = false
 )
 
@@ -39,6 +41,7 @@ class SettingsRepository(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.IO)
 
     // DataStore Keys
+    private val APP_THEME_KEY = stringPreferencesKey("app_theme")
     private val CLOCK_STYLE_KEY = stringPreferencesKey("clock_style")
     private val ACCENT_COLOR_KEY = intPreferencesKey("accent_color")
     private val HOME_OFFSET_Y_KEY = floatPreferencesKey("home_offset_y")
@@ -64,8 +67,17 @@ class SettingsRepository(private val context: Context) {
     private val ROTATION_ENABLED_KEY = booleanPreferencesKey("rotation_enabled")
     private val CITY_NAME_KEY = stringPreferencesKey("weather_city_name")
     private val LOCATION_MODE_KEY = stringPreferencesKey("weather_location_mode")
+    private val SEARCH_CONTACTS_KEY = booleanPreferencesKey("search_contacts_enabled")
 
     // StateFlow Exposures
+    val appTheme: StateFlow<AppTheme> = context.dataStore.data.map {
+        when (it[APP_THEME_KEY]) {
+            "LIGHT" -> AppTheme.LIGHT
+            "DARK" -> AppTheme.DARK
+            else -> AppTheme.AUTO
+        }
+    }.stateIn(scope, SharingStarted.Eagerly, AppTheme.AUTO)
+
     val clockStyle: StateFlow<String> = context.dataStore.data.map { it[CLOCK_STYLE_KEY] ?: "SPLIT_COLORS" }.stateIn(scope, SharingStarted.Eagerly, "SPLIT_COLORS")
     val accentColorArgb: StateFlow<Int> = context.dataStore.data.map { it[ACCENT_COLOR_KEY] ?: 0xFF4DD0E1.toInt() }.stateIn(scope, SharingStarted.Eagerly, 0xFF4DD0E1.toInt())
     val homeOffsetY: StateFlow<Float> = context.dataStore.data.map { it[HOME_OFFSET_Y_KEY] ?: 0f }.stateIn(scope, SharingStarted.Eagerly, 0f)
@@ -86,6 +98,7 @@ class SettingsRepository(private val context: Context) {
     val showBatteryPercentage: StateFlow<Boolean> = context.dataStore.data.map { it[SHOW_BATTERY_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
     val cascadiaButtonEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[CASCADIA_BTN_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
     val calendarPreviewEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[CALENDAR_PREVIEW_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
+    val searchContactsEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[SEARCH_CONTACTS_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
 
     val fabTapActionType: StateFlow<String> = context.dataStore.data.map { it[FAB_TAP_ACTION_KEY] ?: "PHONE" }.stateIn(scope, SharingStarted.Eagerly, "PHONE")
     val fabTapPackage: StateFlow<String> = context.dataStore.data.map { it[FAB_TAP_PKG_KEY] ?: "" }.stateIn(scope, SharingStarted.Eagerly, "")
@@ -102,7 +115,6 @@ class SettingsRepository(private val context: Context) {
     val weatherCityName: StateFlow<String> = context.dataStore.data.map { it[CITY_NAME_KEY] ?: "Pune" }.stateIn(scope, SharingStarted.Eagerly, "Pune")
     val weatherLocationMode: StateFlow<String> = context.dataStore.data.map { it[LOCATION_MODE_KEY] ?: "GPS" }.stateIn(scope, SharingStarted.Eagerly, "GPS")
 
-    // Dynamic State Flow Values
     private val _batteryStatus = MutableStateFlow("85%")
     val batteryStatus: StateFlow<String> = _batteryStatus.asStateFlow()
 
@@ -156,6 +168,7 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun setAppTheme(theme: AppTheme) { context.dataStore.edit { it[APP_THEME_KEY] = theme.name } }
     suspend fun setClockStyle(style: String) { context.dataStore.edit { it[CLOCK_STYLE_KEY] = style } }
     suspend fun setAccentColorArgb(color: Int) { context.dataStore.edit { it[ACCENT_COLOR_KEY] = color } }
     suspend fun setHomeOffsetY(offset: Float) { context.dataStore.edit { it[HOME_OFFSET_Y_KEY] = offset } }
@@ -169,6 +182,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setShowBatteryPercentage(show: Boolean) { context.dataStore.edit { it[SHOW_BATTERY_KEY] = show } }
     suspend fun setCascadiaButtonEnabled(enabled: Boolean) { context.dataStore.edit { it[CASCADIA_BTN_KEY] = enabled } }
     suspend fun setCalendarPreviewEnabled(enabled: Boolean) { context.dataStore.edit { it[CALENDAR_PREVIEW_KEY] = enabled } }
+    suspend fun setSearchContactsEnabled(enabled: Boolean) { context.dataStore.edit { it[SEARCH_CONTACTS_KEY] = enabled } }
     suspend fun setFabTapAction(actionType: String, pkg: String = "") { context.dataStore.edit { it[FAB_TAP_ACTION_KEY] = actionType; it[FAB_TAP_PKG_KEY] = pkg } }
     suspend fun setFabSwipeAction(actionType: String, pkg: String = "") { context.dataStore.edit { it[FAB_SWIPE_ACTION_KEY] = actionType; it[FAB_SWIPE_PKG_KEY] = pkg } }
 
@@ -208,7 +222,7 @@ class SettingsRepository(private val context: Context) {
                 val events = mutableListOf<CalendarEventModel>()
                 val cursor = context.contentResolver.query(
                     CalendarContract.Events.CONTENT_URI,
-                    arrayOf(CalendarContract.Events._ID, CalendarContract.Events.TITLE, CalendarContract.Events.DTSTART, CalendarContract.Events.ALL_DAY),
+                    arrayOf(CalendarContract.Events._ID, CalendarContract.Events.TITLE, CalendarContract.Events.DTSTART, CalendarContract.Events.DTEND, CalendarContract.Events.ALL_DAY),
                     "${CalendarContract.Events.DTSTART} >= ?",
                     arrayOf(System.currentTimeMillis().toString()),
                     "${CalendarContract.Events.DTSTART} ASC"
@@ -217,6 +231,7 @@ class SettingsRepository(private val context: Context) {
                     val idIdx = it.getColumnIndex(CalendarContract.Events._ID)
                     val titleIdx = it.getColumnIndex(CalendarContract.Events.TITLE)
                     val startIdx = it.getColumnIndex(CalendarContract.Events.DTSTART)
+                    val endIdx = it.getColumnIndex(CalendarContract.Events.DTEND)
                     val allDayIdx = it.getColumnIndex(CalendarContract.Events.ALL_DAY)
 
                     while (it.moveToNext() && events.size < 5) {
@@ -225,6 +240,7 @@ class SettingsRepository(private val context: Context) {
                                 id = it.getLong(idIdx),
                                 title = it.getString(titleIdx) ?: "Event",
                                 startTimeMillis = it.getLong(startIdx),
+                                endTimeMillis = if (endIdx != -1) it.getLong(endIdx) else 0L,
                                 isAllDay = it.getInt(allDayIdx) == 1
                             )
                         )
@@ -247,16 +263,6 @@ class SettingsRepository(private val context: Context) {
         prefs.edit().putStringSet(parentPackage, subPackages).apply()
     }
 
-    fun exportBackupJson(): String {
-        return JSONObject().put("version", 1).toString()
-    }
-
-    fun importBackupJson(jsonStr: String): Boolean {
-        return try {
-            JSONObject(jsonStr)
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
+    fun exportBackupJson(): String = JSONObject().put("version", 1).toString()
+    fun importBackupJson(jsonStr: String): Boolean = try { JSONObject(jsonStr); true } catch (e: Exception) { false }
 }
