@@ -6,18 +6,19 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import com.niagaraclone.launcher.data.AppTheme
+
+enum class AppTheme { LIGHT, DARK, AUTO, SYSTEM }
 
 @Composable
 fun NiagaraCloneTheme(
-    appTheme: AppTheme,
-    accentColor: Color,
+    appTheme: AppTheme = AppTheme.AUTO,
+    accentColor: Color = Color(0xFF4DD0E1),
     content: @Composable () -> Unit
 ) {
     val useDark = when (appTheme) {
         AppTheme.LIGHT -> false
         AppTheme.DARK -> true
-        AppTheme.SYSTEM -> isSystemInDarkTheme()
+        AppTheme.AUTO, AppTheme.SYSTEM -> isSystemInDarkTheme()
     }
 
     val colorScheme = if (useDark) {
