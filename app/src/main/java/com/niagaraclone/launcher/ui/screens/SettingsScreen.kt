@@ -8,12 +8,12 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -23,16 +23,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.MediaWidgetTheme
 import com.niagaraclone.launcher.ui.components.MusicAppSelectionSheet
 import com.niagaraclone.launcher.ui.components.UserGuideSheet
 import com.niagaraclone.launcher.ui.components.WeatherBottomSheet
+import com.niagaraclone.launcher.utils.IconPackManager
 import kotlinx.coroutines.launch
 
 private enum class SettingsPage {
@@ -120,7 +123,7 @@ fun SettingsScreen(
 }
 
 // -----------------------------------------------------------------------------
-// 1. MAIN SETTINGS HOME
+// 1. MAIN SETTINGS HOME (COMMUNITY REMOVED)
 // -----------------------------------------------------------------------------
 @Composable
 private fun MainSettingsContent(
@@ -192,13 +195,6 @@ private fun MainSettingsContent(
             title = "Help & User Guide",
             subtitle = "Learn gestures and launcher shortcuts",
             onClick = onOpenUserGuide
-        )
-
-        SettingsCategoryItem(
-            icon = Icons.Outlined.Public,
-            title = "Community",
-            subtitle = null,
-            onClick = { }
         )
 
         SettingsCategoryItem(
@@ -572,15 +568,22 @@ private fun ProductivitySettingsContent(
 }
 
 // -----------------------------------------------------------------------------
-// 3. THEMES PAGE
+// 3. THEMES PAGE WITH THIRD-PARTY ICON PACK SELECTION (COMMUNITY REMOVED)
 // -----------------------------------------------------------------------------
 @Composable
 private fun ThemesSettingsContent(
     viewModel: LauncherViewModel,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
+    val selectedIconPack by viewModel.selectedIconPack.collectAsState()
+
     var showColorPicker by remember { mutableStateOf(false) }
+    var showIconPackPicker by remember { mutableStateOf(false) }
+
+    val iconPackManager = remember { IconPackManager(context) }
+    val installedIconPacks = remember { iconPackManager.getInstalledIconPacks() }
 
     val colorPresets = listOf(
         0xFF4DD0E1.toInt() to "Teal (Default)",
@@ -606,6 +609,12 @@ private fun ThemesSettingsContent(
             onClick = { showColorPicker = true }
         )
         ClickableSettingRow(
+            icon = Icons.Outlined.GridOn,
+            title = "Icon Pack",
+            subtitle = if (selectedIconPack.isNullOrEmpty()) "Default system icons" else "Custom icon pack active",
+            onClick = { showIconPackPicker = true }
+        )
+        ClickableSettingRow(
             icon = Icons.Outlined.AddCircleOutline,
             title = "Create Theme",
             subtitle = "Build a new theme from scratch",
@@ -629,11 +638,69 @@ private fun ThemesSettingsContent(
             subtitle = "Pick from handcrafted themes with just one tap",
             onClick = { }
         )
-        ClickableSettingRow(
-            icon = Icons.Outlined.FavoriteBorder,
-            title = "Community Themes",
-            subtitle = "Discover themes made by our community",
-            onClick = { }
+    }
+
+    // --- THIRD-PARTY ICON PACK SELECTION DIALOG ---
+    if (showIconPackPicker) {
+        AlertDialog(
+            onDismissRequest = { showIconPackPicker = false },
+            title = { Text("Select Icon Pack", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.setSelectedIconPack(null)
+                                showIconPackPicker = false
+                            }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selectedIconPack.isNullOrEmpty(), onClick = null)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Default System Icons", color = Color.White, fontSize = 16.sp)
+                    }
+
+                    if (installedIconPacks.isEmpty()) {
+                        Text(
+                            "No Play Store icon packs detected on your device.",
+                            color = Color.Gray,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    } else {
+                        installedIconPacks.forEach { pack ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.setSelectedIconPack(pack.packageName)
+                                        showIconPackPicker = false
+                                    }
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(selected = selectedIconPack == pack.packageName, onClick = null)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                pack.icon?.let { iconDrawable ->
+                                    Image(
+                                        bitmap = iconDrawable.toBitmap(width = 36, height = 36).asImageBitmap(),
+                                        contentDescription = pack.label,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                }
+                                Text(pack.label, color = Color.White, fontSize = 16.sp)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showIconPackPicker = false }) { Text("Close", color = Color(0xFF4DD0E1)) }
+            },
+            containerColor = Color.Black
         )
     }
 
