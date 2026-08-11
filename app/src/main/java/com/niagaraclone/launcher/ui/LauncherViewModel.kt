@@ -146,6 +146,13 @@ class LauncherViewModel(
     val showBatteryPercentage: StateFlow<Boolean> = repository.showBatteryPercentage
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = true)
 
+    // --- CASCADIA FAB ACTION PREFERENCE FLOWS ---
+    val fabTapActionType: StateFlow<String> = repository.fabTapActionType
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = "DIAL")
+
+    val fabTapPackage: StateFlow<String?> = repository.fabTapPackage
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = null)
+
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             intent?.let { updateBatteryState(it) }
@@ -169,6 +176,12 @@ class LauncherViewModel(
     fun setHapticFeedbackEnabled(enabled: Boolean) = viewModelScope.launch { repository.setHapticFeedbackEnabled(enabled) }
     fun setRotationEnabled(enabled: Boolean) = viewModelScope.launch { repository.setRotationEnabled(enabled) }
     fun setShowBatteryPercentage(show: Boolean) = viewModelScope.launch { repository.setShowBatteryPercentage(show) }
+
+    fun setFabTapAction(actionType: String, packageName: String? = null) {
+        viewModelScope.launch {
+            repository.setFabTapAction(actionType, packageName)
+        }
+    }
 
     // --- PERSISTENT POP-UP FOLDER MAPPING ---
     fun getFolderSubApps(parentPackage: String): List<AppModel> {
@@ -196,6 +209,31 @@ class LauncherViewModel(
     fun loadCalendarEvents() {
         viewModelScope.launch {
             _upcomingEvents.value = calendarRepository.getUpcomingEvents()
+        }
+    }
+
+    fun launchCalendarNewEvent(context: Context) {
+        try {
+            val intent = Intent(Intent.ACTION_INSERT).apply {
+                data = android.provider.CalendarContract.Events.CONTENT_URI
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun openCalendarEvent(context: Context, eventId: Long) {
+        try {
+            val uri = android.content.ContentUris.withAppendedId(android.provider.CalendarContract.Events.CONTENT_URI, eventId)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                data = uri
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -282,6 +320,8 @@ class LauncherViewModel(
                 put("hapticFeedbackEnabled", hapticFeedbackEnabled.value)
                 put("rotationEnabled", rotationEnabled.value)
                 put("showBatteryPercentage", showBatteryPercentage.value)
+                put("fabTapActionType", fabTapActionType.value)
+                put("fabTapPackage", fabTapPackage.value ?: "")
             }
             context.contentResolver.openOutputStream(uri)?.use { stream ->
                 stream.write(json.toString(4).toByteArray())
@@ -322,6 +362,10 @@ class LauncherViewModel(
             if (json.has("hapticFeedbackEnabled")) setHapticFeedbackEnabled(json.getBoolean("hapticFeedbackEnabled"))
             if (json.has("rotationEnabled")) setRotationEnabled(json.getBoolean("rotationEnabled"))
             if (json.has("showBatteryPercentage")) setShowBatteryPercentage(json.getBoolean("showBatteryPercentage"))
+            if (json.has("fabTapActionType")) {
+                val pkg = if (json.has("fabTapPackage")) json.getString("fabTapPackage").ifEmpty { null } else null
+                setFabTapAction(json.getString("fabTapActionType"), pkg)
+            }
 
             true
         } catch (e: Exception) {
