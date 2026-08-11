@@ -46,9 +46,7 @@ private enum class Page { HOME, WIDGETS, SETTINGS, SEARCH }
 
 class MainActivity : ComponentActivity() {
 
-    private val viewModel: LauncherViewModel by viewModels {
-        LauncherViewModel.Factory(this)
-    }
+    private val viewModel: LauncherViewModel by viewModels()
 
     private lateinit var appWidgetManager: AppWidgetManager
     private lateinit var appWidgetHost: AppWidgetHost
@@ -129,10 +127,9 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
 
         setContent {
-            val theme by viewModel.theme.collectAsState()
             val accentArgb by viewModel.accentColorArgb.collectAsState()
 
-            NiagaraCloneTheme(appTheme = theme, accentColor = Color(accentArgb)) {
+            NiagaraCloneTheme(accentColor = Color(accentArgb)) {
                 var page by remember { mutableStateOf(Page.HOME) }
                 var triggerWidgetMoveEdit by remember { mutableStateOf(false) }
 
@@ -205,7 +202,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        viewModel.refreshApps()
+        viewModel.loadInstalledApps()
         viewModel.checkDefaultLauncherStatus()
         viewModel.refreshPermissions()
         AudioConnectionReceiver.checkAudioConnectionState(this)
