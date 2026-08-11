@@ -20,9 +20,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
@@ -70,8 +70,10 @@ fun WaveSideIndex(
 
         INDEX_ITEMS.indices.forEach { idx ->
             val centerY = itemCenterYMap[idx] ?: run {
-                val fallbackFraction = (idx + 0.5f) / INDEX_ITEMS.size
-                fallbackFraction * containerHeightPx
+                val topPaddingPx = with(density) { 165.dp.toPx() }
+                val bottomPaddingPx = with(density) { 85.dp.toPx() }
+                val availableHeight = (containerHeightPx - topPaddingPx - bottomPaddingPx).coerceAtLeast(1f)
+                topPaddingPx + ((idx + 0.5f) / INDEX_ITEMS.size) * availableHeight
             }
             val dist = abs(yPx - centerY)
             if (dist < minDistance) {
@@ -139,7 +141,6 @@ fun WaveSideIndex(
                 }
             }
     ) {
-        // --- 1. LEFT EDGE TOUCH STRIP ---
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
@@ -148,7 +149,6 @@ fun WaveSideIndex(
                 .pointerInput(Unit) { createEdgePointerInput(true) }
         )
 
-        // --- 2. RIGHT EDGE TOUCH STRIP ---
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
@@ -157,7 +157,6 @@ fun WaveSideIndex(
                 .pointerInput(Unit) { createEdgePointerInput(false) }
         )
 
-        // --- 3. INDEXER ARC RENDER (Niagara Ergonomic Padding) ---
         if (isIndexerVisible || isDragging) {
             val currentY = touchY
 
@@ -213,8 +212,8 @@ fun WaveSideIndex(
                         horizontalArrangement = Arrangement.End,
                         modifier = Modifier
                             .onGloballyPositioned { coords ->
-                                val bounds = coords.boundsInParent()
-                                itemCenterYMap[index] = bounds.top + bounds.height / 2f
+                                val rootY = coords.positionInRoot().y + coords.size.height / 2f
+                                itemCenterYMap[index] = rootY
                             }
                             .graphicsLayer {
                                 translationX = animatedOffset
@@ -248,7 +247,6 @@ fun WaveSideIndex(
             }
         }
 
-        // --- 4. DRAG PREVIEW BADGE ---
         if (isDragging && touchY != null) {
             val currentActiveChar = if (lastSelectedIndex in INDEX_ITEMS.indices) INDEX_ITEMS[lastSelectedIndex] else "⭐"
             val badgeOffsetY = ((touchY ?: 0f) - with(density) { 28.dp.toPx() }).roundToInt()
