@@ -18,9 +18,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,9 +44,17 @@ fun SmartSearchSheet(
     var query by remember { mutableStateOf("") }
     var contacts by remember { mutableStateOf<List<ContactSearchResult>>(emptyList()) }
 
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     val filteredApps = remember(query, apps) {
         if (query.isBlank()) emptyList()
         else apps.filter { it.label.contains(query, ignoreCase = true) }
+    }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboardController?.show()
     }
 
     LaunchedEffect(query) {
@@ -72,7 +83,9 @@ fun SmartSearchSheet(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF4DD0E1)) },
                 textStyle = LocalTextStyle.current.copy(color = Color.White),
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
