@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -30,7 +31,9 @@ import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.MediaWidgetTheme
 import com.niagaraclone.launcher.ui.components.MusicAppSelectionSheet
+import com.niagaraclone.launcher.ui.components.UserGuideSheet
 import com.niagaraclone.launcher.ui.components.WeatherBottomSheet
+import kotlinx.coroutines.launch
 
 private enum class SettingsPage {
     MAIN,
@@ -56,6 +59,7 @@ fun SettingsScreen(
     onMoveWidgetClick: () -> Unit = {}
 ) {
     var currentPage by remember { mutableStateOf(SettingsPage.MAIN) }
+    var showUserGuideSheet by remember { mutableStateOf(false) }
 
     BackHandler {
         if (currentPage == SettingsPage.MAIN) {
@@ -72,6 +76,7 @@ fun SettingsScreen(
         when (currentPage) {
             SettingsPage.MAIN -> MainSettingsContent(
                 onNavigate = { currentPage = it },
+                onOpenUserGuide = { showUserGuideSheet = true },
                 onDismiss = onDismiss
             )
             SettingsPage.PRODUCTIVITY -> ProductivitySettingsContent(
@@ -108,6 +113,10 @@ fun SettingsScreen(
             )
         }
     }
+
+    if (showUserGuideSheet) {
+        UserGuideSheet(onDismiss = { showUserGuideSheet = false })
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -116,6 +125,7 @@ fun SettingsScreen(
 @Composable
 private fun MainSettingsContent(
     onNavigate: (SettingsPage) -> Unit,
+    onOpenUserGuide: () -> Unit,
     onDismiss: () -> Unit
 ) {
     Column(
@@ -179,9 +189,9 @@ private fun MainSettingsContent(
 
         SettingsCategoryItem(
             icon = Icons.Outlined.HelpOutline,
-            title = "Help & Feedback",
-            subtitle = null,
-            onClick = { }
+            title = "Help & User Guide",
+            subtitle = "Learn gestures and launcher shortcuts",
+            onClick = onOpenUserGuide
         )
 
         SettingsCategoryItem(
@@ -212,10 +222,14 @@ private fun ProductivitySettingsContent(
     onMoveWidgetClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
     var showCalendarDialog by remember { mutableStateOf(false) }
     var showPermissionDialog by remember { mutableStateOf(false) }
     var isWeatherSheetOpen by remember { mutableStateOf(false) }
     var showMusicAppSheet by remember { mutableStateOf(false) }
+    var showFolderInfoDialog by remember { mutableStateOf(false) }
+    var showSmartSearchDialog by remember { mutableStateOf(false) }
 
     val rawMediaWidgetEnabled by viewModel.showMediaWidget.collectAsState()
     val selectedMediaTheme by viewModel.mediaWidgetTheme.collectAsState()
@@ -228,6 +242,9 @@ private fun ProductivitySettingsContent(
     val showBatteryPercentage by viewModel.showBatteryPercentage.collectAsState()
     val cascadiaButtonEnabled by viewModel.cascadiaButtonEnabled.collectAsState()
 
+    val calendarPreviewEnabled by viewModel.repository.calendarPreviewEnabled.collectAsState(initial = true)
+    val searchContactsEnabled by viewModel.repository.searchContactsEnabled.collectAsState(initial = true)
+
     var showMediaThemeDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -239,23 +256,30 @@ private fun ProductivitySettingsContent(
         SubPageHeader(title = "Productivity", onBack = onBack)
 
         SectionHeader("Instant Access")
-        ToggleSettingRow("Quick Replies", "Reply right from your home screen", false) {}
-        
+        ToggleSettingRow("Quick Replies", "Reply right from your home screen", true) {}
+
         ClickableSettingRow(
             icon = Icons.Outlined.CalendarMonth,
             title = "Calendar Agenda",
             subtitle = "Open your calendar agenda by tapping the date",
             onClick = { showCalendarDialog = true }
         )
-        ToggleSettingRow("Calendar Preview", "See upcoming events on your home screen", false) {}
-        
+        ToggleSettingRow(
+            title = "Calendar Preview",
+            subtitle = "See upcoming events on your home screen",
+            checked = calendarPreviewEnabled,
+            onCheckedChange = { enabled ->
+                coroutineScope.launch { viewModel.repository.setCalendarPreviewEnabled(enabled) }
+            }
+        )
+
         ClickableSettingRow(
             icon = Icons.Outlined.WbSunny,
             title = "Weather Forecast",
             subtitle = "See the full forecast by tapping the current weather",
             onClick = { isWeatherSheetOpen = true }
         )
-        
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -312,7 +336,7 @@ private fun ProductivitySettingsContent(
             icon = Icons.Outlined.Folder,
             title = "Folders & Pop-ups",
             subtitle = "Group apps to keep your app list tidy",
-            onClick = { }
+            onClick = { showFolderInfoDialog = true }
         )
         ToggleSettingRow("Suggest Often-Used Apps", "Directly access often-used apps from your favorites", false) {}
         ToggleSettingRow("Sort All Apps List By Usage", "Prioritize most-used apps for each letter", false) {}
@@ -322,7 +346,7 @@ private fun ProductivitySettingsContent(
             icon = Icons.Outlined.Search,
             title = "Smart Search",
             subtitle = "Apps, contacts, and web in one place",
-            onClick = { }
+            onClick = { showSmartSearchDialog = true }
         )
 
         SectionHeader("Shortcuts & Gestures")
@@ -383,6 +407,59 @@ private fun ProductivitySettingsContent(
         MusicAppSelectionSheet(
             viewModel = viewModel,
             onDismiss = { showMusicAppSheet = false }
+        )
+    }
+
+    if (showFolderInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { showFolderInfoDialog = false },
+            title = { Text("Folders & Pop-ups", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "Swipe right on any favorite app on your home screen to open its Pop-up folder.",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "You can add sub-apps and launch system shortcuts directly from the pop-up view.",
+                        color = Color.Gray,
+                        fontSize = 13.sp
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showFolderInfoDialog = false }) {
+                    Text("Got it", color = Color(0xFF4DD0E1))
+                }
+            },
+            containerColor = Color(0xFF1E1E1E)
+        )
+    }
+
+    if (showSmartSearchDialog) {
+        AlertDialog(
+            onDismissRequest = { showSmartSearchDialog = false },
+            title = { Text("Smart Search Settings", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    ToggleSettingRow(
+                        title = "Include Contacts",
+                        subtitle = "Search phone contacts and dial directly",
+                        checked = searchContactsEnabled,
+                        onCheckedChange = { enabled ->
+                            coroutineScope.launch { viewModel.repository.setSearchContactsEnabled(enabled) }
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSmartSearchDialog = false }) {
+                    Text("Done", color = Color(0xFF4DD0E1))
+                }
+            },
+            containerColor = Color(0xFF1E1E1E)
         )
     }
 
@@ -474,12 +551,14 @@ private fun ProductivitySettingsContent(
                 Column {
                     Text("Check your plans and upcoming events by tapping the date", color = Color.Gray, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(16.dp))
-                    ToggleSettingRow("Show date", null, false) {}
-                    TextButton(onClick = { }) {
-                        Icon(Icons.Outlined.FilterList, contentDescription = null, tint = Color(0xFF4DD0E1))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Filter events", color = Color(0xFF4DD0E1))
-                    }
+                    ToggleSettingRow(
+                        title = "Show Calendar Preview",
+                        subtitle = "Display next event under date",
+                        checked = calendarPreviewEnabled,
+                        onCheckedChange = { enabled ->
+                            coroutineScope.launch { viewModel.repository.setCalendarPreviewEnabled(enabled) }
+                        }
+                    )
                 }
             },
             confirmButton = {
