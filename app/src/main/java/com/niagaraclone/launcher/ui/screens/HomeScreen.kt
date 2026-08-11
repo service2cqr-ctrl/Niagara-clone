@@ -457,7 +457,7 @@ fun HomeScreen(
             }
         }
 
-        // --- WAVE SIDE INDEXER FOR APP DRAWER WITH NOTIFICATION DOTS & DUAL-EDGE EXCLUSION ---
+        // --- WAVE SIDE INDEXER FOR APP DRAWER WITH DUAL-EDGE TOUCH (LEFT & RIGHT) ---
         WaveSideIndex(
             isIndexerVisible = isIndexerVisible,
             notificationLetters = notificationLetters,
@@ -481,7 +481,7 @@ fun HomeScreen(
                     isIndexerVisible = true
                 }
             },
-            modifier = Modifier.align(Alignment.CenterEnd)
+            modifier = Modifier.fillMaxSize()
         )
 
         // --- CASCADIA FAB BUTTON ---
