@@ -12,6 +12,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import org.json.JSONObject
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "launcher_settings")
 
@@ -56,8 +57,9 @@ class SettingsRepository(private val context: Context) {
         val KEY_CALENDAR_PREVIEW_ENABLED = booleanPreferencesKey("calendar_preview_enabled")
         val KEY_SEARCH_CONTACTS_ENABLED = booleanPreferencesKey("search_contacts_enabled")
 
-        // Third-Party Icon Pack Keys
+        // Third-Party Icon Pack & Per-App Customization Keys
         val KEY_SELECTED_ICON_PACK = stringPreferencesKey("selected_icon_pack")
+        val KEY_CUSTOM_APP_LABELS = stringPreferencesKey("custom_app_labels")
     }
 
     val theme: Flow<AppTheme> = context.dataStore.data.map { prefs ->
@@ -169,6 +171,18 @@ class SettingsRepository(private val context: Context) {
         prefs[KEY_SELECTED_ICON_PACK]
     }
 
+    val customAppLabels: Flow<Map<String, String>> = context.dataStore.data.map { prefs ->
+        val raw = prefs[KEY_CUSTOM_APP_LABELS] ?: "{}"
+        try {
+            val json = JSONObject(raw)
+            val map = mutableMapOf<String, String>()
+            json.keys().forEach { key -> map[key] = json.getString(key) }
+            map
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
     suspend fun setTheme(theme: AppTheme) { context.dataStore.edit { prefs -> prefs[KEY_THEME] = theme.name } }
     suspend fun setAccentColor(colorArgb: Int) { context.dataStore.edit { prefs -> prefs[KEY_ACCENT_COLOR] = colorArgb } }
     suspend fun setFavorites(packages: List<String>) { context.dataStore.edit { prefs -> prefs[KEY_FAVORITES] = packages.joinToString(",") } }
@@ -192,11 +206,18 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setSelectedIconPack(packageName: String?) {
         context.dataStore.edit { prefs ->
-            if (packageName != null) {
-                prefs[KEY_SELECTED_ICON_PACK] = packageName
-            } else {
-                prefs.remove(KEY_SELECTED_ICON_PACK)
-            }
+            if (packageName != null) prefs[KEY_SELECTED_ICON_PACK] = packageName
+            else prefs.remove(KEY_SELECTED_ICON_PACK)
+        }
+    }
+
+    suspend fun setCustomAppLabel(packageName: String, customLabel: String) {
+        context.dataStore.edit { prefs ->
+            val raw = prefs[KEY_CUSTOM_APP_LABELS] ?: "{}"
+            val json = try { JSONObject(raw) } catch (e: Exception) { JSONObject() }
+            if (customLabel.isBlank()) json.remove(packageName)
+            else json.put(packageName, customLabel)
+            prefs[KEY_CUSTOM_APP_LABELS] = json.toString()
         }
     }
 
