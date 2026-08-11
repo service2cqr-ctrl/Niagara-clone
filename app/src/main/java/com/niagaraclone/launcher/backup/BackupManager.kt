@@ -2,71 +2,55 @@ package com.niagaraclone.launcher.backup
 
 import android.content.Context
 import android.net.Uri
+import androidx.datastore.preferences.core.Preferences
 import com.niagaraclone.launcher.data.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.OutputStreamWriter
 
-/**
- * Exports the launcher's settings (theme, accent color, favorites, hidden apps,
- * icon pack, gesture bindings) to a single JSON file the user can save, and
- * restores from that same format later — this is the whole "backup" feature.
- */
 class BackupManager(
     private val context: Context,
-    private val settingsRepository: SettingsRepository
+    private val repository: SettingsRepository
 ) {
 
-    companion object {
-        const val BACKUP_VERSION = 1
-    }
-
-    suspend fun exportToJson(): String = withContext(Dispatchers.IO) {
-        val snapshot = settingsRepository.snapshot()
-        val json = JSONObject()
-        json.put("backupVersion", BACKUP_VERSION)
-        val prefsJson = JSONObject()
-        
-        snapshot.forEach { (key, value) ->
-            prefsJson.put(key.name, value.toString())
-        }
-        
-        json.put("preferences", prefsJson)
-        json.toString(2)
-    }
-
-    suspend fun exportToUri(uri: Uri): Boolean = withContext(Dispatchers.IO) {
+    suspend fun createBackup(uri: Uri): Boolean = withContext(Dispatchers.IO) {
         try {
-            val json = exportToJson()
-            context.contentResolver.openOutputStream(uri)?.use { stream ->
-                OutputStreamWriter(stream).use { it.write(json) }
+            val snapshotMap: Map<Preferences.Key<*>, Any> = repository.snapshot()
+            val jsonObject = JSONObject()
+
+            for ((key, value) in snapshotMap) {
+                jsonObject.put(key.name, value.toString())
+            }
+
+            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                outputStream.write(jsonObject.toString(4).toByteArray())
             }
             true
         } catch (e: Exception) {
+            e.printStackTrace()
             false
         }
     }
 
-    suspend fun importFromUri(uri: Uri): Boolean = withContext(Dispatchers.IO) {
+    suspend fun restoreBackup(uri: Uri): Boolean = withContext(Dispatchers.IO) {
         try {
-            val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                ?: return@withContext false
-            importFromJson(text)
-        } catch (e: Exception) {
-            false
-        }
-    }
+            val jsonString = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {
+                it.readText()
+            } ?: return@withContext false
 
-    suspend fun importFromJson(text: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val json = JSONObject(text)
-            val prefsJson = json.getJSONObject("preferences")
-            val values = mutableMapOf<String, String>()
-            prefsJson.keys().forEach { key -> values[key] = prefsJson.getString(key) }
-            settingsRepository.restore(values)
+            val jsonObject = JSONObject(jsonString)
+            val restoreMap = mutableMapOf<String, String>()
+
+            val keys = jsonObject.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                restoreMap[key] = jsonObject.getString(key)
+            }
+
+            repository.restore(restoreMap)
             true
         } catch (e: Exception) {
+            e.printStackTrace()
             false
         }
     }
