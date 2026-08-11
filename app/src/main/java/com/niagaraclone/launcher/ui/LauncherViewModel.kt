@@ -156,6 +156,12 @@ class LauncherViewModel(
     val fabTapPackage: StateFlow<String?> = repository.fabTapPackage
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = null)
 
+    val fabSwipeActionType: StateFlow<String> = repository.fabSwipeActionType
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = "SEARCH")
+
+    val fabSwipePackage: StateFlow<String?> = repository.fabSwipePackage
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = null)
+
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             intent?.let { updateBatteryState(it) }
@@ -170,9 +176,10 @@ class LauncherViewModel(
         refreshPermissions()
         fetchLiveWeatherForCurrentMode()
         loadSelectedMusicPackages()
+        loadCalendarEvents()
     }
 
-    // --- DISPLAY & GESTURE SETTERS ---
+    // --- SETTERS ---
     fun setClockStyle(style: String) = viewModelScope.launch { repository.setClockStyle(style) }
     fun setAccentColor(colorArgb: Int) = viewModelScope.launch { repository.setAccentColor(colorArgb) }
     fun setQuickLockEnabled(enabled: Boolean) = viewModelScope.launch { repository.setQuickLockEnabled(enabled) }
@@ -182,26 +189,21 @@ class LauncherViewModel(
     fun setCascadiaButtonEnabled(enabled: Boolean) = viewModelScope.launch { repository.setCascadiaButtonEnabled(enabled) }
 
     fun setFabTapAction(actionType: String, packageName: String? = null) {
-        viewModelScope.launch {
-            repository.setFabTapAction(actionType, packageName)
-        }
+        viewModelScope.launch { repository.setFabTapAction(actionType, packageName) }
     }
 
-    // --- PERSISTENT POP-UP FOLDER MAPPING ---
+    fun setFabSwipeAction(actionType: String, packageName: String? = null) {
+        viewModelScope.launch { repository.setFabSwipeAction(actionType, packageName) }
+    }
+
+    // --- POP-UP FOLDER MANAGERS ---
     fun getFolderSubApps(parentPackage: String): List<AppModel> {
         val savedPackages = prefs.getStringSet("folder_sub_apps_$parentPackage", null)
         return if (!savedPackages.isNullOrEmpty()) {
             _apps.value.filter { savedPackages.contains(it.packageName) }
         } else {
             val visible = _apps.value.filter { !_hiddenPackages.value.contains(it.packageName) }
-            val parentApp = visible.firstOrNull { it.packageName == parentPackage }
-            val categoryMatch = if (parentApp != null) {
-                visible.filter {
-                    it.packageName != parentPackage && it.label.take(3).equals(parentApp.label.take(3), ignoreCase = true)
-                }
-            } else emptyList()
-
-            if (categoryMatch.isNotEmpty()) categoryMatch.take(4) else visible.filter { it.packageName != parentPackage }.take(4)
+            visible.filter { it.packageName != parentPackage }.take(4)
         }
     }
 
@@ -280,7 +282,6 @@ class LauncherViewModel(
         }
     }
 
-    // --- REAL WEB SEARCH EXECUTOR ---
     fun launchWebSearch(context: Context, query: String) {
         try {
             val searchUrl = "https://www.google.com/search?q=${Uri.encode(query)}"
@@ -293,7 +294,6 @@ class LauncherViewModel(
         }
     }
 
-    // --- HIDDEN APPS MANAGEMENT ---
     private fun loadHiddenPackages() {
         val saved = prefs.getStringSet("hidden_packages", emptySet()) ?: emptySet()
         _hiddenPackages.value = saved
@@ -306,7 +306,6 @@ class LauncherViewModel(
         prefs.edit().putStringSet("hidden_packages", current).apply()
     }
 
-    // --- BACKUP & RESTORE LOGIC ---
     fun exportBackupJson(context: Context, uri: Uri): Boolean {
         return try {
             val json = JSONObject().apply {
@@ -327,6 +326,8 @@ class LauncherViewModel(
                 put("cascadiaButtonEnabled", cascadiaButtonEnabled.value)
                 put("fabTapActionType", fabTapActionType.value)
                 put("fabTapPackage", fabTapPackage.value ?: "")
+                put("fabSwipeActionType", fabSwipeActionType.value)
+                put("fabSwipePackage", fabSwipePackage.value ?: "")
             }
             context.contentResolver.openOutputStream(uri)?.use { stream ->
                 stream.write(json.toString(4).toByteArray())
@@ -372,6 +373,10 @@ class LauncherViewModel(
                 val pkg = if (json.has("fabTapPackage")) json.getString("fabTapPackage").ifEmpty { null } else null
                 setFabTapAction(json.getString("fabTapActionType"), pkg)
             }
+            if (json.has("fabSwipeActionType")) {
+                val pkg = if (json.has("fabSwipePackage")) json.getString("fabSwipePackage").ifEmpty { null } else null
+                setFabSwipeAction(json.getString("fabSwipeActionType"), pkg)
+            }
 
             true
         } catch (e: Exception) {
@@ -380,7 +385,6 @@ class LauncherViewModel(
         }
     }
 
-    // --- MUSIC APP MANAGEMENT ---
     private fun loadSelectedMusicPackages() {
         val saved = prefs.getStringSet("selected_music_packages", setOf("com.spotify.music", "com.google.android.apps.youtube.music")) ?: emptySet()
         _selectedMusicPackages.value = saved
@@ -388,11 +392,7 @@ class LauncherViewModel(
 
     fun toggleMusicPackage(packageName: String) {
         val current = _selectedMusicPackages.value.toMutableSet()
-        if (current.contains(packageName)) {
-            current.remove(packageName)
-        } else {
-            current.add(packageName)
-        }
+        if (current.contains(packageName)) current.remove(packageName) else current.add(packageName)
         _selectedMusicPackages.value = current
         prefs.edit().putStringSet("selected_music_packages", current).apply()
     }
