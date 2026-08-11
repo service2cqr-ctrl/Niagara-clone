@@ -30,8 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import com.niagaraclone.launcher.data.MediaWidgetTheme
 import com.niagaraclone.launcher.ui.LauncherViewModel
-import com.niagaraclone.launcher.ui.components.MediaWidgetTheme
 import com.niagaraclone.launcher.ui.components.MusicAppSelectionSheet
 import com.niagaraclone.launcher.ui.components.UserGuideSheet
 import com.niagaraclone.launcher.ui.components.WeatherBottomSheet
@@ -290,6 +290,8 @@ private fun ProductivitySettingsContent(
                         MediaWidgetTheme.FROSTED_GLASS -> "Frosted Glass"
                         MediaWidgetTheme.DARK -> "Dark"
                         MediaWidgetTheme.LIGHT -> "Light"
+                        MediaWidgetTheme.MATCH_ACCENT -> "Match Accent"
+                        MediaWidgetTheme.ALBUM_ART -> "Album Art"
                     }}",
                     fontSize = 12.sp,
                     color = Color.Gray
@@ -465,7 +467,7 @@ private fun ProductivitySettingsContent(
             title = { Text("Media Player Theme", color = Color.White) },
             text = {
                 Column {
-                    MediaWidgetTheme.values().forEach { theme ->
+                    MediaWidgetTheme.entries.forEach { theme ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -493,6 +495,8 @@ private fun ProductivitySettingsContent(
                                     MediaWidgetTheme.FROSTED_GLASS -> "Frosted Glass"
                                     MediaWidgetTheme.DARK -> "Dark"
                                     MediaWidgetTheme.LIGHT -> "Light"
+                                    MediaWidgetTheme.MATCH_ACCENT -> "Match Accent"
+                                    MediaWidgetTheme.ALBUM_ART -> "Album Art"
                                 },
                                 color = Color.White,
                                 fontSize = 16.sp
