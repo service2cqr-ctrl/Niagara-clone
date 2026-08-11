@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.outlined.Shortcut
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +35,10 @@ fun PopUpFolderCard(
 ) {
     val context = LocalContext.current
     var showEditDialog by remember { mutableStateOf(false) }
+
+    val shortcuts = remember(parentPackage) {
+        viewModel.getAppShortcuts(parentPackage)
+    }
 
     Surface(
         shape = RoundedCornerShape(20.dp),
@@ -78,14 +83,8 @@ fun PopUpFolderCard(
                 }
             }
 
-            if (subApps.isEmpty()) {
-                Text(
-                    text = "Tap + to add sub-apps",
-                    color = Color.Gray,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            } else {
+            // --- SUB-APPS SECTION ---
+            if (subApps.isNotEmpty()) {
                 subApps.forEach { app ->
                     Row(
                         modifier = Modifier
@@ -96,20 +95,82 @@ fun PopUpFolderCard(
                                 intent?.let { context.startActivity(it) }
                                 onDismiss()
                             }
-                            .padding(vertical = 10.dp),
+                            .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         app.icon?.let { iconDrawable ->
                             Image(
                                 bitmap = iconDrawable.toBitmap(width = 36, height = 36).asImageBitmap(),
                                 contentDescription = app.label,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(26.dp)
                             )
-                            Spacer(modifier = Modifier.width(16.dp))
+                            Spacer(modifier = Modifier.width(14.dp))
                         }
                         Text(text = app.label, color = Color.White, fontSize = 15.sp)
                     }
                 }
+            }
+
+            // --- APP SHORTCUTS SECTION ---
+            if (shortcuts.isNotEmpty()) {
+                if (subApps.isNotEmpty()) {
+                    HorizontalDivider(
+                        color = Color.White.copy(alpha = 0.1f),
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+
+                Text(
+                    text = "Shortcuts",
+                    color = Color(0xFF4DD0E1),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+
+                shortcuts.forEach { shortcut ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.launchAppShortcut(shortcut.shortcutInfo)
+                                onDismiss()
+                            }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        shortcut.icon?.let { iconDrawable ->
+                            Image(
+                                bitmap = iconDrawable.toBitmap(width = 36, height = 36).asImageBitmap(),
+                                contentDescription = shortcut.label,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(14.dp))
+                        } ?: run {
+                            Icon(
+                                imageVector = Icons.Outlined.Shortcut,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                        }
+                        Text(
+                            text = shortcut.label,
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+
+            if (subApps.isEmpty() && shortcuts.isEmpty()) {
+                Text(
+                    text = "Tap + to add sub-apps",
+                    color = Color.Gray,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
             }
         }
     }
