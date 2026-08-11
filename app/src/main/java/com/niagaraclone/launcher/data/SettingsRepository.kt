@@ -49,6 +49,8 @@ class SettingsRepository(private val context: Context) {
         val KEY_CASCADIA_BUTTON_ENABLED = booleanPreferencesKey("cascadia_button_enabled")
         val KEY_FAB_TAP_ACTION_TYPE = stringPreferencesKey("fab_tap_action_type")
         val KEY_FAB_TAP_PACKAGE = stringPreferencesKey("fab_tap_package")
+        val KEY_FAB_SWIPE_ACTION_TYPE = stringPreferencesKey("fab_swipe_action_type")
+        val KEY_FAB_SWIPE_PACKAGE = stringPreferencesKey("fab_swipe_package")
     }
 
     val theme: Flow<AppTheme> = context.dataStore.data.map { prefs ->
@@ -140,6 +142,14 @@ class SettingsRepository(private val context: Context) {
         prefs[KEY_FAB_TAP_PACKAGE]
     }
 
+    val fabSwipeActionType: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_FAB_SWIPE_ACTION_TYPE] ?: "SEARCH"
+    }
+
+    val fabSwipePackage: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[KEY_FAB_SWIPE_PACKAGE]
+    }
+
     suspend fun setTheme(theme: AppTheme) { context.dataStore.edit { prefs -> prefs[KEY_THEME] = theme.name } }
     suspend fun setAccentColor(colorArgb: Int) { context.dataStore.edit { prefs -> prefs[KEY_ACCENT_COLOR] = colorArgb } }
     suspend fun setFavorites(packages: List<String>) { context.dataStore.edit { prefs -> prefs[KEY_FAVORITES] = packages.joinToString(",") } }
@@ -157,19 +167,19 @@ class SettingsRepository(private val context: Context) {
     suspend fun setHapticFeedbackEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_HAPTIC_FEEDBACK_ENABLED] = enabled } }
     suspend fun setRotationEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_ROTATION_ENABLED] = enabled } }
     suspend fun setShowBatteryPercentage(show: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_SHOW_BATTERY_PERCENTAGE] = show } }
-
-    suspend fun setCascadiaButtonEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs -> prefs[KEY_CASCADIA_BUTTON_ENABLED] = enabled }
-    }
+    suspend fun setCascadiaButtonEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_CASCADIA_BUTTON_ENABLED] = enabled } }
 
     suspend fun setFabTapAction(actionType: String, packageName: String? = null) {
         context.dataStore.edit { prefs ->
             prefs[KEY_FAB_TAP_ACTION_TYPE] = actionType
-            if (packageName != null) {
-                prefs[KEY_FAB_TAP_PACKAGE] = packageName
-            } else {
-                prefs.remove(KEY_FAB_TAP_PACKAGE)
-            }
+            if (packageName != null) prefs[KEY_FAB_TAP_PACKAGE] = packageName else prefs.remove(KEY_FAB_TAP_PACKAGE)
+        }
+    }
+
+    suspend fun setFabSwipeAction(actionType: String, packageName: String? = null) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_FAB_SWIPE_ACTION_TYPE] = actionType
+            if (packageName != null) prefs[KEY_FAB_SWIPE_PACKAGE] = packageName else prefs.remove(KEY_FAB_SWIPE_PACKAGE)
         }
     }
 
