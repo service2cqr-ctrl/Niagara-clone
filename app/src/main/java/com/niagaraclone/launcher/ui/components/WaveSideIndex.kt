@@ -2,7 +2,6 @@ package com.niagaraclone.launcher.ui.components
 
 import android.graphics.Rect
 import android.os.Build
-import android.view.View
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -66,20 +65,26 @@ fun WaveSideIndex(
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .width(40.dp)
+            .width(44.dp)
             .onGloballyPositioned { coordinates ->
                 containerHeightPx = coordinates.size.height.toFloat()
 
-                // Intercept Android System Back Gestures along Indexer Bounds
+                // Exclude system back gesture zones on both left & right edges for Android 10+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     val bounds = coordinates.boundsInWindow()
-                    val rect = Rect(
+                    val rightRect = Rect(
                         bounds.left.toInt(),
                         bounds.top.toInt(),
                         bounds.right.toInt(),
                         bounds.bottom.toInt()
                     )
-                    hostView.systemGestureExclusionRects = listOf(rect)
+                    val leftRect = Rect(
+                        0,
+                        bounds.top.toInt(),
+                        with(density) { 44.dp.toPx() }.toInt(),
+                        bounds.bottom.toInt()
+                    )
+                    hostView.systemGestureExclusionRects = listOf(leftRect, rightRect)
                 }
             }
             .pointerInput(Unit) {
