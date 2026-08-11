@@ -1,5 +1,8 @@
 package com.niagaraclone.launcher.ui.components
 
+import android.graphics.Rect
+import android.os.Build
+import android.view.View
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -18,9 +21,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -46,6 +51,7 @@ fun WaveSideIndex(
 ) {
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
+    val hostView = LocalView.current
 
     var containerHeightPx by remember { mutableFloatStateOf(1f) }
 
@@ -60,9 +66,21 @@ fun WaveSideIndex(
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .width(40.dp) // Restricted touch strip to preserve home screen interaction
+            .width(40.dp)
             .onGloballyPositioned { coordinates ->
                 containerHeightPx = coordinates.size.height.toFloat()
+
+                // Intercept Android System Back Gestures along Indexer Bounds
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val bounds = coordinates.boundsInWindow()
+                    val rect = Rect(
+                        bounds.left.toInt(),
+                        bounds.top.toInt(),
+                        bounds.right.toInt(),
+                        bounds.bottom.toInt()
+                    )
+                    hostView.systemGestureExclusionRects = listOf(rect)
+                }
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -137,7 +155,6 @@ fun WaveSideIndex(
                     val itemCenterY = itemCenterYMap[index] ?: 0f
                     val distance = if (currentY != null) abs(currentY - itemCenterY) else Float.MAX_VALUE
 
-                    // Smooth Raised Cosine Wave Physics: cos^2(pi * d / (2 * R))
                     val influenceRadiusPx = with(density) { 180.dp.toPx() }
                     val circularArcFactor = if (distance < influenceRadiusPx) {
                         val cosVal = cos((PI.toFloat() * distance) / (2f * influenceRadiusPx))
@@ -146,7 +163,6 @@ fun WaveSideIndex(
                         0f
                     }
 
-                    // Horizontal displacement tracking leftward pull
                     val pullDistancePx = (dragStartX - touchX).coerceAtLeast(0f)
                     val maxLimitPx = with(density) { 200.dp.toPx() }
                     val actualMaxDisplacement = pullDistancePx.coerceIn(with(density) { 36.dp.toPx() }, maxLimitPx)
@@ -183,7 +199,6 @@ fun WaveSideIndex(
                                 scaleY = animatedScale
                             }
                     ) {
-                        // Dynamic Notification Dot directly on indexer
                         if (hasNotification) {
                             Box(
                                 modifier = Modifier
@@ -210,7 +225,6 @@ fun WaveSideIndex(
             }
         }
 
-        // Active letter circle preview badge tracking touch height
         if (isDragging && touchY != null) {
             val currentActiveChar = if (lastSelectedIndex in INDEX_ITEMS.indices) INDEX_ITEMS[lastSelectedIndex] else "⭐"
             val badgeOffsetY = ((touchY ?: 0f) - with(density) { 28.dp.toPx() }).roundToInt()
