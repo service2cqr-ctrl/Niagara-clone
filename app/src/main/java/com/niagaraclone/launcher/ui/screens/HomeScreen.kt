@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Phone
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -151,6 +153,7 @@ fun HomeScreen(
     var isSwipeActionEdit by remember { mutableStateOf(false) }
     var showRecentlyInstalledDialog by remember { mutableStateOf(false) }
     var isWidgetMenuOpen by remember { mutableStateOf(false) }
+    var isMovingHeader by remember { mutableStateOf(false) }
 
     var selectedAppForCustomization by remember { mutableStateOf<AppModel?>(null) }
     var selectedAppForCategory by remember { mutableStateOf<AppModel?>(null) }
@@ -176,6 +179,7 @@ fun HomeScreen(
     val isAnyOverlayActive = isDrawerExpanded ||
             activePopUpApp != null ||
             isWidgetMenuOpen ||
+            isMovingHeader ||
             showSmartSearchSheet ||
             showAgendaSheet ||
             showFabMenuSheet ||
@@ -205,6 +209,7 @@ fun HomeScreen(
             editingFolderApp != null -> editingFolderApp = null
             activePopUpApp != null -> activePopUpApp = null
             isWidgetMenuOpen -> isWidgetMenuOpen = false
+            isMovingHeader -> isMovingHeader = false
             showSmartSearchSheet -> showSmartSearchSheet = false
             showAgendaSheet -> showAgendaSheet = false
             showFabEditActionSheet -> showFabEditActionSheet = false
@@ -375,11 +380,45 @@ fun HomeScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .pointerInput(isMovingHeader) {
+                                if (isMovingHeader) {
+                                    detectDragGestures { change, dragAmount ->
+                                        change.consume()
+                                        val newOffset = (homeLayoutOffsetY + dragAmount.y / 2f).coerceIn(0f, 300f)
+                                        viewModel.setHomeOffsetY(newOffset)
+                                    }
+                                }
+                            }
                             .combinedClickable(
                                 onClick = { openClockApp() },
                                 onLongClick = { isWidgetMenuOpen = true }
                             )
                     ) {
+                        // --- HEADER MOVE POSITION OVERLAY INDICATOR ---
+                        if (isMovingHeader) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = accentColor.copy(alpha = 0.9f),
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Drag vertically to position", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    IconButton(
+                                        onClick = { isMovingHeader = false },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(Icons.Default.Check, contentDescription = "Done", tint = Color.Black)
+                                    }
+                                }
+                            }
+                        }
+
                         ClockHeaderDisplay(
                             clockStyle = clockStyle,
                             timeHours = timeHours,
@@ -625,6 +664,9 @@ fun HomeScreen(
             WidgetMenuSheet(
                 viewModel = viewModel,
                 onAddWidgetClick = onAddWidgetClick,
+                onMoveWidgetClick = {
+                    isMovingHeader = true
+                },
                 onOpenSettings = onOpenSettings,
                 onOpenEditFavorites = {
                     isDrawerExpanded = true
