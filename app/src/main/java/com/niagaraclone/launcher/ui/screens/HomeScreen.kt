@@ -499,7 +499,7 @@ fun HomeScreen(
                     if (widgetIds.isNotEmpty()) {
                         WidgetStackView(
                             widgetIds = widgetIds.toList(),
-                            widgetHeightDp = widgetHeight,
+                            widgetHeightDp = widgetHeight.toFloat(),
                             appWidgetHost = appWidgetHost,
                             appWidgetManager = appWidgetManager,
                             onRemoveWidget = { viewModel.removeWidgetId(it) },
