@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.boundsInWindow
@@ -58,99 +59,111 @@ fun WaveSideIndex(
     var touchY by remember { mutableStateOf<Float?>(null) }
     var touchX by remember { mutableFloatStateOf(0f) }
     var dragStartX by remember { mutableFloatStateOf(0f) }
+    var activeEdgeIsLeft by remember { mutableStateOf(false) }
     var lastSelectedIndex by remember { mutableIntStateOf(-1) }
 
     val itemCenterYMap = remember { mutableStateMapOf<Int, Float>() }
 
+    fun updateSelection(yPx: Float) {
+        var closestIdx = 0
+        var minDistance = Float.MAX_VALUE
+
+        INDEX_ITEMS.indices.forEach { idx ->
+            val centerY = itemCenterYMap[idx] ?: run {
+                val fallbackFraction = (idx + 0.5f) / INDEX_ITEMS.size
+                fallbackFraction * containerHeightPx
+            }
+            val dist = abs(yPx - centerY)
+            if (dist < minDistance) {
+                minDistance = dist
+                closestIdx = idx
+            }
+        }
+
+        if (closestIdx != lastSelectedIndex) {
+            lastSelectedIndex = closestIdx
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onCharSelected(INDEX_ITEMS[closestIdx])
+        }
+    }
+
+    val createEdgePointerInput: suspend PointerInputScope.(Boolean) -> Unit = { isLeft ->
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            isDragging = true
+            activeEdgeIsLeft = isLeft
+            dragStartX = down.position.x
+            touchX = down.position.x
+            touchY = down.position.y.coerceIn(0f, containerHeightPx)
+
+            onTouchStart()
+            updateSelection(down.position.y)
+
+            do {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull() ?: break
+                if (change.pressed) {
+                    change.consume()
+                    touchX = change.position.x
+                    touchY = change.position.y.coerceIn(0f, containerHeightPx)
+                    updateSelection(change.position.y)
+                }
+            } while (event.changes.any { it.pressed })
+
+            val finalChar = if (lastSelectedIndex in INDEX_ITEMS.indices) {
+                INDEX_ITEMS[lastSelectedIndex]
+            } else {
+                "⭐"
+            }
+            isDragging = false
+            touchY = null
+            lastSelectedIndex = -1
+            onDragEnd(finalChar)
+        }
+    }
+
     Box(
         modifier = modifier
-            .fillMaxHeight()
-            .width(44.dp)
+            .fillMaxSize()
             .onGloballyPositioned { coordinates ->
                 containerHeightPx = coordinates.size.height.toFloat()
 
-                // Exclude system back gesture zones on both left & right edges for Android 10+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     val bounds = coordinates.boundsInWindow()
-                    val rightRect = Rect(
-                        bounds.left.toInt(),
-                        bounds.top.toInt(),
-                        bounds.right.toInt(),
-                        bounds.bottom.toInt()
-                    )
-                    val leftRect = Rect(
-                        0,
-                        bounds.top.toInt(),
-                        with(density) { 44.dp.toPx() }.toInt(),
-                        bounds.bottom.toInt()
-                    )
+                    val stripWidthPx = with(density) { 44.dp.toPx() }.toInt()
+
+                    val leftRect = Rect(0, bounds.top.toInt(), stripWidthPx, bounds.bottom.toInt())
+                    val rightRect = Rect((bounds.right - stripWidthPx).toInt(), bounds.top.toInt(), bounds.right.toInt(), bounds.bottom.toInt())
+
                     hostView.systemGestureExclusionRects = listOf(leftRect, rightRect)
                 }
             }
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    isDragging = true
-                    dragStartX = down.position.x
-                    touchX = down.position.x
-                    touchY = down.position.y.coerceIn(0f, containerHeightPx)
-
-                    onTouchStart()
-
-                    fun updateSelection(yPx: Float) {
-                        var closestIdx = 0
-                        var minDistance = Float.MAX_VALUE
-
-                        INDEX_ITEMS.indices.forEach { idx ->
-                            val centerY = itemCenterYMap[idx] ?: run {
-                                val fallbackFraction = (idx + 0.5f) / INDEX_ITEMS.size
-                                fallbackFraction * containerHeightPx
-                            }
-                            val dist = abs(yPx - centerY)
-                            if (dist < minDistance) {
-                                minDistance = dist
-                                closestIdx = idx
-                            }
-                        }
-
-                        if (closestIdx != lastSelectedIndex) {
-                            lastSelectedIndex = closestIdx
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onCharSelected(INDEX_ITEMS[closestIdx])
-                        }
-                    }
-
-                    updateSelection(down.position.y)
-
-                    do {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull() ?: break
-                        if (change.pressed) {
-                            change.consume()
-                            touchX = change.position.x
-                            touchY = change.position.y.coerceIn(0f, containerHeightPx)
-                            updateSelection(change.position.y)
-                        }
-                    } while (event.changes.any { it.pressed })
-
-                    val finalChar = if (lastSelectedIndex in INDEX_ITEMS.indices) {
-                        INDEX_ITEMS[lastSelectedIndex]
-                    } else {
-                        "⭐"
-                    }
-                    isDragging = false
-                    touchY = null
-                    lastSelectedIndex = -1
-                    onDragEnd(finalChar)
-                }
-            },
-        contentAlignment = Alignment.CenterEnd
     ) {
+        // --- 1. LEFT EDGE TOUCH STRIP ---
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .fillMaxHeight()
+                .width(44.dp)
+                .pointerInput(Unit) { createEdgePointerInput(true) }
+        )
+
+        // --- 2. RIGHT EDGE TOUCH STRIP ---
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .width(44.dp)
+                .pointerInput(Unit) { createEdgePointerInput(false) }
+        )
+
+        // --- 3. INDEXER ARC RENDER (Anchored Right) ---
         if (isIndexerVisible || isDragging) {
             val currentY = touchY
 
             Column(
                 modifier = Modifier
+                    .align(Alignment.CenterEnd)
                     .fillMaxHeight()
                     .padding(top = 90.dp, bottom = 40.dp, end = 12.dp),
                 verticalArrangement = Arrangement.SpaceEvenly,
@@ -168,7 +181,12 @@ fun WaveSideIndex(
                         0f
                     }
 
-                    val pullDistancePx = (dragStartX - touchX).coerceAtLeast(0f)
+                    val pullDistancePx = if (activeEdgeIsLeft) {
+                        (touchX - dragStartX).coerceAtLeast(0f)
+                    } else {
+                        (dragStartX - touchX).coerceAtLeast(0f)
+                    }
+
                     val maxLimitPx = with(density) { 200.dp.toPx() }
                     val actualMaxDisplacement = pullDistancePx.coerceIn(with(density) { 36.dp.toPx() }, maxLimitPx)
 
@@ -230,11 +248,16 @@ fun WaveSideIndex(
             }
         }
 
+        // --- 4. DRAG PREVIEW BADGE ---
         if (isDragging && touchY != null) {
             val currentActiveChar = if (lastSelectedIndex in INDEX_ITEMS.indices) INDEX_ITEMS[lastSelectedIndex] else "⭐"
             val badgeOffsetY = ((touchY ?: 0f) - with(density) { 28.dp.toPx() }).roundToInt()
 
-            val pullDistancePx = (dragStartX - touchX).coerceAtLeast(0f)
+            val pullDistancePx = if (activeEdgeIsLeft) {
+                (touchX - dragStartX).coerceAtLeast(0f)
+            } else {
+                (dragStartX - touchX).coerceAtLeast(0f)
+            }
             val maxLimitPx = with(density) { 200.dp.toPx() }
             val apexXDisplacement = pullDistancePx.coerceIn(with(density) { 36.dp.toPx() }, maxLimitPx)
 
