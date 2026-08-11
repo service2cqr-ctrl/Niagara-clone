@@ -51,6 +51,10 @@ class SettingsRepository(private val context: Context) {
         val KEY_FAB_TAP_PACKAGE = stringPreferencesKey("fab_tap_package")
         val KEY_FAB_SWIPE_ACTION_TYPE = stringPreferencesKey("fab_swipe_action_type")
         val KEY_FAB_SWIPE_PACKAGE = stringPreferencesKey("fab_swipe_package")
+
+        // Productivity & Search Preference Keys
+        val KEY_CALENDAR_PREVIEW_ENABLED = booleanPreferencesKey("calendar_preview_enabled")
+        val KEY_SEARCH_CONTACTS_ENABLED = booleanPreferencesKey("search_contacts_enabled")
     }
 
     val theme: Flow<AppTheme> = context.dataStore.data.map { prefs ->
@@ -150,6 +154,14 @@ class SettingsRepository(private val context: Context) {
         prefs[KEY_FAB_SWIPE_PACKAGE]
     }
 
+    val calendarPreviewEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_CALENDAR_PREVIEW_ENABLED] ?: true
+    }
+
+    val searchContactsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SEARCH_CONTACTS_ENABLED] ?: true
+    }
+
     suspend fun setTheme(theme: AppTheme) { context.dataStore.edit { prefs -> prefs[KEY_THEME] = theme.name } }
     suspend fun setAccentColor(colorArgb: Int) { context.dataStore.edit { prefs -> prefs[KEY_ACCENT_COLOR] = colorArgb } }
     suspend fun setFavorites(packages: List<String>) { context.dataStore.edit { prefs -> prefs[KEY_FAVORITES] = packages.joinToString(",") } }
@@ -168,6 +180,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setRotationEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_ROTATION_ENABLED] = enabled } }
     suspend fun setShowBatteryPercentage(show: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_SHOW_BATTERY_PERCENTAGE] = show } }
     suspend fun setCascadiaButtonEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_CASCADIA_BUTTON_ENABLED] = enabled } }
+    suspend fun setCalendarPreviewEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_CALENDAR_PREVIEW_ENABLED] = enabled } }
+    suspend fun setSearchContactsEnabled(enabled: Boolean) { context.dataStore.edit { prefs -> prefs[KEY_SEARCH_CONTACTS_ENABLED] = enabled } }
 
     suspend fun setFabTapAction(actionType: String, packageName: String? = null) {
         context.dataStore.edit { prefs ->
