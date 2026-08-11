@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
     val repository = SettingsRepository(application)
-    private val backupManager = BackupManager(application)
+    private val backupManager = BackupManager(application, repository)
 
     private val _apps = MutableStateFlow<List<AppModel>>(emptyList())
     val apps: StateFlow<List<AppModel>> = _apps.asStateFlow()
@@ -157,9 +157,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setAppTheme(theme: AppTheme) { viewModelScope.launch { repository.setAppTheme(theme) } }
-    fun toggleFavorite(packageName: String) { viewModelScope.launch { repository.toggleFavorite(packageName) } }
-    fun toggleHidePackage(packageName: String) { viewModelScope.launch { repository.toggleHidePackage(packageName) } }
-    fun toggleMusicPackage(packageName: String) { viewModelScope.launch { repository.toggleMusicPackage(packageName) } }
+    fun toggleFavorite(packageName: String = "") { if (packageName.isNotEmpty()) viewModelScope.launch { repository.toggleFavorite(packageName) } }
+    fun toggleHidePackage(packageName: String = "") { if (packageName.isNotEmpty()) viewModelScope.launch { repository.toggleHidePackage(packageName) } }
+    fun toggleMusicPackage(packageName: String = "") { if (packageName.isNotEmpty()) viewModelScope.launch { repository.toggleMusicPackage(packageName) } }
     fun setClockStyle(style: String) { viewModelScope.launch { repository.setClockStyle(style) } }
     fun setAccentColorArgb(color: Int) { viewModelScope.launch { repository.setAccentColorArgb(color) } }
     fun setAccentColor(color: Int) { setAccentColorArgb(color) }
