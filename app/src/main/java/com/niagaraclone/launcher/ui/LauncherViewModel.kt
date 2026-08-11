@@ -266,8 +266,7 @@ class LauncherViewModel(
         return if (!savedPackages.isNullOrEmpty()) {
             _apps.value.filter { savedPackages.contains(it.packageName) }
         } else {
-            val visible = _apps.value.filter { !_hiddenPackages.value.contains(it.packageName) }
-            visible.filter { it.packageName != parentPackage }.take(4)
+            emptyList()
         }
     }
 
