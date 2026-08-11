@@ -1,12 +1,12 @@
 package com.niagaraclone.launcher.ui.screens
 
 import android.Manifest
-import android.app.AlarmClock
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.provider.AlarmClock
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -133,7 +133,7 @@ fun HomeScreen(
     val showBatteryPercentage by viewModel.showBatteryPercentage.collectAsState()
     val cascadiaButtonEnabled by viewModel.cascadiaButtonEnabled.collectAsState()
 
-    val calendarPreviewEnabled by viewModel.repository.calendarPreviewEnabled.collectAsState(initial = true)
+    val calendarPreviewEnabled by viewModel.repository.calendarPreviewEnabled.collectAsState()
 
     val fabTapActionType by viewModel.fabTapActionType.collectAsState()
     val fabTapPackage by viewModel.fabTapPackage.collectAsState()
@@ -394,7 +394,6 @@ fun HomeScreen(
                                 onLongClick = { isWidgetMenuOpen = true }
                             )
                     ) {
-                        // --- HEADER MOVE POSITION OVERLAY INDICATOR ---
                         if (isMovingHeader) {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
@@ -407,7 +406,7 @@ fun HomeScreen(
                                 ) {
                                     Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Drag vertically to position", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(text = "Drag vertically to position", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.width(12.dp))
                                     IconButton(
                                         onClick = { isMovingHeader = false },
@@ -659,18 +658,13 @@ fun HomeScreen(
             }
         }
 
-        // --- OVERLAYS & SHEETS ---
         if (isWidgetMenuOpen) {
             WidgetMenuSheet(
                 viewModel = viewModel,
                 onAddWidgetClick = onAddWidgetClick,
-                onMoveWidgetClick = {
-                    isMovingHeader = true
-                },
+                onMoveWidgetClick = { isMovingHeader = true },
                 onOpenSettings = onOpenSettings,
-                onOpenEditFavorites = {
-                    isDrawerExpanded = true
-                },
+                onOpenEditFavorites = { isDrawerExpanded = true },
                 onDismiss = { isWidgetMenuOpen = false }
             )
         }
