@@ -7,11 +7,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 data class CalendarEventModel(
-    val id: Long,
-    val title: String,
-    val startTimeMillis: Long,
-    val endTimeMillis: Long,
-    val isAllDay: Boolean
+    val id: Long = 0L,
+    val title: String = "",
+    val startTimeMillis: Long = 0L,
+    val endTimeMillis: Long = 0L,
+    val isAllDay: Boolean = false
 )
 
 class CalendarRepository(private val context: Context) {
