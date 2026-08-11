@@ -16,10 +16,12 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.palette.graphics.Palette
+import com.niagaraclone.launcher.backup.BackupManager
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.data.AppShortcutModel
 import com.niagaraclone.launcher.data.MediaWidgetTheme
 import com.niagaraclone.launcher.data.SettingsRepository
+import com.niagaraclone.launcher.ui.theme.AppTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,10 +30,12 @@ import kotlinx.coroutines.launch
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
     val repository = SettingsRepository(application)
+    private val backupManager = BackupManager(application)
 
     private val _apps = MutableStateFlow<List<AppModel>>(emptyList())
     val apps: StateFlow<List<AppModel>> = _apps.asStateFlow()
 
+    val theme = repository.appTheme
     val hiddenPackages = repository.hiddenPackages
     val favoritePackages = repository.favoritePackages
     val selectedMusicPackages = repository.selectedMusicPackages
@@ -63,6 +67,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val selectedIconPack = repository.selectedIconPack
     val weatherCityName = repository.weatherCityName
     val weatherLocationMode = repository.weatherLocationMode
+    val searchContactsEnabled = repository.searchContactsEnabled
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -112,6 +117,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun refreshApps() { loadInstalledApps() }
+
     fun extractWallpaperAccentColor() {
         viewModelScope.launch {
             try {
@@ -149,6 +156,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun setAppTheme(theme: AppTheme) { viewModelScope.launch { repository.setAppTheme(theme) } }
     fun toggleFavorite(packageName: String) { viewModelScope.launch { repository.toggleFavorite(packageName) } }
     fun toggleHidePackage(packageName: String) { viewModelScope.launch { repository.toggleHidePackage(packageName) } }
     fun toggleMusicPackage(packageName: String) { viewModelScope.launch { repository.toggleMusicPackage(packageName) } }
@@ -163,6 +171,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun setMediaWidgetTheme(theme: MediaWidgetTheme) { viewModelScope.launch { repository.setMediaWidgetTheme(theme) } }
     fun setShowBatteryPercentage(show: Boolean) { viewModelScope.launch { repository.setShowBatteryPercentage(show) } }
     fun setCalendarPreviewEnabled(enabled: Boolean) { viewModelScope.launch { repository.setCalendarPreviewEnabled(enabled) } }
+    fun setSearchContactsEnabled(enabled: Boolean) { viewModelScope.launch { repository.setSearchContactsEnabled(enabled) } }
     fun setQuickLockEnabled(enabled: Boolean) { viewModelScope.launch { repository.setQuickLockEnabled(enabled) } }
     fun setCascadiaButtonEnabled(enabled: Boolean) { viewModelScope.launch { repository.setCascadiaButtonEnabled(enabled) } }
     fun setRotationEnabled(enabled: Boolean) { viewModelScope.launch { repository.setRotationEnabled(enabled) } }
@@ -171,7 +180,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun setWeatherCityName(name: String) { viewModelScope.launch { repository.setWeatherCityName(name) } }
     fun setWeatherLocationMode(mode: String) { viewModelScope.launch { repository.setWeatherLocationMode(mode) } }
     fun fetchLiveWeatherForCurrentMode() {}
-    fun scanAndFetchLocationWeather() {}
+    fun scanAndFetchLocationWeather(): String? = null
 
     fun setFabTapAction(actionType: String, pkg: String = "") { viewModelScope.launch { repository.setFabTapAction(actionType, pkg) } }
     fun setFabSwipeAction(actionType: String, pkg: String = "") { viewModelScope.launch { repository.setFabSwipeAction(actionType, pkg) } }
@@ -192,7 +201,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         context.startActivity(intent)
     }
 
-    fun getFolderSubApps(parentPackage: String): List<AppModel> {
+    fun getFolderSubApps(parentPackage: String = ""): List<AppModel> {
         val packageSet = repository.getFolderSubAppPackages(parentPackage)
         return _apps.value.filter { packageSet.contains(it.packageName) }
     }
@@ -201,7 +210,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { repository.setFolderSubApps(parentPackage, subPackages) }
     }
 
-    fun getAppShortcuts(packageName: String): List<AppShortcutModel> {
+    fun getAppShortcuts(packageName: String = ""): List<AppShortcutModel> {
+        if (packageName.isBlank()) return emptyList()
         return try {
             val launcherApps = getApplication<Application>().getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
             val query = LauncherApps.ShortcutQuery().apply {
@@ -248,6 +258,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun exportBackupJson(): String = repository.exportBackupJson()
-    fun importBackupJson(jsonStr: String): Boolean = repository.importBackupJson(jsonStr)
+    fun exportBackupJson(context: Context = getApplication()): String = backupManager.snapshot()
+    fun importBackupJson(context: Context = getApplication(), jsonStr: String): Boolean = backupManager.restore(jsonStr)
 }
