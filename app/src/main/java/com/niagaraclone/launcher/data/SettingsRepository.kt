@@ -180,7 +180,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setFabTapAction(actionType: String, pkg: String = "") { context.dataStore.edit { it[FAB_TAP_ACTION_KEY] = actionType; it[FAB_TAP_PKG_KEY] = pkg } }
     suspend fun setFabSwipeAction(actionType: String, pkg: String = "") { context.dataStore.edit { it[FAB_SWIPE_ACTION_KEY] = actionType; it[FAB_SWIPE_PKG_KEY] = pkg } }
 
-    suspend fun toggleFavorite(pkg: String) {
+    suspend fun toggleFavorite(pkg: String = "") {
+        if (pkg.isEmpty()) return
         context.dataStore.edit {
             val set = (it[FAVORITE_PACKAGES_KEY] ?: emptySet()).toMutableSet()
             if (set.contains(pkg)) set.remove(pkg) else set.add(pkg)
@@ -188,7 +189,8 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun toggleHidePackage(pkg: String) {
+    suspend fun toggleHidePackage(pkg: String = "") {
+        if (pkg.isEmpty()) return
         context.dataStore.edit {
             val set = (it[HIDDEN_PACKAGES_KEY] ?: emptySet()).toMutableSet()
             if (set.contains(pkg)) set.remove(pkg) else set.add(pkg)
@@ -196,7 +198,8 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun toggleMusicPackage(pkg: String) {
+    suspend fun toggleMusicPackage(pkg: String = "") {
+        if (pkg.isEmpty()) return
         context.dataStore.edit {
             val set = (it[MUSIC_PACKAGES_KEY] ?: emptySet()).toMutableSet()
             if (set.contains(pkg)) set.remove(pkg) else set.add(pkg)
@@ -247,12 +250,14 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    fun getFolderSubAppPackages(parentPackage: String): Set<String> {
+    fun getFolderSubAppPackages(parentPackage: String = ""): Set<String> {
+        if (parentPackage.isEmpty()) return emptySet()
         val prefs = context.getSharedPreferences("popUpFolders", Context.MODE_PRIVATE)
         return prefs.getStringSet(parentPackage, emptySet()) ?: emptySet()
     }
 
-    suspend fun setFolderSubApps(parentPackage: String, subPackages: Set<String>) {
+    suspend fun setFolderSubApps(parentPackage: String = "", subPackages: Set<String> = emptySet()) {
+        if (parentPackage.isEmpty()) return
         val prefs = context.getSharedPreferences("popUpFolders", Context.MODE_PRIVATE)
         prefs.edit().putStringSet(parentPackage, subPackages).apply()
     }
