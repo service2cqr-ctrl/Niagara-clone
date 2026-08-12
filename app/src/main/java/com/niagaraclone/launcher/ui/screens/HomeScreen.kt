@@ -166,7 +166,9 @@ fun HomeScreen(
 
     val openClockApp = {
         try {
-            val intent = Intent(AlarmClock.ACTION_SHOW_ALARMS).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+            val intent = Intent(AlarmClock.ACTION_SHOW_ALARMS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
             context.startActivity(intent)
         } catch (e: Exception) {
             try {
