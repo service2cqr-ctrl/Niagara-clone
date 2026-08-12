@@ -222,6 +222,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun getFolderSubApps(parentPackage: String = ""): List<AppModel> {
+        if (parentPackage.isEmpty()) return emptyList()
         val packageSet = repository.getFolderSubAppPackages(parentPackage)
         return _apps.value.filter { packageSet.contains(it.packageName) }
     }
