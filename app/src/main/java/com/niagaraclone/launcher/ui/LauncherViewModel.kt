@@ -14,6 +14,8 @@ import android.os.Process
 import android.provider.CalendarContract
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.palette.graphics.Palette
 import com.niagaraclone.launcher.backup.BackupManager
@@ -143,6 +145,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun checkDefaultLauncherStatus() { viewModelScope.launch { repository.checkDefaultLauncher() } }
     fun addWidgetId(id: Int) { viewModelScope.launch { repository.addWidgetId(id) } }
     fun trackAppLaunch(packageName: String = "") {}
+
     fun launchWebSearch(context: Context, query: String) {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=$query")).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
         context.startActivity(intent)
@@ -157,9 +160,25 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setAppTheme(theme: AppTheme) { viewModelScope.launch { repository.setAppTheme(theme) } }
-    fun toggleFavorite(packageName: String = "") { if (packageName.isNotEmpty()) viewModelScope.launch { repository.toggleFavorite(packageName) } }
-    fun toggleHidePackage(packageName: String = "") { if (packageName.isNotEmpty()) viewModelScope.launch { repository.toggleHidePackage(packageName) } }
-    fun toggleMusicPackage(packageName: String = "") { if (packageName.isNotEmpty()) viewModelScope.launch { repository.toggleMusicPackage(packageName) } }
+    
+    fun toggleFavorite(packageName: String = "") { 
+        if (packageName.isNotEmpty()) {
+            viewModelScope.launch { repository.toggleFavorite(packageName) } 
+        }
+    }
+    
+    fun toggleHidePackage(packageName: String = "") { 
+        if (packageName.isNotEmpty()) {
+            viewModelScope.launch { repository.toggleHidePackage(packageName) } 
+        }
+    }
+    
+    fun toggleMusicPackage(packageName: String = "") { 
+        if (packageName.isNotEmpty()) {
+            viewModelScope.launch { repository.toggleMusicPackage(packageName) } 
+        }
+    }
+
     fun setClockStyle(style: String) { viewModelScope.launch { repository.setClockStyle(style) } }
     fun setAccentColorArgb(color: Int) { viewModelScope.launch { repository.setAccentColorArgb(color) } }
     fun setAccentColor(color: Int) { setAccentColorArgb(color) }
@@ -260,4 +279,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun exportBackupJson(context: Context = getApplication()): String = backupManager.snapshot()
     fun importBackupJson(context: Context = getApplication(), jsonStr: String): Boolean = backupManager.restore(jsonStr)
+
+    // Factory implementation to support custom instantiation from Context / Activity
+    class Factory(private val context: Context) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            val application = context.applicationContext as Application
+            return LauncherViewModel(application) as T
+        }
+    }
 }
