@@ -151,7 +151,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         context.startActivity(intent)
     }
 
-    fun setCustomAppLabel(packageName: String, newLabel: String) {
+    fun setCustomAppLabel(packageName: String = "", newLabel: String = "") {
+        if (packageName.isEmpty()) return
         viewModelScope.launch {
             _apps.value = _apps.value.map { app ->
                 if (app.packageName == packageName) app.copy(label = newLabel) else app
@@ -225,7 +226,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         return _apps.value.filter { packageSet.contains(it.packageName) }
     }
 
-    fun setFolderSubApps(parentPackage: String, subPackages: Set<String>) {
+    fun setFolderSubApps(parentPackage: String = "", subPackages: Set<String> = emptySet()) {
+        if (parentPackage.isEmpty()) return
         viewModelScope.launch { repository.setFolderSubApps(parentPackage, subPackages) }
     }
 
@@ -280,7 +282,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun exportBackupJson(context: Context = getApplication()): String = backupManager.snapshot()
     fun importBackupJson(context: Context = getApplication(), jsonStr: String): Boolean = backupManager.restore(jsonStr)
 
-    // Factory implementation to support custom instantiation from Context / Activity
     class Factory(private val context: Context) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
