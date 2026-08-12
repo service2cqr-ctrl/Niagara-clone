@@ -142,7 +142,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun refreshPermissions() { viewModelScope.launch { repository.checkNotificationPermission() } }
     fun checkDefaultLauncherStatus() { viewModelScope.launch { repository.checkDefaultLauncher() } }
     fun addWidgetId(id: Int) { viewModelScope.launch { repository.addWidgetId(id) } }
-    fun trackAppLaunch(packageName: String) {}
+    fun trackAppLaunch(packageName: String = "") {}
     fun launchWebSearch(context: Context, query: String) {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=$query")).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
         context.startActivity(intent)
