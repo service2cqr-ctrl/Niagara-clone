@@ -161,19 +161,19 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setAppTheme(theme: AppTheme) { viewModelScope.launch { repository.setAppTheme(theme) } }
-    
+
     fun toggleFavorite(packageName: String = "") { 
         if (packageName.isNotEmpty()) {
             viewModelScope.launch { repository.toggleFavorite(packageName) } 
         }
     }
-    
+
     fun toggleHidePackage(packageName: String = "") { 
         if (packageName.isNotEmpty()) {
             viewModelScope.launch { repository.toggleHidePackage(packageName) } 
         }
     }
-    
+
     fun toggleMusicPackage(packageName: String = "") { 
         if (packageName.isNotEmpty()) {
             viewModelScope.launch { repository.toggleMusicPackage(packageName) } 
