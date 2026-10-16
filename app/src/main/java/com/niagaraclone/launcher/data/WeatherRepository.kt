@@ -1,13 +1,17 @@
 package com.niagaraclone.launcher.data
 
 import android.content.Context
+import android.location.Address
 import android.location.Geocoder
+import android.os.Build
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import kotlin.coroutines.resume
 
 data class WeatherData(
     val temperatureCelsius: Float,
@@ -60,18 +64,37 @@ class WeatherRepository(private val context: Context) {
         }
     }
 
-    private fun getCityNameFromCoords(lat: Double, lon: Double): String? {
-        return try {
+    private suspend fun getCityNameFromCoords(lat: Double, lon: Double): String? = suspendCancellableCoroutine { continuation ->
+        try {
             val geocoder = Geocoder(context, Locale.getDefault())
-            @Suppress("DEPRECATION")
-            val addresses = geocoder.getFromLocation(lat, lon, 1)
-            if (!addresses.isNullOrEmpty()) {
-                addresses[0].locality ?: addresses[0].subAdminArea ?: addresses[0].adminArea
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                geocoder.getFromLocation(lat, lon, 1, object : Geocoder.GeocodeListener {
+                    override fun onGeocode(addresses: MutableList<Address>) {
+                        val resolvedCity = if (!addresses.isNullOrEmpty()) {
+                            addresses[0].locality ?: addresses[0].subAdminArea ?: addresses[0].adminArea
+                        } else {
+                            null
+                        }
+                        if (continuation.isActive) continuation.resume(resolvedCity)
+                    }
+
+                    override fun onError(errorMessage: String?) {
+                        super.onError(errorMessage)
+                        if (continuation.isActive) continuation.resume(null)
+                    }
+                })
             } else {
-                null
+                @Suppress("DEPRECATION")
+                val addresses = geocoder.getFromLocation(lat, lon, 1)
+                val resolvedCity = if (!addresses.isNullOrEmpty()) {
+                    addresses[0].locality ?: addresses[0].subAdminArea ?: addresses[0].adminArea
+                } else {
+                    null
+                }
+                if (continuation.isActive) continuation.resume(resolvedCity)
             }
         } catch (e: Exception) {
-            null
+            if (continuation.isActive) continuation.resume(null)
         }
     }
 }
