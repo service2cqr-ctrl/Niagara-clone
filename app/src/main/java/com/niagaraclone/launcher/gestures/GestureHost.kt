@@ -21,7 +21,7 @@ fun GestureHost(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val offsetYAnimatable = remember { Animatable(0f) }
-    val dragThreshold = 140f // Minimum drag distance to trigger actions
+    val dragThreshold = 120f // Min drag distance to trigger actions
 
     Box(
         modifier = modifier.pointerInput(Unit) {
@@ -33,39 +33,37 @@ fun GestureHost(
                         if (currentOffset < -dragThreshold) {
                             // Dragged UP past threshold -> Smart Search
                             onTriggerAction(SwipeDirection.UP)
-                            offsetYAnimatable.animateTo(
-                                targetValue = 0f,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
-                            )
                         } else if (currentOffset > dragThreshold) {
                             // Dragged DOWN past threshold -> Notification Shade
                             onTriggerAction(SwipeDirection.DOWN)
-                            offsetYAnimatable.animateTo(
-                                targetValue = 0f,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
-                            )
-                        } else {
-                            // Cancelled / Micro-drag -> Elastic Spring Rebound back to center
-                            offsetYAnimatable.animateTo(
-                                targetValue = 0f,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
-                            )
                         }
+                        
+                        // Spring rebound back to center regardless
+                        offsetYAnimatable.animateTo(
+                            targetValue = 0f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessLow
+                            )
+                        )
                     }
                 },
                 onDragCancel = {
                     coroutineScope.launch {
                         offsetYAnimatable.animateTo(
                             targetValue = 0f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessLow
+                            )
                         )
                     }
                 },
                 onVerticalDrag = { change, dragAmount ->
                     change.consume()
                     coroutineScope.launch {
-                        // Apply friction damping for smooth drag physics
-                        val newOffset = offsetYAnimatable.value + (dragAmount * 0.7f)
+                        // Apply smooth friction damping
+                        val newOffset = offsetYAnimatable.value + (dragAmount * 0.65f)
                         offsetYAnimatable.snapTo(newOffset)
                     }
                 }
