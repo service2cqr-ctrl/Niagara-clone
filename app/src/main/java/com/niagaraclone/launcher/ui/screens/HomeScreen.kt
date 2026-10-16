@@ -596,10 +596,10 @@ fun HomeScreen(
                 isDrawerExpanded = (char != "☆" && char != "⭐")
             },
             onDragEnd = { lastChar ->
+                activeLetter = null
                 if (lastChar == "☆" || lastChar == "⭐") {
                     isDrawerExpanded = false
                     isIndexerVisible = false
-                    activeLetter = null
                 } else {
                     isDrawerExpanded = true
                     isIndexerVisible = true
