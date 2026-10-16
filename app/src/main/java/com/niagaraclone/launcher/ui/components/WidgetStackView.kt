@@ -5,7 +5,6 @@ import android.appwidget.AppWidgetManager
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -16,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,7 +37,9 @@ fun WidgetStackView(
     appWidgetManager: AppWidgetManager,
     onRemoveWidget: (Int) -> Unit,
     onAddWidgetClick: () -> Unit,
-    modifier: Modifier = Modifier
+    onResizeWidgetHeight: ((Float) -> Unit)? = null, // Optional callback to persist height changes
+    modifier: Modifier = Modifier,
+    accentColor: Color = Color(0xFF4DD0E1)
 ) {
     var showWidgetOptionsDialog by remember { mutableStateOf<Int?>(null) }
     var liveHeight by remember(widgetHeightDp) { mutableFloatStateOf(widgetHeightDp) }
@@ -66,12 +68,7 @@ fun WidgetStackView(
                 val widgetId = widgetIds[page]
 
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .combinedClickable(
-                            onClick = {},
-                            onLongClick = { showWidgetOptionsDialog = widgetId }
-                        )
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     AndroidView(
                         factory = { context ->
@@ -90,6 +87,36 @@ fun WidgetStackView(
                         },
                         modifier = Modifier.fillMaxSize()
                     )
+
+                    // Transparent overlay border / long-press handler zone that doesn't block internal widget touches completely
+                    // Allowing users to long-press near corners or use a dedicated handle if needed
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(8.dp),
+                        contentAlignment = Alignment.TopEnd
+                    ) {
+                        // Small subtle options trigger icon on top right of active widget
+                        IconButton(
+                            onClick = { showWidgetOptionsDialog = widgetId },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.Black.copy(alpha = 0.4f),
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Widget Options",
+                                        tint = Color.White.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -117,7 +144,7 @@ fun WidgetStackView(
                                 .width(dotWidth)
                                 .clip(CircleShape)
                                 .background(
-                                    if (isSelected) Color(0xFF4DD0E1)
+                                    if (isSelected) accentColor
                                     else Color.White.copy(alpha = 0.5f)
                                 )
                         )
@@ -133,10 +160,15 @@ fun WidgetStackView(
                 .fillMaxWidth()
                 .height(18.dp)
                 .pointerInput(Unit) {
-                    detectVerticalDragGestures { change, dragAmount ->
-                        change.consume()
-                        liveHeight = (liveHeight + (dragAmount / density.density)).coerceIn(100f, 420f)
-                    }
+                    detectVerticalDragGestures(
+                        onDragEnd = {
+                            onResizeWidgetHeight?.invoke(liveHeight)
+                        },
+                        onVerticalDrag = { change, dragAmount ->
+                            change.consume()
+                            liveHeight = (liveHeight + (dragAmount / density.density)).coerceIn(100f, 450f)
+                        }
+                    )
                 }
         ) {
             Icon(
@@ -148,13 +180,13 @@ fun WidgetStackView(
         }
     }
 
-    // --- 4. WIDGET OPTIONS DIALOG (ON LONG PRESS) ---
+    // --- 4. WIDGET OPTIONS DIALOG ---
     showWidgetOptionsDialog?.let { targetWidgetId ->
         AlertDialog(
             onDismissRequest = { showWidgetOptionsDialog = null },
-            containerColor = Color(0xFF1E1E1E),
+            containerColor = Color(0xFF161616),
             title = {
-                Text(text = "Widget Options", color = Color.White, fontSize = 18.sp)
+                Text(text = "Widget options", color = Color.White, fontSize = 18.sp)
             },
             text = {
                 Column {
@@ -169,10 +201,10 @@ fun WidgetStackView(
                             Icon(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = null,
-                                tint = Color(0xFF4DD0E1)
+                                tint = accentColor
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "Add another widget to stack", color = Color(0xFF4DD0E1))
+                            Text(text = "Add another widget to stack", color = accentColor)
                         }
                     }
 
@@ -196,7 +228,7 @@ fun WidgetStackView(
             },
             confirmButton = {
                 TextButton(onClick = { showWidgetOptionsDialog = null }) {
-                    Text(text = "Cancel", color = Color.Gray)
+                    Text(text = "Close", color = Color.Gray)
                 }
             }
         )
