@@ -1,12 +1,14 @@
 package com.niagaraclone.launcher.services
 
-import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHeadset
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.os.Build
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,10 +20,22 @@ class AudioConnectionReceiver : BroadcastReceiver() {
         val isAudioDeviceConnected: StateFlow<Boolean> = _isAudioDeviceConnected.asStateFlow()
 
         fun checkAudioConnectionState(context: Context) {
-            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            val isWiredConnected = audioManager?.isWiredHeadsetOn == true
-            val isBluetoothConnected = audioManager?.isBluetoothA2dpOn == true || audioManager?.isBluetoothScoOn == true
-            _isAudioDeviceConnected.value = isWiredConnected || isBluetoothConnected
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+            
+            val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            val isConnected = devices.any { device ->
+                when (device.type) {
+                    AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                    AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                    AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+                    AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+                    AudioDeviceInfo.TYPE_USB_HEADSET,
+                    AudioDeviceInfo.TYPE_BLE_HEADSET,
+                    AudioDeviceInfo.TYPE_BLE_SPEAKER -> true
+                    else -> false
+                }
+            }
+            _isAudioDeviceConnected.value = isConnected
         }
     }
 
@@ -48,6 +62,8 @@ class AudioConnectionReceiver : BroadcastReceiver() {
                 _isAudioDeviceConnected.value = false
             }
         }
+        
+        // Double-check with modern device routing scanner
         checkAudioConnectionState(context)
     }
 }
