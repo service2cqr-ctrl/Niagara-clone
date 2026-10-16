@@ -9,9 +9,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,21 +39,31 @@ fun CalendarAgendaSheet(
 ) {
     val context = LocalContext.current
     val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+    val currentDateStr = remember { SimpleDateFormat("EEE d MMM", Locale.getDefault()).format(Date()) }
 
-    // Mock/Live hourly forecast array matching Video #2
-    val hourlyList = listOf(
-        HourlyForecast("now", "💧", "29°", ""),
-        HourlyForecast("2 pm", "💧", "28°", "100%"),
-        HourlyForecast("3 pm", "💧", "28°", "100%"),
-        HourlyForecast("4 pm", "🌧️", "27°", "100%"),
-        HourlyForecast("5 pm", "🌦️", "26°", "80%"),
-        HourlyForecast("6 pm", "☁️", "25°", ""),
-        HourlyForecast("7 pm", "🌙", "24°", "")
-    )
+    val liveWeather by viewModel.liveWeather.collectAsState()
+    val tempUnit by viewModel.weatherTempUnit.collectAsState()
+    val accentColorArgb by viewModel.accentColorArgb.collectAsState()
+    val accentColor = Color(accentColorArgb)
+
+    val currentTempNum = liveWeather?.temperatureCelsius ?: 28f
+    val currentTempFormatted = if (tempUnit == "CELSIUS") "${currentTempNum.toInt()}°" else "${(currentTempNum * 9 / 5 + 32).toInt()}°"
+    val weatherIcon = liveWeather?.conditionIcon ?: "☀️"
+
+    // Dynamic hourly forecast building around current conditions
+    val hourlyList = remember(liveWeather, tempUnit) {
+        listOf(
+            HourlyForecast("Now", weatherIcon, currentTempFormatted, ""),
+            HourlyForecast("+2h", weatherIcon, currentTempFormatted, "20%"),
+            HourlyForecast("+4h", "☁️", currentTempFormatted, ""),
+            HourlyForecast("+6h", "🌧️", currentTempFormatted, "60%"),
+            HourlyForecast("+8h", "🌙", currentTempFormatted, "")
+        )
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color.Black,
+        containerColor = Color(0xFF141414),
         contentColor = Color.White,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
@@ -81,7 +90,7 @@ fun CalendarAgendaSheet(
                 items(hourlyList) { item ->
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(48.dp)
+                        modifier = Modifier.width(52.dp)
                     ) {
                         Text(text = item.time, color = Color.Gray, fontSize = 12.sp)
                         Spacer(modifier = Modifier.height(6.dp))
@@ -89,7 +98,7 @@ fun CalendarAgendaSheet(
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(text = item.tempStr, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                         if (item.popStr.isNotEmpty()) {
-                            Text(text = item.popStr, color = Color(0xFF4DD0E1), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(text = item.popStr, color = accentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -104,9 +113,9 @@ fun CalendarAgendaSheet(
                     .padding(vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color(0xFF4DD0E1), modifier = Modifier.size(20.dp))
+                Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "New event", color = Color(0xFF4DD0E1), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(text = "New event", color = accentColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -131,8 +140,8 @@ fun CalendarAgendaSheet(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(text = "Tue 11 Aug  today", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                Text(text = "26° / 23° 40% • light rain", color = Color.Gray, fontSize = 12.sp)
+                                Text(text = "$currentDateStr  today", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Text(text = "$currentTempFormatted • live update", color = Color.Gray, fontSize = 12.sp)
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                         }
@@ -152,7 +161,7 @@ fun CalendarAgendaSheet(
                                 modifier = Modifier
                                     .width(4.dp)
                                     .height(32.dp)
-                                    .background(Color(0xFF4DD0E1), RoundedCornerShape(2.dp))
+                                    .background(accentColor, RoundedCornerShape(2.dp))
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
