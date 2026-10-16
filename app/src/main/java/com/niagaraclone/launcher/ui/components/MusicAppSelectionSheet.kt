@@ -23,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,10 +42,12 @@ fun MusicAppSelectionSheet(
 
     val apps by viewModel.apps.collectAsState()
     val selectedPackages by viewModel.selectedMusicPackages.collectAsState()
+    val accentColorArgb by viewModel.accentColorArgb.collectAsState()
+    val accentColor = Color(accentColorArgb)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color.Black, // Pitch Black Background
+        containerColor = Color(0xFF141414), // Rich dark container matching other sheets
         contentColor = Color.White,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
@@ -57,12 +58,14 @@ fun MusicAppSelectionSheet(
         ) { currentStep ->
             when (currentStep) {
                 MusicSheetStep.EXPLANATION -> MusicExplanationStep(
+                    accentColor = accentColor,
                     onSelectAppsClick = { step = MusicSheetStep.SELECTION },
                     onCancelClick = onDismiss
                 )
                 MusicSheetStep.SELECTION -> MusicSelectionStep(
                     apps = apps,
                     selectedPackages = selectedPackages,
+                    accentColor = accentColor,
                     onTogglePackage = { pkg -> viewModel.toggleMusicPackage(pkg) },
                     onDone = onDismiss
                 )
@@ -73,6 +76,7 @@ fun MusicAppSelectionSheet(
 
 @Composable
 private fun MusicExplanationStep(
+    accentColor: Color,
     onSelectAppsClick: () -> Unit,
     onCancelClick: () -> Unit
 ) {
@@ -88,7 +92,7 @@ private fun MusicExplanationStep(
             Icon(
                 imageVector = Icons.Default.MusicNote,
                 contentDescription = null,
-                tint = Color.White,
+                tint = accentColor,
                 modifier = Modifier.size(28.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -110,7 +114,7 @@ private fun MusicExplanationStep(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Niagara Launcher needs the nearby devices permission to show your music apps on the home screen when connecting headphones or speakers.",
+            text = "Cascadia Launcher needs nearby devices permission to show your music apps on the home screen when connecting headphones or speakers.",
             fontSize = 13.sp,
             color = Color.Gray.copy(alpha = 0.8f),
             lineHeight = 18.sp
@@ -124,7 +128,7 @@ private fun MusicExplanationStep(
                 .fillMaxWidth()
                 .height(52.dp),
             shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+            colors = ButtonDefaults.buttonColors(containerColor = accentColor, contentColor = Color.Black)
         ) {
             Text(text = "Select apps", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
@@ -146,6 +150,7 @@ private fun MusicExplanationStep(
 private fun MusicSelectionStep(
     apps: List<AppModel>,
     selectedPackages: Set<String>,
+    accentColor: Color,
     onTogglePackage: (String) -> Unit,
     onDone: () -> Unit
 ) {
@@ -161,14 +166,18 @@ private fun MusicSelectionStep(
         apps.filter { !selectedPackages.contains(it.packageName) && !suggestedApps.contains(it) }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 520.dp)
+    ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(horizontal = 20.dp)
         ) {
             Text(
-                text = "Music Apps",
+                text = "Music apps",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
@@ -181,23 +190,26 @@ private fun MusicSelectionStep(
             )
 
             LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (selectedApps.isNotEmpty()) {
-                    item {
-                        Text(text = "Selected", color = Color.Gray, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp))
+                    item(key = "header_selected") {
+                        Text(text = "SELECTED", color = accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp))
                     }
-                    items(selectedApps) { app ->
+                    items(selectedApps, key = { "sel_${it.packageName}" }) { app ->
                         MusicAppRowItem(
                             app = app,
                             isSelected = true,
+                            accentColor = accentColor,
                             onToggle = { onTogglePackage(app.packageName) },
                             showDragHandle = true
                         )
                     }
 
-                    item {
+                    item(key = "sort_usage_btn") {
                         Surface(
                             shape = CircleShape,
                             color = Color(0xFF222222),
@@ -209,7 +221,7 @@ private fun MusicSelectionStep(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.SwapVert, contentDescription = null, tint = Color(0xFF4DD0E1), modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.SwapVert, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(text = "Sort apps by usage", color = Color.White, fontSize = 13.sp)
                             }
@@ -218,34 +230,36 @@ private fun MusicSelectionStep(
                 }
 
                 if (suggestedApps.isNotEmpty()) {
-                    item {
-                        Text(text = "Suggestions", color = Color.Gray, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+                    item(key = "header_suggested") {
+                        Text(text = "SUGGESTIONS", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
                     }
-                    items(suggestedApps) { app ->
+                    items(suggestedApps, key = { "sug_${it.packageName}" }) { app ->
                         MusicAppRowItem(
                             app = app,
                             isSelected = false,
+                            accentColor = accentColor,
                             onToggle = { onTogglePackage(app.packageName) },
                             showDragHandle = false
                         )
                     }
                 }
 
-                item {
-                    Text(text = "All Apps", color = Color.Gray, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+                item(key = "header_all_apps") {
+                    Text(text = "ALL APPS", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
                 }
 
-                items(otherApps) { app ->
+                items(otherApps, key = { "oth_${it.packageName}" }) { app ->
                     MusicAppRowItem(
                         app = app,
                         isSelected = false,
+                        accentColor = accentColor,
                         onToggle = { onTogglePackage(app.packageName) },
                         showDragHandle = false
                     )
                 }
 
-                item {
-                    Spacer(modifier = Modifier.height(80.dp))
+                item(key = "spacer_bottom") {
+                    Spacer(modifier = Modifier.height(72.dp))
                 }
             }
         }
@@ -254,12 +268,12 @@ private fun MusicSelectionStep(
         Button(
             onClick = onDone,
             shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+            colors = ButtonDefaults.buttonColors(containerColor = accentColor, contentColor = Color.Black),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 24.dp)
-                .height(48.dp)
-                .width(140.dp)
+                .padding(bottom = 16.dp)
+                .height(46.dp)
+                .width(130.dp)
         ) {
             Icon(Icons.Default.Check, contentDescription = "Done", tint = Color.Black, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
@@ -272,6 +286,7 @@ private fun MusicSelectionStep(
 private fun MusicAppRowItem(
     app: AppModel,
     isSelected: Boolean,
+    accentColor: Color,
     onToggle: () -> Unit,
     showDragHandle: Boolean
 ) {
@@ -285,18 +300,22 @@ private fun MusicAppRowItem(
         Checkbox(
             checked = isSelected,
             onCheckedChange = { onToggle() },
-            colors = CheckboxDefaults.colors(checkedColor = Color(0xFF4DD0E1), uncheckedColor = Color.Gray)
+            colors = CheckboxDefaults.colors(
+                checkedColor = accentColor,
+                checkmarkColor = Color.Black,
+                uncheckedColor = Color.Gray
+            )
         )
         Spacer(modifier = Modifier.width(8.dp))
 
         app.icon?.let { iconDrawable ->
             Image(
-                bitmap = iconDrawable.toBitmap(width = 36, height = 36).asImageBitmap(),
+                bitmap = iconDrawable.toBitmap(width = 40, height = 40).asImageBitmap(),
                 contentDescription = app.label,
                 modifier = Modifier.size(30.dp)
             )
             Spacer(modifier = Modifier.width(14.dp))
-        }
+        } ?: Spacer(modifier = Modifier.width(44.dp))
 
         Text(
             text = app.label,
