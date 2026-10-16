@@ -4,11 +4,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,11 +32,14 @@ fun PopUpFolderCard(
     val context = LocalContext.current
     val shortcuts = remember(parentPackage) { viewModel.getAppShortcuts(parentPackage) }
 
+    val accentColorArgb by viewModel.accentColorArgb.collectAsState()
+    val accentColor = Color(accentColorArgb)
+
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = Color(0xFF1E1E1E),
+        color = Color(0xFF161616),
         tonalElevation = 8.dp,
-        shadowElevation = 12.dp,
+        shadowElevation = 16.dp,
         modifier = Modifier
             .fillMaxWidth()
             .wrapContentHeight()
@@ -68,7 +69,7 @@ fun PopUpFolderCard(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Add,
+                        imageVector = Icons.Default.Close,
                         contentDescription = "Close",
                         tint = Color.Gray
                     )
@@ -97,15 +98,17 @@ fun PopUpFolderCard(
                                 modifier = Modifier.size(28.dp)
                             )
                             Spacer(modifier = Modifier.width(14.dp))
-                        }
+                        } ?: Spacer(modifier = Modifier.width(42.dp))
+
                         Text(
                             text = subApp.label,
                             color = Color.White,
-                            fontSize = 15.sp
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
             }
 
             // App Native Shortcuts (if any)
@@ -116,10 +119,10 @@ fun PopUpFolderCard(
                 )
 
                 Text(
-                    text = "Shortcuts",
-                    color = Color(0xFF4DD0E1),
+                    text = "SHORTCUTS",
+                    color = accentColor,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(vertical = 6.dp)
                 )
 
@@ -140,8 +143,9 @@ fun PopUpFolderCard(
                                 contentDescription = shortcut.label,
                                 modifier = Modifier.size(24.dp)
                             )
-                            Spacer(modifier = Modifier.width(14.dp))
-                        }
+                            Spacer(modifier = Modifier.width(18.dp))
+                        } ?: Spacer(modifier = Modifier.width(42.dp))
+
                         Text(
                             text = shortcut.label,
                             color = Color.White.copy(alpha = 0.9f),
