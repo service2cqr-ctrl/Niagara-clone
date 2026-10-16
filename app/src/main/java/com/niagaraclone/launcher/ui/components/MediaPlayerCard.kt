@@ -38,6 +38,7 @@ fun MediaPlayerCard(
     artistName: String,
     isPlaying: Boolean,
     widgetTheme: MediaWidgetTheme = MediaWidgetTheme.FROSTED_GLASS,
+    accentColor: Color = Color(0xFF4DD0E1),
     onPlayPauseToggle: () -> Unit,
     onOpenApp: () -> Unit,
     onNextTrack: () -> Unit,
@@ -47,7 +48,8 @@ fun MediaPlayerCard(
     val backgroundColor = when (widgetTheme) {
         MediaWidgetTheme.LIGHT -> Color.White.copy(alpha = 0.85f)
         MediaWidgetTheme.DARK -> Color(0xFF1E1E1E).copy(alpha = 0.90f)
-        MediaWidgetTheme.FROSTED_GLASS, MediaWidgetTheme.MATCH_ACCENT, MediaWidgetTheme.ALBUM_ART -> Color.White.copy(alpha = 0.22f)
+        MediaWidgetTheme.MATCH_ACCENT -> accentColor.copy(alpha = 0.35f)
+        MediaWidgetTheme.FROSTED_GLASS, MediaWidgetTheme.ALBUM_ART -> Color.White.copy(alpha = 0.22f)
     }
 
     val borderBrush = when (widgetTheme) {
@@ -56,6 +58,9 @@ fun MediaPlayerCard(
         )
         MediaWidgetTheme.DARK -> Brush.verticalGradient(
             listOf(Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.05f))
+        )
+        MediaWidgetTheme.MATCH_ACCENT -> Brush.verticalGradient(
+            listOf(accentColor.copy(alpha = 0.7f), accentColor.copy(alpha = 0.2f))
         )
         else -> Brush.verticalGradient(
             listOf(Color.White.copy(alpha = 0.55f), Color.White.copy(alpha = 0.15f))
