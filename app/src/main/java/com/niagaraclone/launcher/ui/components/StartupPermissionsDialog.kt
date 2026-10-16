@@ -37,6 +37,8 @@ fun StartupPermissionsDialog(
     val hasLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     val hasCalendar = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
     val notificationGranted by viewModel.notificationPermissionGranted.collectAsState()
+    val accentColorArgb by viewModel.accentColorArgb.collectAsState()
+    val accentColor = Color(accentColorArgb)
 
     var requestLocation by remember { mutableStateOf(!hasLocation) }
     var requestCalendar by remember { mutableStateOf(!hasCalendar) }
@@ -63,7 +65,7 @@ fun StartupPermissionsDialog(
 
     ModalBottomSheet(
         onDismissRequest = onComplete,
-        containerColor = Color(0xFF181818),
+        containerColor = Color(0xFF141414), // Rich dark container matching other sheets
         contentColor = Color.White,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
@@ -73,7 +75,7 @@ fun StartupPermissionsDialog(
                 .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
             Text(
-                text = "Permissions Request",
+                text = "Permissions request",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
@@ -94,6 +96,7 @@ fun StartupPermissionsDialog(
                     icon = Icons.Outlined.Notifications,
                     title = "Notification Access",
                     description = "Show badges, music player, and inline replies",
+                    accentColor = accentColor,
                     onGrant = {
                         try {
                             context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
@@ -112,6 +115,7 @@ fun StartupPermissionsDialog(
                     icon = Icons.Outlined.CalendarToday,
                     title = "Calendar Access",
                     description = "Display upcoming agenda events in header",
+                    accentColor = accentColor,
                     onGrant = {
                         calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
                     }
@@ -123,6 +127,7 @@ fun StartupPermissionsDialog(
                     icon = Icons.Outlined.LocationOn,
                     title = "Location Access",
                     description = "Get accurate live weather updates",
+                    accentColor = accentColor,
                     onGrant = {
                         locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                     }
@@ -150,6 +155,7 @@ private fun PermissionRequestRow(
     icon: ImageVector,
     title: String,
     description: String,
+    accentColor: Color,
     onGrant: () -> Unit
 ) {
     Row(
@@ -161,7 +167,7 @@ private fun PermissionRequestRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color(0xFF4DD0E1),
+            tint = accentColor,
             modifier = Modifier.size(28.dp)
         )
 
@@ -176,7 +182,7 @@ private fun PermissionRequestRow(
 
         Button(
             onClick = onGrant,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4DD0E1), contentColor = Color.Black),
+            colors = ButtonDefaults.buttonColors(containerColor = accentColor, contentColor = Color.Black),
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
             modifier = Modifier.height(34.dp)
         ) {
