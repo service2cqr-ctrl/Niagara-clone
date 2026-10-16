@@ -278,6 +278,7 @@ fun HomeScreen(
 
     val (letterIndexMap, totalDrawerItemCount) = remember(favorites, groupedApps) {
         val map = mutableMapOf<String, Int>()
+        map["☆"] = 0
         map["⭐"] = 0
         var currentIndex = favorites.size
 
@@ -293,8 +294,8 @@ fun HomeScreen(
             if (map.containsKey(char)) {
                 lastKnownIndex = map[char]!!
             } else {
-                if (char == "#") {
-                    map["#"] = (totalCount - 1).coerceAtLeast(0)
+                if (char == "#" || char == "∘") {
+                    map[char] = (totalCount - 1).coerceAtLeast(0)
                 } else {
                     map[char] = lastKnownIndex
                 }
@@ -306,7 +307,7 @@ fun HomeScreen(
 
     LaunchedEffect(activeLetter, isDrawerExpanded) {
         val letter = activeLetter ?: return@LaunchedEffect
-        if (letter == "⭐") {
+        if (letter == "☆" || letter == "⭐") {
             listState.scrollToItem(0)
         } else if (isDrawerExpanded) {
             val targetIdx = letterIndexMap[letter] ?: 0
@@ -592,10 +593,10 @@ fun HomeScreen(
             },
             onCharSelected = { char ->
                 activeLetter = char
-                isDrawerExpanded = (char != "⭐")
+                isDrawerExpanded = (char != "☆" && char != "⭐")
             },
             onDragEnd = { lastChar ->
-                if (lastChar == "⭐") {
+                if (lastChar == "☆" || lastChar == "⭐") {
                     isDrawerExpanded = false
                     isIndexerVisible = false
                     activeLetter = null
