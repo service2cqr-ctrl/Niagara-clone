@@ -11,3 +11,4 @@ data class AppModel(
     val icon: Drawable? = null,
     val notificationText: String? = null
 )
+
