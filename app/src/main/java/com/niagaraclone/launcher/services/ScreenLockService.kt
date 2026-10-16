@@ -33,4 +33,11 @@ class ScreenLockService : AccessibilityService() {
         instance = null
         return super.onUnbind(intent)
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (instance == this) {
+            instance = null
+        }
+    }
 }
