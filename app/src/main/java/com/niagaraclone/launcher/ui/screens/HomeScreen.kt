@@ -67,7 +67,7 @@ import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.AddToCategorySheet
 import com.niagaraclone.launcher.ui.components.AppCustomizationSheet
 import com.niagaraclone.launcher.ui.components.CalendarAgendaSheet
-import com.niagaraclone.launcher.ui.components.CascadiaButtonSheet
+import com.niagaraclone.launcher.ui.components.CascadiaButtonMenuSheet
 import com.niagaraclone.launcher.ui.components.EditPopUpFolderSheet
 import com.niagaraclone.launcher.ui.components.FabActionSelectionSheet
 import com.niagaraclone.launcher.ui.components.INDEX_ITEMS
@@ -748,7 +748,7 @@ fun HomeScreen(
         }
 
         if (showFabMenuSheet) {
-            CascadiaButtonSheet(
+            CascadiaButtonMenuSheet(
                 viewModel = viewModel,
                 onEditTapAction = {
                     isSwipeActionEdit = false
