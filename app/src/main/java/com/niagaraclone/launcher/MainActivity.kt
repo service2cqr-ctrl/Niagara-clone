@@ -163,7 +163,13 @@ class MainActivity : ComponentActivity() {
                                 onRequestSetDefaultLauncher = { requestDefaultLauncher() },
                                 onOpenSearch = { page = Page.SEARCH }
                             )
-                            Page.WIDGETS -> WidgetsScreen()
+                            Page.WIDGETS -> WidgetsScreen(
+                                viewModel = viewModel,
+                                appWidgetHost = appWidgetHost,
+                                appWidgetManager = appWidgetManager,
+                                onAddWidgetClick = { launchWidgetPicker() },
+                                onDismiss = { page = Page.HOME }
+                            )
                             Page.SETTINGS -> SettingsScreen(
                                 viewModel = viewModel,
                                 onDismiss = { page = Page.HOME },
