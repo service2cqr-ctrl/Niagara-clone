@@ -3,6 +3,7 @@ package com.niagaraclone.launcher.data
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.drawable.Drawable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,12 +24,20 @@ class AppRepository(context: Context) {
             addCategory(Intent.CATEGORY_LAUNCHER)
         }
         val resolveInfos = packageManager.queryIntentActivities(intent, 0)
-        val apps = resolveInfos.map {
-            AppModel(
-                packageName = it.activityInfo.packageName,
-                label = it.loadLabel(packageManager).toString(),
-                icon = it.loadIcon(packageManager)
-            )
+        val apps = resolveInfos.mapNotNull { resolveInfo ->
+            try {
+                val pkgName = resolveInfo.activityInfo.packageName
+                val label = resolveInfo.loadLabel(packageManager).toString()
+                val icon = resolveInfo.loadIcon(packageManager)
+                AppModel(
+                    packageName = pkgName,
+                    label = label,
+                    icon = icon
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
         }.sortedBy { it.label.lowercase() }
 
         _installedApps.value = apps
