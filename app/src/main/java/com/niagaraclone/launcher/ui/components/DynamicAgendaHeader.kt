@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.data.CalendarEventModel
@@ -38,14 +39,40 @@ fun DynamicAgendaHeader(
     Column(modifier = Modifier.fillMaxWidth()) {
         // --- CLOCK DISPLAY ---
         when (clockStyle) {
-            "DIGITAL_MINIMAL" -> Text(text = "$timeHours:$timeMinutes", color = Color.White, fontSize = 54.sp, fontWeight = FontWeight.Bold)
+            "DIGITAL_MINIMAL" -> Text(
+                text = "$timeHours:$timeMinutes",
+                color = Color.White,
+                fontSize = 54.sp,
+                fontWeight = FontWeight.Bold
+            )
             "DIGITAL_HEADER" -> Column {
-                Text(text = currentDate.uppercase(), color = accentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                Text(text = "$timeHours:$timeMinutes", color = Color.White, fontSize = 60.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = currentDate.uppercase(),
+                    color = accentColor,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp
+                )
+                Text(
+                    text = "$timeHours:$timeMinutes",
+                    color = Color.White,
+                    fontSize = 60.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
             else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = timeHours, color = accentColor, fontSize = 68.sp, fontWeight = FontWeight.Bold)
-                Text(text = timeMinutes, color = Color.White, fontSize = 68.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = timeHours,
+                    color = accentColor,
+                    fontSize = 68.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = timeMinutes,
+                    color = Color.White,
+                    fontSize = 68.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
@@ -66,7 +93,11 @@ fun DynamicAgendaHeader(
 
             if (showBattery) {
                 Text(text = "•", color = Color.Gray, fontSize = 12.sp)
-                Text(text = batteryStatus, color = Color.White.copy(alpha = 0.9f), fontSize = 15.sp)
+                Text(
+                    text = batteryStatus,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 15.sp
+                )
             }
 
             if (weatherEnabled) {
@@ -84,7 +115,12 @@ fun DynamicAgendaHeader(
         AnimatedVisibility(visible = showCalendarPreview && upcomingEvents.isNotEmpty()) {
             val nextEvent = upcomingEvents.firstOrNull()
             if (nextEvent != null) {
-                val eventTimeStr = if (nextEvent.isAllDay) "All day" else SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(nextEvent.startTimeMillis))
+                val eventTimeStr = if (nextEvent.isAllDay) {
+                    "All day"
+                } else {
+                    SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(nextEvent.startTimeMillis))
+                }
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -101,7 +137,9 @@ fun DynamicAgendaHeader(
                         text = "$eventTimeStr • ${nextEvent.title}",
                         color = Color.White.copy(alpha = 0.88f),
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
