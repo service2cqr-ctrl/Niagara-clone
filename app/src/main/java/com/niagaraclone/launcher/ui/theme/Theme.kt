@@ -24,8 +24,8 @@ fun NiagaraCloneTheme(
     val colorScheme = if (useDark) {
         darkColorScheme(
             primary = accentColor,
-            background = Color(0xFF121212),
-            surface = Color(0xFF1B1B1B),
+            background = Color.Black, // True AMOLED Pitch Black matching Niagara
+            surface = Color(0xFF141414), // Rich dark surface for cards and sheets
             onBackground = Color(0xFFECECEC),
             onSurface = Color(0xFFECECEC)
         )
@@ -48,11 +48,12 @@ fun NiagaraCloneTheme(
 
 /** Preset accent colors offered in the theme picker, echoing Niagara's palette options. */
 val AccentPresets = listOf(
-    Color(0xFF3B82F6), // blue
-    Color(0xFF10B981), // green
-    Color(0xFFF59E0B), // amber
-    Color(0xFFEF4444), // red
-    Color(0xFF8B5CF6), // violet
-    Color(0xFFEC4899), // pink
-    Color(0xFF64748B)  // slate
+    Color(0xFF4DD0E1), // Teal (Default)
+    Color(0xFF3B82F6), // Blue
+    Color(0xFF10B981), // Green
+    Color(0xFFF59E0B), // Amber
+    Color(0xFFEF4444), // Red
+    Color(0xFF8B5CF6), // Violet
+    Color(0xFFEC4899), // Pink
+    Color(0xFF64748B)  // Slate
 )
