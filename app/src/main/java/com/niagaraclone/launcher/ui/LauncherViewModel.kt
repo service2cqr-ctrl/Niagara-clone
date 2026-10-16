@@ -246,6 +246,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 AppShortcutModel(
                     id = shortcut.id,
                     label = shortcut.shortLabel?.toString() ?: shortcut.id,
+                    packageName = shortcut.`package`,
                     icon = iconDrawable,
                     shortcutInfo = shortcut
                 )
