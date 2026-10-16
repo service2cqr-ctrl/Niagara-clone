@@ -64,6 +64,9 @@ fun SettingsScreen(
     var currentPage by remember { mutableStateOf(SettingsPage.MAIN) }
     var showUserGuideSheet by remember { mutableStateOf(false) }
 
+    val accentColorArgb by viewModel.accentColorArgb.collectAsState()
+    val accentColor = Color(accentColorArgb)
+
     BackHandler {
         if (currentPage == SettingsPage.MAIN) {
             onDismiss()
@@ -78,12 +81,14 @@ fun SettingsScreen(
     ) {
         when (currentPage) {
             SettingsPage.MAIN -> MainSettingsContent(
+                accentColor = accentColor,
                 onNavigate = { currentPage = it },
                 onOpenUserGuide = { showUserGuideSheet = true },
                 onDismiss = onDismiss
             )
             SettingsPage.PRODUCTIVITY -> ProductivitySettingsContent(
                 viewModel = viewModel,
+                accentColor = accentColor,
                 onBack = { currentPage = SettingsPage.MAIN },
                 onNavigateToHideApps = { currentPage = SettingsPage.HIDE_APPS },
                 onAddWidgetClick = {
@@ -97,17 +102,21 @@ fun SettingsScreen(
             )
             SettingsPage.THEMES -> ThemesSettingsContent(
                 viewModel = viewModel,
+                accentColor = accentColor,
                 onBack = { currentPage = SettingsPage.MAIN }
             )
             SettingsPage.PRO -> CascadiaProContent(
+                accentColor = accentColor,
                 onBack = { currentPage = SettingsPage.MAIN }
             )
             SettingsPage.ADVANCED -> AdvancedSettingsContent(
+                accentColor = accentColor,
                 onNavigateToBackup = { currentPage = SettingsPage.BACKUP_RESTORE },
                 onBack = { currentPage = SettingsPage.MAIN }
             )
             SettingsPage.BACKUP_RESTORE -> BackupRestoreContent(
                 viewModel = viewModel,
+                accentColor = accentColor,
                 onBack = { currentPage = SettingsPage.ADVANCED }
             )
             SettingsPage.HIDE_APPS -> HideAppsScreen(
@@ -127,6 +136,7 @@ fun SettingsScreen(
 // -----------------------------------------------------------------------------
 @Composable
 private fun MainSettingsContent(
+    accentColor: Color,
     onNavigate: (SettingsPage) -> Unit,
     onOpenUserGuide: () -> Unit,
     onDismiss: () -> Unit
@@ -134,6 +144,8 @@ private fun MainSettingsContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 24.dp)
     ) {
@@ -157,7 +169,7 @@ private fun MainSettingsContent(
             Icon(
                 imageVector = Icons.Default.AutoAwesome,
                 contentDescription = null,
-                tint = Color(0xFF4DD0E1),
+                tint = accentColor,
                 modifier = Modifier.size(64.dp)
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -212,6 +224,7 @@ private fun MainSettingsContent(
 @Composable
 private fun ProductivitySettingsContent(
     viewModel: LauncherViewModel,
+    accentColor: Color,
     onBack: () -> Unit,
     onNavigateToHideApps: () -> Unit,
     onAddWidgetClick: () -> Unit,
@@ -246,13 +259,15 @@ private fun ProductivitySettingsContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
         SubPageHeader(title = "Productivity", onBack = onBack)
 
-        SectionHeader("Instant Access")
-        ToggleSettingRow("Quick Replies", "Reply right from your home screen", true) {}
+        SectionHeader("Instant Access", accentColor)
+        ToggleSettingRow("Quick Replies", "Reply right from your home screen", true, accentColor = accentColor) {}
 
         ClickableSettingRow(
             icon = Icons.Outlined.CalendarMonth,
@@ -264,6 +279,7 @@ private fun ProductivitySettingsContent(
             title = "Calendar Preview",
             subtitle = "See upcoming events on your home screen",
             checked = calendarPreviewEnabled,
+            accentColor = accentColor,
             onCheckedChange = { enabled ->
                 coroutineScope.launch { viewModel.repository.setCalendarPreviewEnabled(enabled) }
             }
@@ -307,7 +323,7 @@ private fun ProductivitySettingsContent(
                 },
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.Black,
-                    checkedTrackColor = Color(0xFF4DD0E1)
+                    checkedTrackColor = accentColor
                 )
             )
         }
@@ -319,11 +335,11 @@ private fun ProductivitySettingsContent(
             onClick = { showMusicAppSheet = true }
         )
 
-        SectionHeader("Digital Wellbeing")
-        ToggleSettingRow("Usage Breaker", "Get reminders to take breaks", false) {}
-        ToggleSettingRow("Notification Summary", "Bundle notifications to reduce distractions", false) {}
+        SectionHeader("Digital Wellbeing", accentColor)
+        ToggleSettingRow("Usage Breaker", "Get reminders to take breaks", false, accentColor = accentColor) {}
+        ToggleSettingRow("Notification Summary", "Bundle notifications to reduce distractions", false, accentColor = accentColor) {}
 
-        SectionHeader("App Organization")
+        SectionHeader("App Organization", accentColor)
         ClickableSettingRow(
             icon = Icons.Outlined.VisibilityOff,
             title = "Hide Apps",
@@ -336,10 +352,10 @@ private fun ProductivitySettingsContent(
             subtitle = "Group apps to keep your app list tidy",
             onClick = { showFolderInfoDialog = true }
         )
-        ToggleSettingRow("Suggest Often-Used Apps", "Directly access often-used apps from your favorites", false) {}
-        ToggleSettingRow("Sort All Apps List By Usage", "Prioritize most-used apps for each letter", false) {}
+        ToggleSettingRow("Suggest Often-Used Apps", "Directly access often-used apps from your favorites", false, accentColor = accentColor) {}
+        ToggleSettingRow("Sort All Apps List By Usage", "Prioritize most-used apps for each letter", false, accentColor = accentColor) {}
 
-        SectionHeader("Smart Search")
+        SectionHeader("Smart Search", accentColor)
         ClickableSettingRow(
             icon = Icons.Outlined.Search,
             title = "Smart Search",
@@ -347,21 +363,23 @@ private fun ProductivitySettingsContent(
             onClick = { showSmartSearchDialog = true }
         )
 
-        SectionHeader("Shortcuts & Gestures")
+        SectionHeader("Shortcuts & Gestures", accentColor)
         ToggleSettingRow(
             title = "Cascadia Button",
             subtitle = "Run quick actions from your home screen",
             checked = cascadiaButtonEnabled,
+            accentColor = accentColor,
             onCheckedChange = { viewModel.setCascadiaButtonEnabled(it) }
         )
         ToggleSettingRow(
             title = "Quick Lock",
             subtitle = "Double-tap empty home screen space to lock phone",
             checked = quickLockEnabled,
+            accentColor = accentColor,
             onCheckedChange = { viewModel.setQuickLockEnabled(it) }
         )
 
-        SectionHeader("Advanced")
+        SectionHeader("Advanced", accentColor)
         ClickableSettingRow(
             icon = Icons.Outlined.AddBox,
             title = "Add Custom Widget",
@@ -378,18 +396,21 @@ private fun ProductivitySettingsContent(
             title = "Show Battery Percentage",
             subtitle = "Display battery level next to date",
             checked = showBatteryPercentage,
+            accentColor = accentColor,
             onCheckedChange = { viewModel.setShowBatteryPercentage(it) }
         )
         ToggleSettingRow(
             title = "Allow Home Screen Rotation",
             subtitle = "When device is rotated",
             checked = rotationEnabled,
+            accentColor = accentColor,
             onCheckedChange = { viewModel.setRotationEnabled(it) }
         )
         ToggleSettingRow(
             title = "Allow Haptic Feedback",
             subtitle = "Follow system settings",
             checked = hapticFeedbackEnabled,
+            accentColor = accentColor,
             onCheckedChange = { viewModel.setHapticFeedbackEnabled(it) }
         )
     }
@@ -429,7 +450,7 @@ private fun ProductivitySettingsContent(
             },
             confirmButton = {
                 TextButton(onClick = { showFolderInfoDialog = false }) {
-                    Text("Got it", color = Color(0xFF4DD0E1))
+                    Text("Got it", color = accentColor)
                 }
             },
             containerColor = Color(0xFF1E1E1E)
@@ -446,6 +467,7 @@ private fun ProductivitySettingsContent(
                         title = "Include Contacts",
                         subtitle = "Search phone contacts and dial directly",
                         checked = searchContactsEnabled,
+                        accentColor = accentColor,
                         onCheckedChange = { enabled ->
                             coroutineScope.launch { viewModel.repository.setSearchContactsEnabled(enabled) }
                         }
@@ -454,7 +476,7 @@ private fun ProductivitySettingsContent(
             },
             confirmButton = {
                 TextButton(onClick = { showSmartSearchDialog = false }) {
-                    Text("Done", color = Color(0xFF4DD0E1))
+                    Text("Done", color = accentColor)
                 }
             },
             containerColor = Color(0xFF1E1E1E)
@@ -485,7 +507,7 @@ private fun ProductivitySettingsContent(
                                     showMediaThemeDialog = false
                                 },
                                 colors = RadioButtonDefaults.colors(
-                                    selectedColor = Color(0xFF4DD0E1),
+                                    selectedColor = accentColor,
                                     unselectedColor = Color.Gray
                                 )
                             )
@@ -507,10 +529,10 @@ private fun ProductivitySettingsContent(
             },
             confirmButton = {
                 TextButton(onClick = { showMediaThemeDialog = false }) {
-                    Text("Close", color = Color(0xFF4DD0E1))
+                    Text("Close", color = accentColor)
                 }
             },
-            containerColor = Color.Black
+            containerColor = Color(0xFF161616)
         )
     }
 
@@ -531,7 +553,7 @@ private fun ProductivitySettingsContent(
                         openNotificationAccessSettings(context)
                     }
                 ) {
-                    Text(text = "Open Settings", color = Color(0xFF4DD0E1))
+                    Text(text = "Open Settings", color = accentColor)
                 }
             },
             dismissButton = {
@@ -539,7 +561,7 @@ private fun ProductivitySettingsContent(
                     Text(text = "Cancel", color = Color.Gray)
                 }
             },
-            containerColor = Color.Black
+            containerColor = Color(0xFF161616)
         )
     }
 
@@ -555,6 +577,7 @@ private fun ProductivitySettingsContent(
                         title = "Show Calendar Preview",
                         subtitle = "Display next event under date",
                         checked = calendarPreviewEnabled,
+                        accentColor = accentColor,
                         onCheckedChange = { enabled ->
                             coroutineScope.launch { viewModel.repository.setCalendarPreviewEnabled(enabled) }
                         }
@@ -563,10 +586,10 @@ private fun ProductivitySettingsContent(
             },
             confirmButton = {
                 TextButton(onClick = { showCalendarDialog = false }) {
-                    Text("Done", color = Color(0xFF4DD0E1))
+                    Text("Done", color = accentColor)
                 }
             },
-            containerColor = Color.Black
+            containerColor = Color(0xFF161616)
         )
     }
 }
@@ -577,6 +600,7 @@ private fun ProductivitySettingsContent(
 @Composable
 private fun ThemesSettingsContent(
     viewModel: LauncherViewModel,
+    accentColor: Color,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -601,6 +625,8 @@ private fun ThemesSettingsContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
@@ -660,7 +686,11 @@ private fun ThemesSettingsContent(
                             .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = selectedIconPack == "SYSTEM" || selectedIconPack.isEmpty(), onClick = null)
+                        RadioButton(
+                            selected = selectedIconPack == "SYSTEM" || selectedIconPack.isEmpty(),
+                            onClick = null,
+                            colors = RadioButtonDefaults.colors(selectedColor = accentColor)
+                        )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text("Default System Icons", color = Color.White, fontSize = 16.sp)
                     }
@@ -684,7 +714,11 @@ private fun ThemesSettingsContent(
                                     .padding(vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                RadioButton(selected = selectedIconPack == pack.packageName, onClick = null)
+                                RadioButton(
+                                    selected = selectedIconPack == pack.packageName,
+                                    onClick = null,
+                                    colors = RadioButtonDefaults.colors(selectedColor = accentColor)
+                                )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 pack.icon?.let { iconDrawable ->
                                     Image(
@@ -701,9 +735,9 @@ private fun ThemesSettingsContent(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showIconPackPicker = false }) { Text("Close", color = Color(0xFF4DD0E1)) }
+                TextButton(onClick = { showIconPackPicker = false }) { Text("Close", color = accentColor) }
             },
-            containerColor = Color.Black
+            containerColor = Color(0xFF161616)
         )
     }
 
@@ -739,9 +773,9 @@ private fun ThemesSettingsContent(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showColorPicker = false }) { Text("Close", color = Color(accentColorArgb)) }
+                TextButton(onClick = { showColorPicker = false }) { Text("Close", color = accentColor) }
             },
-            containerColor = Color.Black
+            containerColor = Color(0xFF161616)
         )
     }
 }
@@ -750,10 +784,15 @@ private fun ThemesSettingsContent(
 // 4. PRO MEMBERSHIP PAGE
 // -----------------------------------------------------------------------------
 @Composable
-private fun CascadiaProContent(onBack: () -> Unit) {
+private fun CascadiaProContent(
+    accentColor: Color,
+    onBack: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -761,7 +800,7 @@ private fun CascadiaProContent(onBack: () -> Unit) {
         Icon(
             imageVector = Icons.Default.AutoAwesome,
             contentDescription = null,
-            tint = Color(0xFF4DD0E1),
+            tint = accentColor,
             modifier = Modifier.size(80.dp)
         )
         Spacer(modifier = Modifier.height(24.dp))
@@ -784,6 +823,7 @@ private fun CascadiaProContent(onBack: () -> Unit) {
 // -----------------------------------------------------------------------------
 @Composable
 private fun AdvancedSettingsContent(
+    accentColor: Color,
     onNavigateToBackup: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -792,6 +832,8 @@ private fun AdvancedSettingsContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
@@ -867,6 +909,7 @@ private fun AdvancedSettingsContent(
 @Composable
 private fun BackupRestoreContent(
     viewModel: LauncherViewModel,
+    accentColor: Color,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -907,6 +950,8 @@ private fun BackupRestoreContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
@@ -918,24 +963,27 @@ private fun BackupRestoreContent(
         FeatureBenefitRow(
             icon = Icons.Outlined.Sync,
             title = "Effortlessly switch devices",
-            description = "Apply your home screen setup to your new device in seconds."
+            description = "Apply your home screen setup to your new device in seconds.",
+            accentColor = accentColor
         )
 
         FeatureBenefitRow(
             icon = Icons.Outlined.Security,
             title = "Keep your setup",
-            description = "Favorites, icons, pop-up folders, settings and more are kept safe."
+            description = "Favorites, icons, pop-up folders, settings and more are kept safe.",
+            accentColor = accentColor
         )
 
         FeatureBenefitRow(
             icon = Icons.Outlined.Close,
             title = "Not included",
             description = "We cannot back up externally set wallpapers and shortcuts.",
-            isNegative = true
+            isNegative = true,
+            accentColor = accentColor
         )
 
         Spacer(modifier = Modifier.height(32.dp))
-        Text("Actions", color = Color(0xFF4DD0E1), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text("Actions", color = accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(12.dp))
 
         ClickableSettingRow(
@@ -973,10 +1021,10 @@ private fun SubPageHeader(title: String, onBack: () -> Unit) {
 }
 
 @Composable
-private fun SectionHeader(title: String) {
+private fun SectionHeader(title: String, accentColor: Color) {
     Text(
         text = title,
-        color = Color(0xFF4DD0E1),
+        color = accentColor,
         fontSize = 13.sp,
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(top = 24.dp, bottom = 12.dp)
@@ -1014,6 +1062,7 @@ private fun ToggleSettingRow(
     subtitle: String?,
     initialValue: Boolean = false,
     checked: Boolean = initialValue,
+    accentColor: Color,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
@@ -1034,7 +1083,7 @@ private fun ToggleSettingRow(
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.Black,
-                checkedTrackColor = Color(0xFF4DD0E1)
+                checkedTrackColor = accentColor
             )
         )
     }
@@ -1070,7 +1119,8 @@ private fun FeatureBenefitRow(
     icon: ImageVector,
     title: String,
     description: String,
-    isNegative: Boolean = false
+    isNegative: Boolean = false,
+    accentColor: Color
 ) {
     Row(
         modifier = Modifier
@@ -1087,7 +1137,7 @@ private fun FeatureBenefitRow(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (isNegative) Color(0xFFEF4444) else Color(0xFF4DD0E1),
+                    tint = if (isNegative) Color(0xFFEF4444) else accentColor,
                     modifier = Modifier.size(20.dp)
                 )
             }
