@@ -8,7 +8,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,6 +26,17 @@ fun AddToCategorySheet(
     viewModel: LauncherViewModel,
     onDismiss: () -> Unit
 ) {
+    val selectedMusicPackages by viewModel.selectedMusicPackages.collectAsState()
+    val hiddenPackages by viewModel.hiddenPackages.collectAsState()
+    val accentColorArgb by viewModel.accentColorArgb.collectAsState()
+    val accentColor = Color(accentColorArgb)
+
+    val isMusicApp = selectedMusicPackages.contains(app.packageName)
+    val isHiddenApp = hiddenPackages.contains(app.packageName)
+
+    var showCreateFolderDialog by remember { mutableStateOf(false) }
+    var newFolderName by remember { mutableStateOf("") }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF141414),
@@ -49,7 +60,9 @@ fun AddToCategorySheet(
             CategoryRow(
                 icon = Icons.Outlined.Headphones,
                 title = "Music Apps",
-                subtitle = "Appear when headphones or speakers are connected",
+                subtitle = if (isMusicApp) "Added to music player triggers • Tap to remove" else "Appear when headphones or speakers are connected",
+                isChecked = isMusicApp,
+                accentColor = accentColor,
                 onClick = {
                     viewModel.toggleMusicPackage(app.packageName)
                     onDismiss()
@@ -59,7 +72,9 @@ fun AddToCategorySheet(
             CategoryRow(
                 icon = Icons.Outlined.VisibilityOff,
                 title = "Hidden apps",
-                subtitle = "Tidy up your app list to find apps quicker",
+                subtitle = if (isHiddenApp) "Currently hidden from app list • Tap to unhide" else "Tidy up your app list to find apps quicker",
+                isChecked = isHiddenApp,
+                accentColor = accentColor,
                 onClick = {
                     viewModel.toggleHidePackage(app.packageName)
                     onDismiss()
@@ -67,42 +82,62 @@ fun AddToCategorySheet(
             )
 
             CategoryRow(
-                icon = Icons.Outlined.Security,
-                title = "Private space",
-                subtitle = "Keep sensitive apps isolated and protected",
-                onClick = { onDismiss() }
-            )
-
-            CategoryRow(
-                icon = Icons.Outlined.Folder,
-                title = "social",
-                subtitle = "WhatsApp, Gmail +5",
-                onClick = { onDismiss() }
-            )
-
-            CategoryRow(
-                icon = Icons.Outlined.Folder,
-                title = "Finance",
-                subtitle = "Finance watchlist, Paytm Money, Paytm +4",
-                onClick = { onDismiss() }
-            )
-
-            CategoryRow(
-                icon = Icons.Outlined.Folder,
-                title = "productivity",
-                subtitle = "At a Glance, Home Workout, Notes +3",
-                onClick = { onDismiss() }
-            )
-
-            CategoryRow(
                 icon = Icons.Outlined.CreateNewFolder,
                 title = "Create pop-up folder",
-                subtitle = null,
-                onClick = { onDismiss() }
+                subtitle = "Group ${app.label} into a new custom folder",
+                isChecked = false,
+                accentColor = accentColor,
+                onClick = { showCreateFolderDialog = true }
             )
 
             Spacer(modifier = Modifier.height(20.dp))
         }
+    }
+
+    if (showCreateFolderDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateFolderDialog = false },
+            containerColor = Color(0xFF1E1E1E),
+            title = { Text("Create Pop-up Folder", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Enter a name for the new folder containing ${app.label}:", color = Color.Gray, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = newFolderName,
+                        onValueChange = { newFolderName = it },
+                        placeholder = { Text("Folder name", color = Color.Gray) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = accentColor,
+                            unfocusedBorderColor = Color.DarkGray,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (newFolderName.isNotBlank()) {
+                            val currentSubApps = viewModel.repository.getFolderSubAppPackages(newFolderName)
+                            val updatedSubApps = currentSubApps + app.packageName
+                            viewModel.setFolderSubApps(newFolderName, updatedSubApps)
+                            showCreateFolderDialog = false
+                            onDismiss()
+                        }
+                    }
+                ) {
+                    Text("Create", color = accentColor, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateFolderDialog = false }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            }
+        )
     }
 }
 
@@ -111,6 +146,8 @@ private fun CategoryRow(
     icon: ImageVector,
     title: String,
     subtitle: String?,
+    isChecked: Boolean,
+    accentColor: Color,
     onClick: () -> Unit
 ) {
     Row(
@@ -123,21 +160,35 @@ private fun CategoryRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.9f),
+            tint = if (isChecked) accentColor else Color.White.copy(alpha = 0.9f),
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.width(18.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 16.sp, color = Color.White, fontWeight = FontWeight.Medium)
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                color = if (isChecked) accentColor else Color.White,
+                fontWeight = FontWeight.Medium
+            )
             if (subtitle != null) {
                 Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
             }
         }
-        Icon(
-            imageVector = Icons.Outlined.ChevronRight,
-            contentDescription = null,
-            tint = Color.Gray,
-            modifier = Modifier.size(20.dp)
-        )
+        if (isChecked) {
+            Icon(
+                imageVector = Icons.Outlined.Check,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(20.dp)
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = Color.Gray,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }
