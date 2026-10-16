@@ -17,6 +17,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
 import org.json.JSONObject
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -262,6 +264,59 @@ class SettingsRepository(private val context: Context) {
         prefs.edit().putStringSet(parentPackage, subPackages).apply()
     }
 
-    fun exportBackupJson(): String = JSONObject().put("version", 1).toString()
-    fun importBackupJson(jsonStr: String): Boolean = try { JSONObject(jsonStr); true } catch (e: Exception) { false }
+    fun exportBackupJson(): String = runBlocking {
+        try {
+            val prefs = context.dataStore.data.first()
+            val jsonObj = JSONObject()
+            jsonObj.put("version", 1)
+            
+            // Serialize DataStore preferences
+            val prefsObj = JSONObject()
+            prefs.asMap().forEach { (key, value) ->
+                if (value is Set<*>) {
+                    prefsObj.put(key.name, JSONArray(value.toList()))
+                } else {
+                    prefsObj.put(key.name, value)
+                }
+            }
+            jsonObj.put("preferences", prefsObj)
+            jsonObj.toString()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            "{}"
+        }
+    }
+
+    fun importBackupJson(jsonStr: String): Boolean = runBlocking {
+        try {
+            val jsonObj = JSONObject(jsonStr)
+            if (jsonObj.has("preferences")) {
+                val prefsObj = jsonObj.getJSONObject("preferences")
+                context.dataStore.edit { mutablePreferences ->
+                    val keysIter = prefsObj.keys()
+                    while (keysIter.hasNext()) {
+                        val keyName = keysIter.next()
+                        val value = prefsObj.get(keyName)
+                        when (value) {
+                            is Boolean -> mutablePreferences[booleanPreferencesKey(keyName)] = value
+                            is Int -> mutablePreferences[intPreferencesKey(keyName)] = value
+                            is Float -> mutablePreferences[floatPreferencesKey(keyName)] = value
+                            is String -> mutablePreferences[stringPreferencesKey(keyName)] = value
+                            is JSONArray -> {
+                                val set = mutableSetOf<String>()
+                                for (i in 0 until value.length()) {
+                                    value.optString(i)?.let { set.add(it) }
+                                }
+                                mutablePreferences[stringSetPreferencesKey(keyName)] = set
+                            }
+                        }
+                    }
+                }
+            }
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
 }
