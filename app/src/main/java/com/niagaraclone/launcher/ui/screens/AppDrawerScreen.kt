@@ -1,21 +1,16 @@
 package com.niagaraclone.launcher.ui.screens
 
-import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.History
@@ -25,21 +20,29 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.components.AddToCategorySheet
+import com.niagaraclone.launcher.ui.components.AppCustomizationSheet
+import com.niagaraclone.launcher.ui.components.EditPopUpFolderSheet
+import com.niagaraclone.launcher.ui.components.INDEX_ITEMS
+import com.niagaraclone.launcher.ui.components.SmartSearchSheet
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
 import kotlinx.coroutines.launch
 
 private val AppModel.firstLetter: String
-    get() = label.firstOrNull()?.uppercaseChar()?.toString() ?: "#"
+    get() = label.firstOrNull()?.uppercaseChar()?.let {
+        if (it in 'A'..'Z') it.toString() else "#"
+    } ?: "#"
 
 private sealed interface DrawerListItem {
     data class Header(val letter: String) : DrawerListItem
@@ -56,28 +59,54 @@ fun AppDrawerScreen(
     onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
-    val allApps by viewModel.apps.collectAsState(initial = emptyList())
-    val favorites by viewModel.favoritePackages.collectAsState(initial = emptySet())
+    val allApps by viewModel.apps.collectAsState()
+    val hiddenPackages by viewModel.hiddenPackages.collectAsState()
+    val accentColorArgb by viewModel.accentColorArgb.collectAsState()
+    val notificationCounts by viewModel.notificationCounts.collectAsState()
+    val notificationSummaries by viewModel.notificationSummaries.collectAsState()
+
+    val accentColor = Color(accentColorArgb)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    var searchQuery by remember { mutableStateOf("") }
-    var appForMenu by remember { mutableStateOf<AppModel?>(null) }
+    var activeLetter by remember { mutableStateOf<String?>(null) }
+    var showSmartSearchSheet by remember { mutableStateOf(false) }
+    var showRecentlyInstalledDialog by remember { mutableStateOf(false) }
 
-    val filteredApps = remember(allApps, searchQuery) {
-        if (searchQuery.isBlank()) {
-            allApps
-        } else {
-            allApps.filter { it.label.contains(searchQuery, ignoreCase = true) }
+    var selectedAppForCustomization by remember { mutableStateOf<AppModel?>(null) }
+    var selectedAppForCategory by remember { mutableStateOf<AppModel?>(null) }
+    var editingFolderApp by remember { mutableStateOf<AppModel?>(null) }
+
+    // Filter out hidden apps just like Niagara Launcher
+    val visibleApps = remember(allApps, hiddenPackages) {
+        allApps.filter { !hiddenPackages.contains(it.packageName) }
+    }
+
+    val notificationLetters = remember(notificationSummaries, visibleApps) {
+        notificationSummaries.mapNotNull { notification ->
+            visibleApps.firstOrNull { it.packageName == notification.packageName }
+                ?.firstLetter
+        }.toSet()
+    }
+
+    // Handle system Back gesture properly
+    BackHandler {
+        when {
+            selectedAppForCategory != null -> selectedAppForCategory = null
+            selectedAppForCustomization != null -> selectedAppForCustomization = null
+            editingFolderApp != null -> editingFolderApp = null
+            showSmartSearchSheet -> showSmartSearchSheet = false
+            showRecentlyInstalledDialog -> showRecentlyInstalledDialog = false
+            else -> onDismiss()
         }
     }
 
     // Build grouped items with section headers (A, B, C...)
-    val drawerItems = remember(filteredApps) {
+    val drawerItems = remember(visibleApps) {
         val list = mutableListOf<DrawerListItem>()
         var currentLetter = ""
 
-        filteredApps.forEach { app ->
+        visibleApps.forEach { app ->
             val letter = app.firstLetter
             if (letter != currentLetter) {
                 currentLetter = letter
@@ -91,193 +120,238 @@ fun AppDrawerScreen(
         list
     }
 
-    // Map each letter to its exact scroll index in LazyColumn
+    // Map every index item (including letters with no apps) to its closest scroll position
     val letterStartIndexMap = remember(drawerItems) {
-        val map = mutableMapOf<String, Int>()
+        val exactMap = mutableMapOf<String, Int>()
         drawerItems.forEachIndexed { index, item ->
             if (item is DrawerListItem.Header) {
-                map[item.letter] = index
+                exactMap[item.letter] = index
             }
         }
-        map
-    }
 
-    // Determine current active letter header based on visible scroll item
-    val activeVisibleLetter = remember(listState.firstVisibleItemIndex, drawerItems) {
-        if (drawerItems.isNotEmpty() && listState.firstVisibleItemIndex < drawerItems.size) {
-            when (val currentItem = drawerItems[listState.firstVisibleItemIndex]) {
-                is DrawerListItem.Header -> currentItem.letter
-                is DrawerListItem.AppItem -> currentItem.app.firstLetter
-                else -> ""
+        val fullMap = mutableMapOf<String, Int>()
+        fullMap["☆"] = 0
+        fullMap["⭐"] = 0
+        var lastKnownIndex = 0
+        INDEX_ITEMS.forEach { char ->
+            if (exactMap.containsKey(char)) {
+                lastKnownIndex = exactMap[char]!!
+                fullMap[char] = lastKnownIndex
+            } else if (char == "∘" || char == "#") {
+                fullMap[char] = (drawerItems.size - 1).coerceAtLeast(0)
+            } else {
+                fullMap[char] = lastKnownIndex
             }
-        } else ""
+        }
+        fullMap
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(
+        // Full A-Z App List with Niagara-style spacing and headers
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(end = 50.dp) // Space reserved for right-side wave index
+                .padding(start = 24.dp, end = 48.dp),
+            contentPadding = PaddingValues(top = 48.dp, bottom = 140.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            // Search Bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                placeholder = { Text("Search apps", color = Color.Gray) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = Color.Gray
-                    )
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF4DD0E1),
-                    unfocusedBorderColor = Color.DarkGray,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
-                )
-            )
-
-            Box(modifier = Modifier.weight(1f)) {
-                // Full A-Z App List with Headers
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 80.dp)
-                ) {
-                    itemsIndexed(
-                        items = drawerItems,
-                        key = { _, item ->
-                            when (item) {
-                                is DrawerListItem.Header -> "header_${item.letter}"
-                                is DrawerListItem.AppItem -> item.app.packageName
-                                is DrawerListItem.RecentlyInstalledAction -> "action_recently_installed"
-                                is DrawerListItem.SettingsAction -> "action_cascadia_settings"
-                            }
-                        }
-                    ) { _, item ->
-                        when (item) {
-                            is DrawerListItem.Header -> {
-                                Text(
-                                    text = item.letter,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp)
-                                )
-                            }
-                            is DrawerListItem.AppItem -> {
-                                AppRow(
-                                    app = item.app,
-                                    isFavorite = favorites.contains(item.app.packageName),
-                                    onClick = {
-                                        val intent = context.packageManager.getLaunchIntentForPackage(item.app.packageName)
-                                        intent?.let { context.startActivity(it) }
-                                    },
-                                    onLongClick = { appForMenu = item.app }
-                                )
-                            }
-                            is DrawerListItem.RecentlyInstalledAction -> {
-                                DrawerActionRow(
-                                    icon = Icons.Outlined.History,
-                                    label = "Recently Installed Apps",
-                                    onClick = { /* Optional action */ }
-                                )
-                            }
-                            is DrawerListItem.SettingsAction -> {
-                                DrawerActionRow(
-                                    icon = Icons.Outlined.Settings,
-                                    label = "Cascadia Settings",
-                                    onClick = onOpenSettings
-                                )
-                            }
-                        }
+            itemsIndexed(
+                items = drawerItems,
+                key = { _, item ->
+                    when (item) {
+                        is DrawerListItem.Header -> "header_${item.letter}"
+                        is DrawerListItem.AppItem -> item.app.packageName
+                        is DrawerListItem.RecentlyInstalledAction -> "action_recently_installed"
+                        is DrawerListItem.SettingsAction -> "action_cascadia_settings"
                     }
                 }
-
-                // Active Section Circle Badge (Floats on left when scrolling)
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = activeVisibleLetter.isNotEmpty() && listState.isScrollInProgress,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .background(Color(0xFF4DD0E1), shape = CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
+            ) { _, item ->
+                when (item) {
+                    is DrawerListItem.Header -> {
                         Text(
-                            text = activeVisibleLetter,
+                            text = item.letter,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.Black
+                            color = Color.White.copy(alpha = 0.9f),
+                            style = TextStyle(
+                                shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f)
+                            ),
+                            modifier = Modifier.padding(top = 16.dp, bottom = 6.dp)
+                        )
+                    }
+                    is DrawerListItem.AppItem -> {
+                        AppRow(
+                            app = item.app,
+                            badgeCount = notificationCounts[item.app.packageName] ?: 0,
+                            accentColor = accentColor,
+                            onClick = {
+                                val intent = context.packageManager.getLaunchIntentForPackage(item.app.packageName)
+                                intent?.let { context.startActivity(it) }
+                            },
+                            onLongClick = { selectedAppForCustomization = item.app }
+                        )
+                    }
+                    is DrawerListItem.RecentlyInstalledAction -> {
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Text(
+                            text = "Cascadia Launcher",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        DrawerActionRow(
+                            icon = Icons.Outlined.History,
+                            label = "Recently installed",
+                            onClick = { showRecentlyInstalledDialog = true }
+                        )
+                    }
+                    is DrawerListItem.SettingsAction -> {
+                        DrawerActionRow(
+                            icon = Icons.Outlined.Settings,
+                            label = "Cascadia settings",
+                            onClick = onOpenSettings
                         )
                     }
                 }
             }
         }
 
+        // Niagara-style Floating Search Button at Bottom-Right (see Image 3)
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 44.dp, end = 52.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = accentColor,
+                shadowElevation = 6.dp,
+                modifier = Modifier
+                    .size(54.dp)
+                    .clickable { showSmartSearchSheet = true }
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search apps",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
+
         // Wave Side Indexer (Right Edge)
         WaveSideIndex(
-            modifier = Modifier.align(Alignment.CenterEnd),
+            isIndexerVisible = true,
+            notificationLetters = notificationLetters,
+            activeChar = activeLetter,
+            accentColor = accentColor,
             onCharSelected = { char ->
-                when (char) {
-                    "⭐", "★" -> {
-                        // Tapping/Stopping on Star returns to Home Screen
-                        onDismiss()
-                    }
-                    "o", "∘" -> {
-                        scope.launch {
-                            if (drawerItems.isNotEmpty()) {
-                                listState.scrollToItem(drawerItems.size - 1)
-                            }
-                        }
-                    }
-                    else -> {
-                        letterStartIndexMap[char]?.let { targetIndex ->
-                            scope.launch { listState.scrollToItem(targetIndex) }
-                        }
+                activeLetter = char
+                if (char != "☆" && char != "⭐") {
+                    letterStartIndexMap[char]?.let { targetIndex ->
+                        scope.launch { listState.scrollToItem(targetIndex) }
                     }
                 }
             },
-            onDragEnd = {}
+            onDragEnd = { lastChar ->
+                activeLetter = null
+                if (lastChar == "☆" || lastChar == "⭐") {
+                    onDismiss()
+                }
+            },
+            modifier = Modifier.fillMaxSize()
         )
     }
 
-    // App Long-Press Menu
-    appForMenu?.let { app ->
-        AppLongPressMenu(
+    // --- OVERLAYS & SHEETS ---
+    if (showSmartSearchSheet) {
+        SmartSearchSheet(
+            viewModel = viewModel,
+            apps = visibleApps,
+            onDismiss = { showSmartSearchSheet = false }
+        )
+    }
+
+    selectedAppForCustomization?.let { app ->
+        AppCustomizationSheet(
             app = app,
-            isFavorite = favorites.contains(app.packageName),
-            onDismiss = { appForMenu = null },
-            onToggleFavorite = {
-                viewModel.toggleFavorite(app.packageName)
-                appForMenu = null
+            viewModel = viewModel,
+            onDismiss = { selectedAppForCustomization = null },
+            onOpenSettings = onOpenSettings,
+            onOpenCategorySheet = {
+                selectedAppForCategory = app
+                selectedAppForCustomization = null
             },
-            onAppInfo = {
-                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                    data = Uri.fromParts("package", app.packageName, null)
-                }
-                context.startActivity(intent)
-                appForMenu = null
-            },
-            onUninstall = {
-                val intent = Intent(Intent.ACTION_DELETE).apply {
-                    data = Uri.fromParts("package", app.packageName, null)
-                }
-                context.startActivity(intent)
-                appForMenu = null
+            onOpenEditFolderSheet = {
+                editingFolderApp = app
+                selectedAppForCustomization = null
             }
+        )
+    }
+
+    selectedAppForCategory?.let { app ->
+        AddToCategorySheet(
+            app = app,
+            viewModel = viewModel,
+            onDismiss = { selectedAppForCategory = null }
+        )
+    }
+
+    editingFolderApp?.let { parentApp ->
+        EditPopUpFolderSheet(
+            parentApp = parentApp,
+            viewModel = viewModel,
+            allApps = visibleApps,
+            onDismiss = { editingFolderApp = null }
+        )
+    }
+
+    if (showRecentlyInstalledDialog) {
+        val recentApps = remember { viewModel.getRecentlyInstalledApps() }
+
+        AlertDialog(
+            onDismissRequest = { showRecentlyInstalledDialog = false },
+            title = { Text("Recently Installed Apps", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = {
+                if (recentApps.isEmpty()) {
+                    Text("No newly installed apps in the last 30 days.", color = Color.Gray)
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                        itemsIndexed(recentApps) { _, app ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) }
+                                        showRecentlyInstalledDialog = false
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                app.icon?.let { icon ->
+                                    Image(
+                                        bitmap = icon.toBitmap(width = 40, height = 40).asImageBitmap(),
+                                        contentDescription = app.label,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                }
+                                Text(text = app.label, color = Color.White, fontSize = 16.sp)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showRecentlyInstalledDialog = false }) {
+                    Text("Close", color = accentColor)
+                }
+            },
+            containerColor = Color(0xFF1E1E1E)
         )
     }
 }
@@ -286,7 +360,8 @@ fun AppDrawerScreen(
 @Composable
 private fun AppRow(
     app: AppModel,
-    isFavorite: Boolean,
+    badgeCount: Int = 0,
+    accentColor: Color,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -294,31 +369,34 @@ private fun AppRow(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         app.icon?.let { iconDrawable ->
             Image(
-                bitmap = iconDrawable.toBitmap(width = 44, height = 44).asImageBitmap(),
+                bitmap = iconDrawable.toBitmap(width = 48, height = 48).asImageBitmap(),
                 contentDescription = app.label,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(34.dp)
             )
             Spacer(modifier = Modifier.width(18.dp))
-        } ?: Spacer(modifier = Modifier.width(54.dp))
+        } ?: Spacer(modifier = Modifier.width(52.dp))
 
         Text(
             text = app.label,
-            fontSize = 18.sp,
+            fontSize = 16.sp,
             color = Color.White,
             fontWeight = FontWeight.Medium,
+            style = TextStyle(
+                shadow = Shadow(color = Color.Black.copy(alpha = 0.45f), blurRadius = 4f)
+            ),
             modifier = Modifier.weight(1f)
         )
 
-        if (isFavorite) {
-            Text(
-                text = "★",
-                fontSize = 14.sp,
-                color = Color(0xFF4DD0E1)
+        if (badgeCount > 0) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(accentColor, CircleShape)
             )
         }
     }
@@ -330,75 +408,25 @@ private fun DrawerActionRow(
     label: String,
     onClick: () -> Unit
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        color = Color.Transparent
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.8f),
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(18.dp))
-            Text(
-                text = label,
-                fontSize = 18.sp,
-                color = Color.White
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.85f),
+            modifier = Modifier.size(28.dp)
+        )
+        Spacer(modifier = Modifier.width(18.dp))
+        Text(
+            text = label,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.White
+        )
     }
-}
-
-@Composable
-private fun AppLongPressMenu(
-    app: AppModel,
-    isFavorite: Boolean,
-    onDismiss: () -> Unit,
-    onToggleFavorite: () -> Unit,
-    onAppInfo: () -> Unit,
-    onUninstall: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = app.label, color = Color.White) },
-        text = {
-            Column {
-                TextButton(
-                    onClick = onToggleFavorite,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                        color = Color(0xFF4DD0E1)
-                    )
-                }
-                TextButton(
-                    onClick = onAppInfo,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(text = "App info", color = Color.White)
-                }
-                TextButton(
-                    onClick = onUninstall,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(text = "Uninstall", color = Color(0xFFEF4444))
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = "Cancel", color = Color.Gray)
-            }
-        },
-        containerColor = Color(0xFF1E1E1E)
-    )
 }
