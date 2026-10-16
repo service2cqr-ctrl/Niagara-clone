@@ -1,6 +1,7 @@
 package com.niagaraclone.launcher.ui.screens
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -61,7 +62,6 @@ fun SmartSearchOverlay(
 
     var matchedContacts by remember { mutableStateOf<List<ContactResultModel>>(emptyList()) }
 
-    // Query contacts dynamically when typing if enabled
     LaunchedEffect(query, searchContactsEnabled) {
         if (!searchContactsEnabled || query.isBlank() || query.length < 2) {
             matchedContacts = emptyList()
@@ -103,10 +103,9 @@ fun SmartSearchOverlay(
         matchedContacts = contactsList
     }
 
-    // Prioritize apps starting with query, then containing query
     val filteredApps = remember(query, apps) {
         if (query.isBlank()) {
-            apps.take(5) // Show frequent/recent apps when query is empty
+            apps.take(5)
         } else {
             val trimmed = query.trim()
             apps.sortedWith(
@@ -128,7 +127,7 @@ fun SmartSearchOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.92f)) // Solid frosted dark overlay matching Niagara
+            .background(Color.Black.copy(alpha = 0.92f))
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -137,7 +136,6 @@ fun SmartSearchOverlay(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            // Search Top Bar
             Surface(
                 shape = RoundedCornerShape(28.dp),
                 color = Color(0xFF161616),
@@ -196,11 +194,10 @@ fun SmartSearchOverlay(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 contentPadding = PaddingValues(bottom = 32.dp)
             ) {
-                // Apps section
                 if (filteredApps.isNotEmpty()) {
                     item(key = "header_apps") {
                         Text(
-                            text = if (query.isBlank()) "SUGGESTED APPS" : "APPS",
+                            text = if (query.isBlank()) "SUGGESTED APPS" else "APPS",
                             color = Color.Gray,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
@@ -226,7 +223,6 @@ fun SmartSearchOverlay(
                     }
                 }
 
-                // Contacts section
                 if (matchedContacts.isNotEmpty()) {
                     item(key = "header_contacts") {
                         Text(
@@ -276,7 +272,6 @@ fun SmartSearchOverlay(
                     }
                 }
 
-                // Web suggestions section
                 if (query.isNotBlank()) {
                     item(key = "header_web") {
                         Text(
