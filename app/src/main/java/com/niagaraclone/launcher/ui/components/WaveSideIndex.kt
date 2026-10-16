@@ -92,6 +92,8 @@ fun WaveSideIndex(
     val createEdgePointerInput: suspend PointerInputScope.(Boolean) -> Unit = { isLeft ->
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
+            
+            // Only capture if user interacts near the edge (outer 44dp), allowing normal back-gestures elsewhere
             isDragging = true
             activeEdgeIsLeft = isLeft
             dragStartX = down.position.x
@@ -132,7 +134,7 @@ fun WaveSideIndex(
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     val bounds = coordinates.boundsInWindow()
-                    val stripWidthPx = with(density) { 44.dp.toPx() }.toInt()
+                    val stripWidthPx = with(density) { 24.dp.toPx() }.toInt() // Narrower exclusion zone to allow back-gesture clearance
 
                     val leftRect = Rect(0, bounds.top.toInt(), stripWidthPx, bounds.bottom.toInt())
                     val rightRect = Rect((bounds.right - stripWidthPx).toInt(), bounds.top.toInt(), bounds.right.toInt(), bounds.bottom.toInt())
@@ -141,11 +143,12 @@ fun WaveSideIndex(
                 }
             }
     ) {
+        // Touch target strips on left and right edges
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .fillMaxHeight()
-                .width(44.dp)
+                .width(36.dp)
                 .pointerInput(Unit) { createEdgePointerInput(true) }
         )
 
@@ -153,7 +156,7 @@ fun WaveSideIndex(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .fillMaxHeight()
-                .width(44.dp)
+                .width(36.dp)
                 .pointerInput(Unit) { createEdgePointerInput(false) }
         )
 
@@ -172,9 +175,12 @@ fun WaveSideIndex(
                     val itemCenterY = itemCenterYMap[index] ?: 0f
                     val distance = if (currentY != null) abs(currentY - itemCenterY) else Float.MAX_VALUE
 
-                    val influenceRadiusPx = with(density) { 180.dp.toPx() }
+                    // Tighter influence radius (120dp) for a sharper, more focused Niagara-like physical ribbon curve
+                    val influenceRadiusPx = with(density) { 120.dp.toPx() }
                     val circularArcFactor = if (distance < influenceRadiusPx) {
-                        val cosVal = cos((PI.toFloat() * distance) / (2f * influenceRadiusPx))
+                        val normalizedDist = distance / influenceRadiusPx
+                        // Sharper power curve mimicking physical steel ribbon tension
+                        val cosVal = cos((PI.toFloat() * normalizedDist) / 2f)
                         cosVal * cosVal
                     } else {
                         0f
@@ -186,21 +192,22 @@ fun WaveSideIndex(
                         (dragStartX - touchX).coerceAtLeast(0f)
                     }
 
-                    val maxLimitPx = with(density) { 200.dp.toPx() }
-                    val actualMaxDisplacement = pullDistancePx.coerceIn(with(density) { 36.dp.toPx() }, maxLimitPx)
+                    val maxLimitPx = with(density) { 160.dp.toPx() }
+                    val actualMaxDisplacement = pullDistancePx.coerceIn(with(density) { 28.dp.toPx() }, maxLimitPx)
 
                     val targetTranslationX = -1f * (actualMaxDisplacement * circularArcFactor)
-                    val targetScale = 1.0f + (0.75f * circularArcFactor)
+                    // Enhanced scale transition mapping closer to real launcher magnification
+                    val targetScale = 1.0f + (0.9f * circularArcFactor)
 
                     val animatedOffset by animateFloatAsState(
                         targetValue = targetTranslationX,
-                        animationSpec = spring(stiffness = 450f, dampingRatio = 0.7f),
+                        animationSpec = spring(stiffness = 600f, dampingRatio = 0.65f),
                         label = "wave_offset"
                     )
 
                     val animatedScale by animateFloatAsState(
                         targetValue = targetScale,
-                        animationSpec = spring(stiffness = 450f, dampingRatio = 0.7f),
+                        animationSpec = spring(stiffness = 600f, dampingRatio = 0.65f),
                         label = "wave_scale"
                     )
 
@@ -239,7 +246,7 @@ fun WaveSideIndex(
                                 )
                             ),
                             color = if (isSelected) accentColor else Color.White.copy(alpha = 0.85f),
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                         )
                     }
@@ -256,10 +263,10 @@ fun WaveSideIndex(
             } else {
                 (dragStartX - touchX).coerceAtLeast(0f)
             }
-            val maxLimitPx = with(density) { 200.dp.toPx() }
-            val apexXDisplacement = pullDistancePx.coerceIn(with(density) { 36.dp.toPx() }, maxLimitPx)
+            val maxLimitPx = with(density) { 160.dp.toPx() }
+            val apexXDisplacement = pullDistancePx.coerceIn(with(density) { 28.dp.toPx() }, maxLimitPx)
 
-            val badgeOffsetX = - (apexXDisplacement + with(density) { 48.dp.toPx() })
+            val badgeOffsetX = - (apexXDisplacement + with(density) { 44.dp.toPx() })
 
             Box(
                 modifier = Modifier
@@ -270,13 +277,13 @@ fun WaveSideIndex(
                     shape = CircleShape,
                     color = accentColor,
                     shadowElevation = 10.dp,
-                    modifier = Modifier.size(54.dp)
+                    modifier = Modifier.size(52.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
                             text = currentActiveChar,
                             color = Color.Black,
-                            fontSize = 24.sp,
+                            fontSize = 22.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
