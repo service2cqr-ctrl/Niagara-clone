@@ -92,8 +92,6 @@ fun WaveSideIndex(
     val createEdgePointerInput: suspend PointerInputScope.(Boolean) -> Unit = { isLeft ->
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
-            
-            // Only capture if user interacts near the edge (outer 44dp), allowing normal back-gestures elsewhere
             isDragging = true
             activeEdgeIsLeft = isLeft
             dragStartX = down.position.x
@@ -134,16 +132,13 @@ fun WaveSideIndex(
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     val bounds = coordinates.boundsInWindow()
-                    val stripWidthPx = with(density) { 24.dp.toPx() }.toInt() // Narrower exclusion zone to allow back-gesture clearance
-
+                    val stripWidthPx = with(density) { 32.dp.toPx() }.toInt()
                     val leftRect = Rect(0, bounds.top.toInt(), stripWidthPx, bounds.bottom.toInt())
                     val rightRect = Rect((bounds.right - stripWidthPx).toInt(), bounds.top.toInt(), bounds.right.toInt(), bounds.bottom.toInt())
-
                     hostView.systemGestureExclusionRects = listOf(leftRect, rightRect)
                 }
             }
     ) {
-        // Touch target strips on left and right edges
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
@@ -160,96 +155,93 @@ fun WaveSideIndex(
                 .pointerInput(Unit) { createEdgePointerInput(false) }
         )
 
-        if (isIndexerVisible || isDragging) {
-            val currentY = touchY
+        // Always render the index column with a comfortable padding from the edge (matching Niagara rest view)
+        val currentY = touchY
 
-            Column(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
-                    .padding(top = 165.dp, bottom = 85.dp, end = 12.dp),
-                verticalArrangement = Arrangement.SpaceEvenly,
-                horizontalAlignment = Alignment.End
-            ) {
-                INDEX_ITEMS.forEachIndexed { index, char ->
-                    val itemCenterY = itemCenterYMap[index] ?: 0f
-                    val distance = if (currentY != null) abs(currentY - itemCenterY) else Float.MAX_VALUE
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .padding(top = 165.dp, bottom = 85.dp, end = 20.dp), // Increased right padding to pull it away from the edge
+            verticalArrangement = Arrangement.SpaceEvenly,
+            horizontalAlignment = Alignment.End
+        ) {
+            INDEX_ITEMS.forEachIndexed { index, char ->
+                val itemCenterY = itemCenterYMap[index] ?: 0f
+                val distance = if (currentY != null) abs(currentY - itemCenterY) else Float.MAX_VALUE
 
-                    // Tighter influence radius (120dp) for a sharper, more focused Niagara-like physical ribbon curve
-                    val influenceRadiusPx = with(density) { 120.dp.toPx() }
-                    val circularArcFactor = if (distance < influenceRadiusPx) {
-                        val normalizedDist = distance / influenceRadiusPx
-                        // Sharper power curve mimicking physical steel ribbon tension
-                        val cosVal = cos((PI.toFloat() * normalizedDist) / 2f)
-                        cosVal * cosVal
-                    } else {
-                        0f
-                    }
+                val influenceRadiusPx = with(density) { 130.dp.toPx() }
+                val circularArcFactor = if (distance < influenceRadiusPx) {
+                    val normalizedDist = distance / influenceRadiusPx
+                    val cosVal = cos((PI.toFloat() * normalizedDist) / 2f)
+                    cosVal * cosVal
+                } else {
+                    0f
+                }
 
-                    val pullDistancePx = if (activeEdgeIsLeft) {
-                        (touchX - dragStartX).coerceAtLeast(0f)
-                    } else {
-                        (dragStartX - touchX).coerceAtLeast(0f)
-                    }
+                val pullDistancePx = if (activeEdgeIsLeft) {
+                    (touchX - dragStartX).coerceAtLeast(0f)
+                } else {
+                    (dragStartX - touchX).coerceAtLeast(0f)
+                }
 
-                    val maxLimitPx = with(density) { 160.dp.toPx() }
-                    val actualMaxDisplacement = pullDistancePx.coerceIn(with(density) { 28.dp.toPx() }, maxLimitPx)
+                val maxLimitPx = with(density) { 180.dp.toPx() }
+                // Multiplied displacement factor for a deeper, more pronounced curve arc when dragged
+                val actualMaxDisplacement = (pullDistancePx * 1.25f).coerceIn(with(density) { 32.dp.toPx() }, maxLimitPx)
 
-                    val targetTranslationX = -1f * (actualMaxDisplacement * circularArcFactor)
-                    // Enhanced scale transition mapping closer to real launcher magnification
-                    val targetScale = 1.0f + (0.9f * circularArcFactor)
+                val targetTranslationX = -1f * (actualMaxDisplacement * circularArcFactor)
+                val targetScale = 1.0f + (1.1f * circularArcFactor) // Richer magnification curve like Niagara
 
-                    val animatedOffset by animateFloatAsState(
-                        targetValue = targetTranslationX,
-                        animationSpec = spring(stiffness = 600f, dampingRatio = 0.65f),
-                        label = "wave_offset"
-                    )
+                val animatedOffset by animateFloatAsState(
+                    targetValue = targetTranslationX,
+                    animationSpec = spring(stiffness = 500f, dampingRatio = 0.6f),
+                    label = "wave_offset"
+                )
 
-                    val animatedScale by animateFloatAsState(
-                        targetValue = targetScale,
-                        animationSpec = spring(stiffness = 600f, dampingRatio = 0.65f),
-                        label = "wave_scale"
-                    )
+                val animatedScale by animateFloatAsState(
+                    targetValue = targetScale,
+                    animationSpec = spring(stiffness = 500f, dampingRatio = 0.6f),
+                    label = "wave_scale"
+                )
 
-                    val isSelected = index == lastSelectedIndex || char == activeChar
-                    val hasNotification = notificationLetters.contains(char)
+                val isSelected = index == lastSelectedIndex || char == activeChar
+                val hasNotification = notificationLetters.contains(char)
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.End,
-                        modifier = Modifier
-                            .onGloballyPositioned { coords ->
-                                val rootY = coords.positionInRoot().y + coords.size.height / 2f
-                                itemCenterYMap[index] = rootY
-                            }
-                            .graphicsLayer {
-                                translationX = animatedOffset
-                                scaleX = animatedScale
-                                scaleY = animatedScale
-                            }
-                    ) {
-                        if (hasNotification) {
-                            Box(
-                                modifier = Modifier
-                                    .padding(end = 4.dp)
-                                    .size(5.dp)
-                                    .background(accentColor, CircleShape)
-                            )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier
+                        .onGloballyPositioned { coords ->
+                            val rootY = coords.positionInRoot().y + coords.size.height / 2f
+                            itemCenterYMap[index] = rootY
                         }
-
-                        Text(
-                            text = char,
-                            style = TextStyle(
-                                shadow = Shadow(
-                                    color = Color.Black.copy(alpha = 0.6f),
-                                    blurRadius = 6f
-                                )
-                            ),
-                            color = if (isSelected) accentColor else Color.White.copy(alpha = 0.85f),
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        .graphicsLayer {
+                            translationX = animatedOffset
+                            scaleX = animatedScale
+                            scaleY = animatedScale
+                        }
+                ) {
+                    if (hasNotification) {
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 4.dp)
+                               .size(5.dp)
+                                .background(accentColor, CircleShape)
                         )
                     }
+
+                    Text(
+                        text = char,
+                        style = TextStyle(
+                            shadow = Shadow(
+                                color = Color.Black.copy(alpha = 0.6f),
+                                blurRadius = 6f
+                            )
+                        ),
+                        color = if (isSelected) accentColor else Color.White.copy(alpha = 0.85f),
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
                 }
             }
         }
@@ -263,10 +255,10 @@ fun WaveSideIndex(
             } else {
                 (dragStartX - touchX).coerceAtLeast(0f)
             }
-            val maxLimitPx = with(density) { 160.dp.toPx() }
-            val apexXDisplacement = pullDistancePx.coerceIn(with(density) { 28.dp.toPx() }, maxLimitPx)
+            val maxLimitPx = with(density) { 180.dp.toPx() }
+            val apexXDisplacement = (pullDistancePx * 1.25f).coerceIn(with(density) { 32.dp.toPx() }, maxLimitPx)
 
-            val badgeOffsetX = - (apexXDisplacement + with(density) { 44.dp.toPx() })
+            val badgeOffsetX = - (apexXDisplacement + with(density) { 52.dp.toPx() })
 
             Box(
                 modifier = Modifier
@@ -277,13 +269,13 @@ fun WaveSideIndex(
                     shape = CircleShape,
                     color = accentColor,
                     shadowElevation = 10.dp,
-                    modifier = Modifier.size(52.dp)
+                    modifier = Modifier.size(56.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
                             text = currentActiveChar,
                             color = Color.Black,
-                            fontSize = 22.sp,
+                            fontSize = 24.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
