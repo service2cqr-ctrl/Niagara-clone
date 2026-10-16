@@ -47,6 +47,9 @@ fun SmartSearchSheet(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
+    val accentColorArgb by viewModel.accentColorArgb.collectAsState()
+    val accentColor = Color(accentColorArgb)
+
     val filteredApps = remember(query, apps) {
         if (query.isBlank()) emptyList()
         else apps.filter { it.label.contains(query, ignoreCase = true) }
@@ -67,22 +70,30 @@ fun SmartSearchSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF121212),
+        containerColor = Color(0xFF141414), // Rich dark container matching other sheets
         contentColor = Color.White,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .heightIn(max = 560.dp)
                 .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
                 placeholder = { Text("Search apps, contacts & web...", color = Color.Gray) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF4DD0E1)) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = accentColor) },
                 textStyle = LocalTextStyle.current.copy(color = Color.White),
                 singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = accentColor,
+                    unfocusedBorderColor = Color(0xFF2C2C2C),
+                    focusedContainerColor = Color(0xFF1C1C1C),
+                    unfocusedContainerColor = Color(0xFF1C1C1C)
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
@@ -91,12 +102,25 @@ fun SmartSearchSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize()
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp)
             ) {
                 if (filteredApps.isNotEmpty()) {
-                    item { Text("Applications", color = Color(0xFF4DD0E1), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-                    items(filteredApps) { app ->
+                    item(key = "header_apps") {
+                        Text(
+                            text = "APPLICATIONS",
+                            color = accentColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+                    items(
+                        items = filteredApps,
+                        key = { "app_${it.packageName}" }
+                    ) { app ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -105,21 +129,32 @@ fun SmartSearchSheet(
                                     context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) }
                                     onDismiss()
                                 }
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             app.icon?.let {
-                                Image(bitmap = it.toBitmap(width = 36, height = 36).asImageBitmap(), contentDescription = null, modifier = Modifier.size(28.dp))
+                                Image(bitmap = it.toBitmap(width = 40, height = 40).asImageBitmap(), contentDescription = null, modifier = Modifier.size(30.dp))
                                 Spacer(modifier = Modifier.width(14.dp))
-                            }
-                            Text(text = app.label, color = Color.White, fontSize = 15.sp)
+                            } ?: Spacer(modifier = Modifier.width(44.dp))
+                            Text(text = app.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
 
                 if (contacts.isNotEmpty()) {
-                    item { Text("Contacts", color = Color(0xFF4DD0E1), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp)) }
-                    items(contacts) { contact ->
+                    item(key = "header_contacts") {
+                        Text(
+                            text = "CONTACTS",
+                            color = accentColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                        )
+                    }
+                    items(
+                        items = contacts,
+                        key = { "contact_${it.phoneNumber}" }
+                    ) { contact ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -128,22 +163,30 @@ fun SmartSearchSheet(
                                     context.startActivity(intent)
                                     onDismiss()
                                 }
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Person, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = Color(0xFF262626),
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Person, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                                }
+                            }
                             Spacer(modifier = Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(text = contact.name, color = Color.White, fontSize = 15.sp)
+                                Text(text = contact.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                                 Text(text = contact.phoneNumber, color = Color.Gray, fontSize = 12.sp)
                             }
-                            Icon(Icons.Default.Call, contentDescription = null, tint = Color(0xFF4DD0E1))
+                            Icon(Icons.Default.Call, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
                         }
                     }
                 }
 
                 if (query.isNotBlank()) {
-                    item {
+                    item(key = "web_search_item") {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -151,12 +194,20 @@ fun SmartSearchSheet(
                                     viewModel.launchWebSearch(context, query)
                                     onDismiss()
                                 }
-                                .padding(vertical = 12.dp),
+                                .padding(vertical = 12.dp, horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF4DD0E1))
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = accentColor.copy(alpha = 0.2f),
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Search, contentDescription = null, tint = accentColor, modifier = Modifier.size(16.dp))
+                                }
+                            }
                             Spacer(modifier = Modifier.width(14.dp))
-                            Text(text = "Search Google for \"$query\"", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                            Text(text = "Search web for \"$query\"", color = accentColor, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
