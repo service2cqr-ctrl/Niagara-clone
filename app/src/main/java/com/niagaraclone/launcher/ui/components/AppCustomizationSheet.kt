@@ -44,7 +44,12 @@ fun AppCustomizationSheet(
     var showRenameDialog by remember { mutableStateOf(false) }
 
     val favorites by viewModel.favoritePackages.collectAsState()
+    val hiddenPackages by viewModel.hiddenPackages.collectAsState()
+    val accentColorArgb by viewModel.accentColorArgb.collectAsState()
+    val accentColor = Color(accentColorArgb)
+
     val isFavorite = favorites.contains(app.packageName)
+    val isHidden = hiddenPackages.contains(app.packageName)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -174,8 +179,8 @@ fun AppCustomizationSheet(
                     )
 
                     SheetActionRow(
-                        icon = Icons.Outlined.VisibilityOff,
-                        title = "Hide from app list",
+                        icon = if (isHidden) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                        title = if (isHidden) "Unhide from app list" else "Hide from app list",
                         onClick = {
                             viewModel.toggleHidePackage(app.packageName)
                             onDismiss()
@@ -202,7 +207,7 @@ fun AppCustomizationSheet(
         }
     }
 
-    // --- EDIT NAME DIALOG (FIXED SAVING CALL) ---
+    // --- EDIT NAME DIALOG ---
     if (showRenameDialog) {
         var newName by remember { mutableStateOf(app.label) }
 
@@ -215,7 +220,11 @@ fun AppCustomizationSheet(
                     onValueChange = { newName = it },
                     singleLine = true,
                     textStyle = LocalTextStyle.current.copy(color = Color.White),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = accentColor,
+                        unfocusedBorderColor = Color.DarkGray
+                    )
                 )
             },
             confirmButton = {
@@ -224,7 +233,7 @@ fun AppCustomizationSheet(
                     showRenameDialog = false
                     onDismiss()
                 }) {
-                    Text("Save", color = Color(0xFF4DD0E1))
+                    Text("Save", color = accentColor, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
