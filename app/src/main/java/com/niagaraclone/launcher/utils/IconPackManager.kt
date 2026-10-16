@@ -2,7 +2,6 @@ package com.niagaraclone.launcher.utils
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -78,7 +77,7 @@ class IconPackManager(private val context: Context) {
             while (parser.next() != XmlPullParser.END_DOCUMENT) {
                 if (parser.eventType == XmlPullParser.START_TAG && parser.name == "item") {
                     val component = parser.getAttributeValue(null, "component")
-                    if (component != null && component.contains(appPackageName)) {
+                    if (component != null && (component.contains(appPackageName) || component.startsWith("ComponentInfo{$appPackageName/"))) {
                         drawableName = parser.getAttributeValue(null, "drawable")
                         break
                     }
@@ -88,7 +87,8 @@ class IconPackManager(private val context: Context) {
             if (drawableName != null) {
                 val iconResId = iconPackResources.getIdentifier(drawableName, "drawable", iconPackPackage)
                 if (iconResId != 0) {
-                    return iconPackResources.getDrawable(iconResId, null)
+                    val resDrawable = iconPackResources.getDrawable(iconResId, null)
+                    if (resDrawable != null) return resDrawable
                 }
             }
 
@@ -127,7 +127,9 @@ class IconPackManager(private val context: Context) {
                                     if (attrName.startsWith("img")) {
                                         val resName = parser.getAttributeValue(i)
                                         val id = res.getIdentifier(resName, "drawable", iconPackPackage)
-                                        if (id != 0) res.getDrawable(id, null)?.toBitmap()?.let { backs.add(it) }
+                                        if (id != 0) {
+                                            res.getDrawable(id, null)?.let { backs.add(drawableToBitmap(it)) }
+                                        }
                                     }
                                 }
                             }
@@ -135,14 +137,18 @@ class IconPackManager(private val context: Context) {
                                 val resName = parser.getAttributeValue(null, "img1")
                                 if (resName != null) {
                                     val id = res.getIdentifier(resName, "drawable", iconPackPackage)
-                                    if (id != 0) mask = res.getDrawable(id, null)?.toBitmap()
+                                    if (id != 0) {
+                                        mask = res.getDrawable(id, null)?.let { drawableToBitmap(it) }
+                                    }
                                 }
                             }
                             "iconupon" -> {
                                 val resName = parser.getAttributeValue(null, "img1")
                                 if (resName != null) {
                                     val id = res.getIdentifier(resName, "drawable", iconPackPackage)
-                                    if (id != 0) upon = res.getDrawable(id, null)?.toBitmap()
+                                    if (id != 0) {
+                                        upon = res.getDrawable(id, null)?.let { drawableToBitmap(it) }
+                                    }
                                 }
                             }
                             "scale" -> {
@@ -176,13 +182,13 @@ class IconPackManager(private val context: Context) {
         // 2. Scale & Draw Original App Icon
         val scaledWidth = (width * config.scale).toInt()
         val scaledHeight = (height * config.scale).toInt()
-        val origBitmap = original.toBitmap(scaledWidth, scaledHeight)
+        val origBitmap = drawableToBitmap(original)
 
         val tempBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val tempCanvas = Canvas(tempBitmap)
         val left = (width - scaledWidth) / 2f
         val top = (height - scaledHeight) / 2f
-        tempCanvas.drawBitmap(origBitmap, left, top, paint)
+        tempCanvas.drawBitmap(Bitmap.createScaledBitmap(origBitmap, scaledWidth, scaledHeight, true), left, top, paint)
 
         // 3. Apply Icon Mask
         config.iconMask?.let { maskBitmap ->
@@ -199,5 +205,18 @@ class IconPackManager(private val context: Context) {
         }
 
         return BitmapDrawable(context.resources, resultBitmap)
+    }
+
+    private fun drawableToBitmap(drawable: Drawable): Bitmap {
+        if (drawable is BitmapDrawable && drawable.bitmap != null) {
+            return drawable.bitmap
+        }
+        val width = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 192
+        val height = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 192
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        return bitmap
     }
 }
