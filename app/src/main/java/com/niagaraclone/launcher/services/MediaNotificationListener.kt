@@ -87,6 +87,7 @@ class MediaNotificationListener : NotificationListenerService() {
     }
 
     private lateinit var sessionManager: MediaSessionManager
+    private var currentCallback: MediaController.Callback? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -101,13 +102,21 @@ class MediaNotificationListener : NotificationListenerService() {
 
             updateActiveSession(sessionManager.getActiveSessions(component))
         } catch (e: SecurityException) {
-            // Triggers if listener permission is not granted yet
             e.printStackTrace()
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        activeController?.let { controller ->
+            currentCallback?.let { callback ->
+                try {
+                    controller.unregisterCallback(callback)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
         if (instance == this) instance = null
     }
 
@@ -174,6 +183,16 @@ class MediaNotificationListener : NotificationListenerService() {
     }
 
     private fun updateActiveSession(controllers: List<MediaController>?) {
+        activeController?.let { oldController ->
+            currentCallback?.let { oldCb ->
+                try {
+                    oldController.unregisterCallback(oldCb)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
         val controller = controllers?.firstOrNull()
         activeController = controller
 
@@ -182,7 +201,7 @@ class MediaNotificationListener : NotificationListenerService() {
             return
         }
 
-        controller.registerCallback(object : MediaController.Callback() {
+        val callback = object : MediaController.Callback() {
             override fun onMetadataChanged(metadata: MediaMetadata?) {
                 extractData(controller)
             }
@@ -190,29 +209,37 @@ class MediaNotificationListener : NotificationListenerService() {
             override fun onPlaybackStateChanged(state: PlaybackState?) {
                 extractData(controller)
             }
-        })
+        }
 
+        currentCallback = callback
+        controller.registerCallback(callback)
         extractData(controller)
     }
 
     private fun extractData(controller: MediaController) {
-        val metadata = controller.metadata
-        val playbackState = controller.playbackState
+        try {
+            val metadata = controller.metadata
+            val playbackState = controller.playbackState
 
-        val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
-        val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
-        val isPlaying = playbackState?.state == PlaybackState.STATE_PLAYING
-        val bitmap = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-            ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
+            val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
+            val isPlaying = playbackState?.state == PlaybackState.STATE_PLAYING
+            val bitmap = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
 
-        if (title.isNotEmpty()) {
-            _mediaState.value = MediaState(
-                title = title,
-                artist = artist,
-                packageName = controller.packageName,
-                isPlaying = isPlaying,
-                albumArt = bitmap
-            )
+            if (title.isNotEmpty()) {
+                _mediaState.value = MediaState(
+                    title = title,
+                    artist = artist,
+                    packageName = controller.packageName,
+                    isPlaying = isPlaying,
+                    albumArt = bitmap
+                )
+            } else {
+                _mediaState.value = null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }
