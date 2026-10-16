@@ -41,7 +41,7 @@ fun CascadiaButtonMenuSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color.Black,
+        containerColor = Color(0xFF141414),
         contentColor = Color.White,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
@@ -50,7 +50,13 @@ fun CascadiaButtonMenuSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
-            Text(text = "Cascadia Button", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 16.dp))
+            Text(
+                text = "Cascadia Button",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
 
             SheetRowItem(
                 icon = Icons.Outlined.Edit,
@@ -105,13 +111,14 @@ fun FabActionSelectionSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color.Black,
+        containerColor = Color(0xFF141414),
         contentColor = Color.White,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .heightIn(max = 550.dp) // Bound height safely inside bottom sheet
                 .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
             Text(
@@ -123,11 +130,17 @@ fun FabActionSelectionSheet(
             )
 
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.fillMaxSize()
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 item {
-                    Text(text = "Suggestions", color = accentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+                    Text(
+                        text = "SUGGESTIONS",
+                        color = accentColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
                 }
 
                 item {
@@ -196,10 +209,16 @@ fun FabActionSelectionSheet(
                 }
 
                 item {
-                    Text(text = "Applications", color = accentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+                    Text(
+                        text = "APPLICATIONS",
+                        color = accentColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+                    )
                 }
 
-                items(apps) { app ->
+                items(apps, key = { it.packageName }) { app ->
                     val isAppSelected = fabActionType == "APP" && fabPackage == app.packageName
                     Row(
                         modifier = Modifier
@@ -218,7 +237,8 @@ fun FabActionSelectionSheet(
                                 modifier = Modifier.size(28.dp)
                             )
                             Spacer(modifier = Modifier.width(16.dp))
-                        }
+                        } ?: Spacer(modifier = Modifier.width(44.dp))
+
                         Text(text = app.label, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         if (isAppSelected) {
                             Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = accentColor)
