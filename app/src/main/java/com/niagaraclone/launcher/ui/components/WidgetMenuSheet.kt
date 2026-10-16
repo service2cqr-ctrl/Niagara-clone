@@ -1,10 +1,10 @@
 package com.niagaraclone.launcher.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.with
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,7 +32,7 @@ private enum class WidgetSubPage {
     MAIN, CLOCK_STYLE, CALENDAR, CALENDAR_FILTER, WEATHER
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WidgetMenuSheet(
     viewModel: LauncherViewModel,
@@ -54,6 +54,14 @@ fun WidgetMenuSheet(
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
     val accentColor = Color(accentColorArgb)
 
+    // Handle back button inside sub-pages gracefully
+    BackHandler(enabled = currentPage != WidgetSubPage.MAIN) {
+        currentPage = when (currentPage) {
+            WidgetSubPage.CALENDAR_FILTER -> WidgetSubPage.CALENDAR
+            else -> WidgetSubPage.MAIN
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF141414),
@@ -62,7 +70,7 @@ fun WidgetMenuSheet(
     ) {
         AnimatedContent(
             targetState = currentPage,
-            transitionSpec = { fadeIn() with fadeOut() },
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "WidgetMenuAnimation"
         ) { page ->
             when (page) {
@@ -98,6 +106,7 @@ fun WidgetMenuSheet(
                             title = "Weather",
                             subtitle = "Location, Temperature units",
                             checked = weatherEnabled,
+                            accentColor = accentColor,
                             onCheckedChange = { viewModel.setWeatherEnabled(it) },
                             onClick = { currentPage = WidgetSubPage.WEATHER }
                         )
@@ -126,6 +135,7 @@ fun WidgetMenuSheet(
                             title = "Show media widget",
                             subtitle = "While playing music",
                             checked = rawShowMediaWidget,
+                            accentColor = accentColor,
                             onCheckedChange = { viewModel.setShowMediaWidget(it) }
                         )
 
@@ -133,6 +143,7 @@ fun WidgetMenuSheet(
                             icon = Icons.Outlined.BatteryStd,
                             title = "Show Battery Percentage",
                             checked = showBatteryPercentage,
+                            accentColor = accentColor,
                             onCheckedChange = { viewModel.setShowBatteryPercentage(it) }
                         )
 
@@ -177,6 +188,7 @@ fun WidgetMenuSheet(
                 WidgetSubPage.CALENDAR -> {
                     CalendarSettingsSubPage(
                         previewEnabled = calendarPreviewEnabled,
+                        accentColor = accentColor,
                         onTogglePreview = { viewModel.setCalendarPreviewEnabled(it) },
                         onOpenFilter = { currentPage = WidgetSubPage.CALENDAR_FILTER }
                     )
@@ -184,6 +196,7 @@ fun WidgetMenuSheet(
 
                 WidgetSubPage.CALENDAR_FILTER -> {
                     CalendarFilterSubPage(
+                        accentColor = accentColor,
                         onClose = { currentPage = WidgetSubPage.CALENDAR }
                     )
                 }
@@ -271,6 +284,7 @@ private fun ClockStyleSubPage(
 @Composable
 private fun CalendarSettingsSubPage(
     previewEnabled: Boolean,
+    accentColor: Color,
     onTogglePreview: (Boolean) -> Unit,
     onOpenFilter: () -> Unit
 ) {
@@ -285,6 +299,7 @@ private fun CalendarSettingsSubPage(
             icon = Icons.Outlined.CalendarToday,
             title = "Show upcoming events",
             checked = previewEnabled,
+            accentColor = accentColor,
             onCheckedChange = onTogglePreview
         )
 
@@ -300,10 +315,11 @@ private fun CalendarSettingsSubPage(
 
 @Composable
 private fun CalendarFilterSubPage(
+    accentColor: Color,
     onClose: () -> Unit
 ) {
     val sampleAccounts = listOf(
-        Pair("Events", Color(0xFF4DD0E1)),
+        Pair("Events", accentColor),
         Pair("Holidays in India", Color(0xFF81C784)),
         Pair("Samsung Calendar", Color(0xFFBA68C8))
     )
@@ -330,7 +346,7 @@ private fun CalendarFilterSubPage(
                 Checkbox(
                     checked = isChecked,
                     onCheckedChange = { isChecked = it },
-                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFF4DD0E1))
+                    colors = CheckboxDefaults.colors(checkedColor = accentColor)
                 )
             }
         }
@@ -339,7 +355,7 @@ private fun CalendarFilterSubPage(
 
         Button(
             onClick = onClose,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4DD0E1), contentColor = Color.Black),
+            colors = ButtonDefaults.buttonColors(containerColor = accentColor, contentColor = Color.Black),
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Okay", fontWeight = FontWeight.Bold)
@@ -399,12 +415,14 @@ private fun WeatherSettingsSubPage(
                 FilterChip(
                     selected = tempUnit == "CELSIUS",
                     onClick = { onSelectTempUnit("CELSIUS") },
-                    label = { Text("°C") }
+                    label = { Text("°C") },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = accentColor.copy(alpha = 0.3f))
                 )
                 FilterChip(
                     selected = tempUnit == "FAHRENHEIT",
                     onClick = { onSelectTempUnit("FAHRENHEIT") },
-                    label = { Text("°F") }
+                    label = { Text("°F") },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = accentColor.copy(alpha = 0.3f))
                 )
             }
         }
@@ -461,6 +479,7 @@ private fun WidgetMenuItemToggleRow(
     title: String,
     subtitle: String? = null,
     checked: Boolean,
+    accentColor: Color,
     onCheckedChange: (Boolean) -> Unit,
     onClick: (() -> Unit)? = null
 ) {
@@ -482,7 +501,10 @@ private fun WidgetMenuItemToggleRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF4DD0E1))
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.Black,
+                checkedTrackColor = accentColor
+            )
         )
     }
 }
