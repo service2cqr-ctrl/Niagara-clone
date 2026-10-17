@@ -37,7 +37,7 @@ fun WidgetStackView(
     appWidgetManager: AppWidgetManager,
     onRemoveWidget: (Int) -> Unit,
     onAddWidgetClick: () -> Unit,
-    onResizeWidgetHeight: ((Float) -> Unit)? = null, // Optional callback to persist height changes
+    onResizeWidgetHeight: ((Float) -> Unit)? = null,
     modifier: Modifier = Modifier,
     accentColor: Color = Color(0xFF4DD0E1)
 ) {
@@ -60,7 +60,6 @@ fun WidgetStackView(
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color(0xFF141414))
         ) {
-            // --- 1. SWIPEABLE WIDGET PAGER ---
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize()
@@ -88,15 +87,12 @@ fun WidgetStackView(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Transparent overlay border / long-press handler zone that doesn't block internal widget touches completely
-                    // Allowing users to long-press near corners or use a dedicated handle if needed
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(8.dp),
                         contentAlignment = Alignment.TopEnd
                     ) {
-                        // Small subtle options trigger icon on top right of active widget
                         IconButton(
                             onClick = { showWidgetOptionsDialog = widgetId },
                             modifier = Modifier.size(32.dp)
@@ -120,7 +116,6 @@ fun WidgetStackView(
                 }
             }
 
-            // --- 2. PAGINATION DOTS INDICATOR (Only shown if 2+ widgets exist) ---
             if (widgetIds.size > 1) {
                 Row(
                     modifier = Modifier
@@ -153,7 +148,6 @@ fun WidgetStackView(
             }
         }
 
-        // --- 3. LIVE HEIGHT RESIZE HANDLE ---
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -180,7 +174,6 @@ fun WidgetStackView(
         }
     }
 
-    // --- 4. WIDGET OPTIONS DIALOG ---
     showWidgetOptionsDialog?.let { targetWidgetId ->
         AlertDialog(
             onDismissRequest = { showWidgetOptionsDialog = null },
