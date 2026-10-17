@@ -7,9 +7,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
-import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Process
@@ -35,6 +35,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val repository = SettingsRepository(application)
     private val appRepository = AppRepository(application)
     private val weatherRepository = WeatherRepository(application)
+    private val calendarRepository = CalendarRepository(application)
     private val backupManager = BackupManager(application, repository)
 
     val apps: StateFlow<List<AppModel>> = appRepository.installedApps
@@ -76,10 +77,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val suggestAppsEnabled = repository.suggestAppsEnabled
     val sortByUsageEnabled = repository.sortByUsageEnabled
 
-    // Live notification counts and summaries from MediaNotificationListener service
     val notificationCounts = MediaNotificationListener.activeNotificationCounts
     val notificationSummaries = MediaNotificationListener.notificationSummaries
-    val upcomingEvents = repository.upcomingEvents
+
+    private val _upcomingEvents = MutableStateFlow<List<CalendarEventModel>>(emptyList())
+    val upcomingEvents: StateFlow<List<CalendarEventModel>> = _upcomingEvents.asStateFlow()
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -93,6 +95,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         checkDefaultLauncherStatus()
         extractWallpaperAccentColor()
         fetchLiveWeatherForCurrentMode()
+        loadCalendarEvents()
 
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)
@@ -139,7 +142,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                             repository.setWeatherCityName(weatherData.cityName)
                         }
                     } else {
-                        // Fallback default coordinates (Pune/India) if GPS is null
                         val weatherData = weatherRepository.fetchLiveWeather(18.5204, 73.8567)
                         if (weatherData != null) {
                             repository.updateLiveWeather(weatherData.temperatureCelsius, weatherData.conditionIcon)
@@ -240,7 +242,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun setFabTapAction(actionType: String, pkg: String = "") { viewModelScope.launch { repository.setFabTapAction(actionType, pkg) } }
     fun setFabSwipeAction(actionType: String, pkg: String = "") { viewModelScope.launch { repository.setFabSwipeAction(actionType, pkg) } }
 
-    fun loadCalendarEvents() { viewModelScope.launch { repository.loadCalendarEvents() } }
+    fun loadCalendarEvents() {
+        viewModelScope.launch {
+            _upcomingEvents.value = calendarRepository.getUpcomingEvents(2)
+        }
+    }
 
     fun launchCalendarNewEvent(context: Context) {
         val intent = Intent(Intent.ACTION_INSERT).apply {
