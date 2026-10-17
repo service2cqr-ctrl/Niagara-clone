@@ -76,6 +76,7 @@ import com.niagaraclone.launcher.ui.components.PopUpFolderCard
 import com.niagaraclone.launcher.ui.components.SmartSearchSheet
 import com.niagaraclone.launcher.ui.components.StartupPermissionsDialog
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
+import com.niagaraclone.launcher.ui.components.WeatherBottomSheet
 import com.niagaraclone.launcher.ui.components.WidgetMenuSheet
 import com.niagaraclone.launcher.ui.components.WidgetStackView
 import com.niagaraclone.launcher.ui.components.rememberCurrentTimeState
@@ -151,6 +152,7 @@ fun HomeScreen(
     val notificationSummaries by viewModel.notificationSummaries.collectAsState()
 
     var showAgendaSheet by remember { mutableStateOf(false) }
+    var showWeatherSheet by remember { mutableStateOf(false) }
     var showSmartSearchSheet by remember { mutableStateOf(false) }
     var showFabMenuSheet by remember { mutableStateOf(false) }
     var showFabEditActionSheet by remember { mutableStateOf(false) }
@@ -189,6 +191,7 @@ fun HomeScreen(
             isMovingHeader ||
             showSmartSearchSheet ||
             showAgendaSheet ||
+            showWeatherSheet ||
             showFabMenuSheet ||
             showFabEditActionSheet ||
             selectedAppForCustomization != null ||
@@ -218,6 +221,7 @@ fun HomeScreen(
             isWidgetMenuOpen -> isWidgetMenuOpen = false
             isMovingHeader -> isMovingHeader = false
             showSmartSearchSheet -> showSmartSearchSheet = false
+            showWeatherSheet -> showWeatherSheet = false
             showAgendaSheet -> showAgendaSheet = false
             showFabEditActionSheet -> showFabEditActionSheet = false
             showFabMenuSheet -> showFabMenuSheet = false
@@ -231,12 +235,41 @@ fun HomeScreen(
         }
     }
 
+    // On-demand permission launcher for Calendar feature
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
             viewModel.loadCalendarEvents()
             showAgendaSheet = true
+        }
+    }
+
+    // On-demand permission launcher for Weather / Location feature
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.fetchLiveWeatherForCurrentMode()
+        }
+        showWeatherSheet = true
+    }
+
+    val openWeatherWithPermissionCheck = {
+        val hasFineLocation = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val hasCoarseLocation = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasFineLocation || hasCoarseLocation) {
+            viewModel.fetchLiveWeatherForCurrentMode()
+            showWeatherSheet = true
+        } else {
+            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
     }
 
@@ -282,7 +315,6 @@ fun HomeScreen(
         visibleApps.groupBy { it.firstLetter }.toSortedMap()
     }
 
-    // Resolve the closest non-empty letter section when scrubbing over an empty letter
     val resolvedScrubLetter = remember(activeLetter, groupedApps) {
         val charStr = activeLetter ?: return@remember null
         if (charStr == "☆" || charStr == "⭐" || charStr == "∘") return@remember charStr
@@ -296,7 +328,6 @@ fun HomeScreen(
         }
     }
 
-    // Index map for the full expanded A-Z drawer (when finger is lifted)
     val letterIndexMap = remember(groupedApps) {
         val map = mutableMapOf<String, Int>()
         map["☆"] = 0
@@ -386,7 +417,7 @@ fun HomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 24.dp, end = 52.dp, top = if (showHomeFavorites) 64.dp else 44.dp)
+                .padding(start = 24.dp, end = 56.dp, top = if (showHomeFavorites) 64.dp else 44.dp)
         ) {
             if (showHomeFavorites) {
                 // --- 1. HOME SCREEN HEADER & FAVORITES ---
@@ -460,7 +491,14 @@ fun HomeScreen(
                                 }
                             )
                             if (showBatteryPercentage) Text(text = batteryStatus, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
-                            if (weatherEnabled) Text(text = liveTempDisplay, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp)
+                            if (weatherEnabled) {
+                                Text(
+                                    text = liveTempDisplay,
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.clickable { openWeatherWithPermissionCheck() }
+                                )
+                            }
                         }
 
                         AnimatedVisibility(visible = calendarPreviewEnabled && upcomingEvents.isNotEmpty()) {
@@ -554,7 +592,7 @@ fun HomeScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(end = 64.dp), // Leave room on the right for the curved wave arc
+                        .padding(end = 64.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     if (resolvedScrubLetter == "∘") {
@@ -714,14 +752,14 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Bottom-Right Floating Action Button (Phone / Search depending on mode)
+        // Bottom-Right Floating Action Button
         if (cascadiaButtonEnabled && !isScrubbingIndex) {
             var totalDragY by remember { mutableFloatStateOf(0f) }
 
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(bottom = 50.dp, end = 50.dp)
+                    .padding(bottom = 50.dp, end = 56.dp)
             ) {
                 Surface(
                     shape = CircleShape,
@@ -787,6 +825,13 @@ fun HomeScreen(
                 onOpenSettings = onOpenSettings,
                 onOpenEditFavorites = { isDrawerExpanded = true },
                 onDismiss = { isWidgetMenuOpen = false }
+            )
+        }
+
+        if (showWeatherSheet) {
+            WeatherBottomSheet(
+                viewModel = viewModel,
+                onDismiss = { showWeatherSheet = false }
             )
         }
 
