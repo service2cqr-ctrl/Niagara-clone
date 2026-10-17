@@ -11,12 +11,12 @@ import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.services.NotificationSummaryModel
 import com.niagaraclone.launcher.ui.theme.AppTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -62,6 +62,11 @@ class SettingsRepository(private val context: Context) {
     private val CITY_NAME_KEY = stringPreferencesKey("weather_city_name")
     private val LOCATION_MODE_KEY = stringPreferencesKey("weather_location_mode")
     private val SEARCH_CONTACTS_KEY = booleanPreferencesKey("search_contacts_enabled")
+    private val QUICK_REPLIES_KEY = booleanPreferencesKey("quick_replies_enabled")
+    private val USAGE_BREAKER_KEY = booleanPreferencesKey("usage_breaker_enabled")
+    private val NOTIFICATION_SUMMARY_SETTING_KEY = booleanPreferencesKey("notification_summary_enabled")
+    private val SUGGEST_APPS_KEY = booleanPreferencesKey("suggest_apps_enabled")
+    private val SORT_BY_USAGE_KEY = booleanPreferencesKey("sort_by_usage_enabled")
 
     // StateFlow Exposures
     val appTheme: StateFlow<AppTheme> = context.dataStore.data.map {
@@ -96,6 +101,12 @@ class SettingsRepository(private val context: Context) {
     val calendarPreviewEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[CALENDAR_PREVIEW_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
     val searchContactsEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[SEARCH_CONTACTS_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
 
+    val quickRepliesEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[QUICK_REPLIES_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
+    val usageBreakerEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[USAGE_BREAKER_KEY] ?: false }.stateIn(scope, SharingStarted.Eagerly, false)
+    val notificationSummaryEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[NOTIFICATION_SUMMARY_SETTING_KEY] ?: false }.stateIn(scope, SharingStarted.Eagerly, false)
+    val suggestAppsEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[SUGGEST_APPS_KEY] ?: false }.stateIn(scope, SharingStarted.Eagerly, false)
+    val sortByUsageEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[SORT_BY_USAGE_KEY] ?: false }.stateIn(scope, SharingStarted.Eagerly, false)
+
     val fabTapActionType: StateFlow<String> = context.dataStore.data.map { it[FAB_TAP_ACTION_KEY] ?: "PHONE" }.stateIn(scope, SharingStarted.Eagerly, "PHONE")
     val fabTapPackage: StateFlow<String> = context.dataStore.data.map { it[FAB_TAP_PKG_KEY] ?: "" }.stateIn(scope, SharingStarted.Eagerly, "")
     val fabSwipeActionType: StateFlow<String> = context.dataStore.data.map { it[FAB_SWIPE_ACTION_KEY] ?: "SEARCH" }.stateIn(scope, SharingStarted.Eagerly, "SEARCH")
@@ -122,15 +133,6 @@ class SettingsRepository(private val context: Context) {
 
     private val _liveWeather = MutableStateFlow<LiveWeatherModel?>(LiveWeatherModel(28f, "☀️"))
     val liveWeather: StateFlow<LiveWeatherModel?> = _liveWeather.asStateFlow()
-
-    private val _notificationCounts = MutableStateFlow<Map<String, Int>>(emptyMap())
-    val notificationCounts: StateFlow<Map<String, Int>> = _notificationCounts.asStateFlow()
-
-    private val _upcomingEvents = MutableStateFlow<List<CalendarEventModel>>(emptyList())
-    val upcomingEvents: StateFlow<List<CalendarEventModel>> = _upcomingEvents.asStateFlow()
-
-    private val _notificationSummaries = MutableStateFlow<List<NotificationSummaryModel>>(emptyList())
-    val notificationSummaries: StateFlow<List<NotificationSummaryModel>> = _notificationSummaries.asStateFlow()
 
     init {
         checkBatteryStatus()
@@ -168,6 +170,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setClockStyle(style: String) { context.dataStore.edit { it[CLOCK_STYLE_KEY] = style } }
     suspend fun setAccentColorArgb(color: Int) { context.dataStore.edit { it[ACCENT_COLOR_KEY] = color } }
     suspend fun setHomeOffsetY(offset: Float) { context.dataStore.edit { it[HOME_OFFSET_Y_KEY] = offset } }
+    suspend fun setWidgetHeight(height: Int) { context.dataStore.edit { it[WIDGET_HEIGHT_KEY] = height } }
     suspend fun addWidgetId(id: Int) { context.dataStore.edit { val set = (it[WIDGET_IDS_KEY] ?: emptySet()).toMutableSet(); set.add(id.toString()); it[WIDGET_IDS_KEY] = set } }
     suspend fun removeWidgetId(id: Int) { context.dataStore.edit { val set = (it[WIDGET_IDS_KEY] ?: emptySet()).toMutableSet(); set.remove(id.toString()); it[WIDGET_IDS_KEY] = set } }
     suspend fun setWeatherEnabled(enabled: Boolean) { context.dataStore.edit { it[WEATHER_ENABLED_KEY] = enabled } }
@@ -179,6 +182,13 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCascadiaButtonEnabled(enabled: Boolean) { context.dataStore.edit { it[CASCADIA_BTN_KEY] = enabled } }
     suspend fun setCalendarPreviewEnabled(enabled: Boolean) { context.dataStore.edit { it[CALENDAR_PREVIEW_KEY] = enabled } }
     suspend fun setSearchContactsEnabled(enabled: Boolean) { context.dataStore.edit { it[SEARCH_CONTACTS_KEY] = enabled } }
+    
+    suspend fun setQuickRepliesEnabled(enabled: Boolean) { context.dataStore.edit { it[QUICK_REPLIES_KEY] = enabled } }
+    suspend fun setUsageBreakerEnabled(enabled: Boolean) { context.dataStore.edit { it[USAGE_BREAKER_KEY] = enabled } }
+    suspend fun setNotificationSummaryEnabled(enabled: Boolean) { context.dataStore.edit { it[NOTIFICATION_SUMMARY_SETTING_KEY] = enabled } }
+    suspend fun setSuggestAppsEnabled(enabled: Boolean) { context.dataStore.edit { it[SUGGEST_APPS_KEY] = enabled } }
+    suspend fun setSortByUsageEnabled(enabled: Boolean) { context.dataStore.edit { it[SORT_BY_USAGE_KEY] = enabled } }
+
     suspend fun setFabTapAction(actionType: String, pkg: String = "") { context.dataStore.edit { it[FAB_TAP_ACTION_KEY] = actionType; it[FAB_TAP_PKG_KEY] = pkg } }
     suspend fun setFabSwipeAction(actionType: String, pkg: String = "") { context.dataStore.edit { it[FAB_SWIPE_ACTION_KEY] = actionType; it[FAB_SWIPE_PKG_KEY] = pkg } }
 
@@ -215,41 +225,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setWeatherCityName(name: String) { context.dataStore.edit { it[CITY_NAME_KEY] = name } }
     suspend fun setWeatherLocationMode(mode: String) { context.dataStore.edit { it[LOCATION_MODE_KEY] = mode } }
 
-    fun loadCalendarEvents() {
-        if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED) {
-            try {
-                val events = mutableListOf<CalendarEventModel>()
-                val cursor = context.contentResolver.query(
-                    CalendarContract.Events.CONTENT_URI,
-                    arrayOf(CalendarContract.Events._ID, CalendarContract.Events.TITLE, CalendarContract.Events.DTSTART, CalendarContract.Events.DTEND, CalendarContract.Events.ALL_DAY),
-                    "${CalendarContract.Events.DTSTART} >= ?",
-                    arrayOf(System.currentTimeMillis().toString()),
-                    "${CalendarContract.Events.DTSTART} ASC"
-                )
-                cursor?.use {
-                    val idIdx = it.getColumnIndex(CalendarContract.Events._ID)
-                    val titleIdx = it.getColumnIndex(CalendarContract.Events.TITLE)
-                    val startIdx = it.getColumnIndex(CalendarContract.Events.DTSTART)
-                    val endIdx = it.getColumnIndex(CalendarContract.Events.DTEND)
-                    val allDayIdx = it.getColumnIndex(CalendarContract.Events.ALL_DAY)
-
-                    while (it.moveToNext() && events.size < 5) {
-                        events.add(
-                            CalendarEventModel(
-                                id = it.getLong(idIdx),
-                                title = it.getString(titleIdx) ?: "Event",
-                                startTimeMillis = it.getLong(startIdx),
-                                endTimeMillis = if (endIdx != -1) it.getLong(endIdx) else 0L,
-                                isAllDay = it.getInt(allDayIdx) == 1
-                            )
-                        )
-                    }
-                }
-                _upcomingEvents.value = events
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+    fun updateLiveWeather(temp: Float, icon: String) {
+        _liveWeather.value = LiveWeatherModel(temp, icon)
     }
 
     fun getFolderSubAppPackages(parentPackage: String = ""): Set<String> {
@@ -269,8 +246,6 @@ class SettingsRepository(private val context: Context) {
             val prefs = context.dataStore.data.first()
             val jsonObj = JSONObject()
             jsonObj.put("version", 1)
-            
-            // Serialize DataStore preferences
             val prefsObj = JSONObject()
             prefs.asMap().forEach { (key, value) ->
                 if (value is Set<*>) {
