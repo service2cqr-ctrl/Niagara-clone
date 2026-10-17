@@ -9,6 +9,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 enum class SwipeDirection { UP, DOWN }
@@ -21,24 +23,32 @@ fun GestureHost(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val offsetYAnimatable = remember { Animatable(0f) }
-    val dragThreshold = 120f // Min drag distance to trigger actions
+    val density = LocalDensity.current
+    val dragThreshold = 120f
+    var ignoreCurrentDrag by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier.pointerInput(Unit) {
+            val edgeIgnoreWidthPx = with(density) { 64.dp.toPx() }
+
             detectVerticalDragGestures(
-                onDragStart = { },
+                onDragStart = { startOffset ->
+                    // Do not intercept vertical drags on the right alphabet index strip
+                    ignoreCurrentDrag = startOffset.x >= (size.width - edgeIgnoreWidthPx)
+                },
                 onDragEnd = {
+                    if (ignoreCurrentDrag) {
+                        ignoreCurrentDrag = false
+                        return@detectVerticalDragGestures
+                    }
                     val currentOffset = offsetYAnimatable.value
                     coroutineScope.launch {
                         if (currentOffset < -dragThreshold) {
-                            // Dragged UP past threshold -> Smart Search
                             onTriggerAction(SwipeDirection.UP)
                         } else if (currentOffset > dragThreshold) {
-                            // Dragged DOWN past threshold -> Notification Shade
                             onTriggerAction(SwipeDirection.DOWN)
                         }
-                        
-                        // Spring rebound back to center regardless
+
                         offsetYAnimatable.animateTo(
                             targetValue = 0f,
                             animationSpec = spring(
@@ -49,6 +59,7 @@ fun GestureHost(
                     }
                 },
                 onDragCancel = {
+                    ignoreCurrentDrag = false
                     coroutineScope.launch {
                         offsetYAnimatable.animateTo(
                             targetValue = 0f,
@@ -60,9 +71,9 @@ fun GestureHost(
                     }
                 },
                 onVerticalDrag = { change, dragAmount ->
+                    if (ignoreCurrentDrag) return@detectVerticalDragGestures
                     change.consume()
                     coroutineScope.launch {
-                        // Apply smooth friction damping
                         val newOffset = offsetYAnimatable.value + (dragAmount * 0.65f)
                         offsetYAnimatable.snapTo(newOffset)
                     }
