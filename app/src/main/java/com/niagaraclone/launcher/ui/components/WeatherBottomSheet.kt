@@ -12,7 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material3.*
@@ -32,7 +31,7 @@ import kotlin.math.roundToInt
 
 @Composable
 fun rememberCurrentTimeState(
-    timeFormatPattern: String = "h:mm", // Updated to 12-hour format
+    timeFormatPattern: String = "h:mm",
     dateFormatPattern: String = "EEE d MMM"
 ): Pair<String, String> {
     var timeStr by remember { mutableStateOf("") }
@@ -73,6 +72,8 @@ fun WeatherBottomSheet(
     val cityName by viewModel.weatherCityName.collectAsState()
     val tempUnit by viewModel.weatherTempUnit.collectAsState()
     val liveWeather by viewModel.liveWeather.collectAsState()
+    val accentColorArgb by viewModel.accentColorArgb.collectAsState()
+    val accentColor = Color(accentColorArgb)
 
     var tempSearchCity by remember { mutableStateOf("") }
 
@@ -87,7 +88,7 @@ fun WeatherBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color.Black, // Updated to Pitch Black
+        containerColor = Color(0xFF141414), // Rich dark container matching other sheets
         contentColor = Color.White,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
@@ -101,6 +102,7 @@ fun WeatherBottomSheet(
                     locationText = if (locationMode == "AUTO") "Current location · $cityName" else cityName,
                     tempUnitText = if (tempUnit == "CELSIUS") "Celsius" else "Fahrenheit",
                     tempDisplay = "$conditionIcon $tempDisplay",
+                    accentColor = accentColor,
                     onOpenLocation = { currentStep = WeatherStep.CHOOSE_LOCATION },
                     onOpenTempUnits = { currentStep = WeatherStep.TEMP_UNITS },
                     onKeepEnabled = {
@@ -115,12 +117,14 @@ fun WeatherBottomSheet(
 
                 WeatherStep.CHOOSE_LOCATION -> ChooseLocationStep(
                     selectedMode = locationMode,
+                    accentColor = accentColor,
                     onSelectAuto = { currentStep = WeatherStep.SCANNING_CURRENT_LOCATION },
                     onSelectFixed = { currentStep = WeatherStep.FIXED_LOCATION_PROMPT }
                 )
 
                 WeatherStep.SCANNING_CURRENT_LOCATION -> ScanningCurrentLocationStep(
                     viewModel = viewModel,
+                    accentColor = accentColor,
                     onScanComplete = {
                         viewModel.setWeatherLocationMode("AUTO")
                         currentStep = WeatherStep.MAIN
@@ -128,11 +132,13 @@ fun WeatherBottomSheet(
                 )
 
                 WeatherStep.FIXED_LOCATION_PROMPT -> FixedLocationPromptStep(
+                    accentColor = accentColor,
                     onOkayAutoDetect = { currentStep = WeatherStep.SCANNING_CURRENT_LOCATION },
                     onEnterManually = { currentStep = WeatherStep.MANUAL_LOCATION_INPUT }
                 )
 
                 WeatherStep.MANUAL_LOCATION_INPUT -> ManualLocationInputStep(
+                    accentColor = accentColor,
                     onCitySelected = { city ->
                         tempSearchCity = city
                         currentStep = WeatherStep.MANUAL_LOCATION_CONFIRM
@@ -141,6 +147,7 @@ fun WeatherBottomSheet(
 
                 WeatherStep.MANUAL_LOCATION_CONFIRM -> ManualLocationConfirmStep(
                     city = tempSearchCity,
+                    accentColor = accentColor,
                     onConfirm = {
                         viewModel.setWeatherLocationMode("FIXED")
                         viewModel.setWeatherCityName(tempSearchCity)
@@ -152,6 +159,7 @@ fun WeatherBottomSheet(
 
                 WeatherStep.TEMP_UNITS -> TempUnitsStep(
                     selectedUnit = tempUnit,
+                    accentColor = accentColor,
                     onSelectUnit = { unit ->
                         viewModel.setWeatherTempUnit(unit)
                         currentStep = WeatherStep.MAIN
@@ -167,6 +175,7 @@ private fun MainWeatherStep(
     locationText: String,
     tempUnitText: String,
     tempDisplay: String,
+    accentColor: Color,
     onOpenLocation: () -> Unit,
     onOpenTempUnits: () -> Unit,
     onKeepEnabled: () -> Unit,
@@ -176,7 +185,7 @@ private fun MainWeatherStep(
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 20.dp)) {
-            Icon(imageVector = Icons.Default.WbSunny, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(imageVector = Icons.Default.WbSunny, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text(text = "Weather", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
         }
@@ -187,7 +196,7 @@ private fun MainWeatherStep(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(text = currentDate.ifEmpty { "Wed 5 Aug" }, fontSize = 16.sp, color = Color.Gray)
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text(text = tempDisplay, fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(text = tempDisplay, fontSize = 18.sp, color = accentColor, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -214,9 +223,9 @@ private fun MainWeatherStep(
 
         Spacer(modifier = Modifier.height(16.dp))
         Text(text = "Tapping the weather widget reveals hourly and daily forecast. Learn more", fontSize = 12.sp, color = Color.Gray)
-        Text(text = "Powered by OpenWeather", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
+        Text(text = "Powered by Open-Meteo", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
 
-        Button(onClick = onKeepEnabled, modifier = Modifier.fillMaxWidth().height(52.dp), shape = CircleShape, colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)) {
+        Button(onClick = onKeepEnabled, modifier = Modifier.fillMaxWidth().height(52.dp), shape = CircleShape, colors = ButtonDefaults.buttonColors(containerColor = accentColor, contentColor = Color.Black)) {
             Text(text = "Keep enabled", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -228,7 +237,7 @@ private fun MainWeatherStep(
 }
 
 @Composable
-private fun ChooseLocationStep(selectedMode: String, onSelectAuto: () -> Unit, onSelectFixed: () -> Unit) {
+private fun ChooseLocationStep(selectedMode: String, accentColor: Color, onSelectAuto: () -> Unit, onSelectFixed: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
         Text(text = "Choose location", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(modifier = Modifier.height(8.dp))
@@ -240,12 +249,12 @@ private fun ChooseLocationStep(selectedMode: String, onSelectAuto: () -> Unit, o
                 Text(text = "Current location", fontSize = 16.sp, color = Color.White)
                 Text(text = "Updates automatically", fontSize = 13.sp, color = Color.Gray)
             }
-            RadioButton(selected = (selectedMode == "AUTO"), onClick = onSelectAuto, colors = RadioButtonDefaults.colors(selectedColor = Color.White, unselectedColor = Color.Gray))
+            RadioButton(selected = (selectedMode == "AUTO"), onClick = onSelectAuto, colors = RadioButtonDefaults.colors(selectedColor = accentColor, unselectedColor = Color.Gray))
         }
 
         Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onSelectFixed).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) { Text(text = "Fixed location", fontSize = 16.sp, color = Color.White) }
-            RadioButton(selected = (selectedMode == "FIXED"), onClick = onSelectFixed, colors = RadioButtonDefaults.colors(selectedColor = Color.White, unselectedColor = Color.Gray))
+            RadioButton(selected = (selectedMode == "FIXED"), onClick = onSelectFixed, colors = RadioButtonDefaults.colors(selectedColor = accentColor, unselectedColor = Color.Gray))
         }
         Spacer(modifier = Modifier.height(24.dp))
     }
@@ -254,14 +263,16 @@ private fun ChooseLocationStep(selectedMode: String, onSelectAuto: () -> Unit, o
 @Composable
 private fun ScanningCurrentLocationStep(
     viewModel: LauncherViewModel,
+    accentColor: Color,
     onScanComplete: () -> Unit
 ) {
-    var detectedCity by remember { mutableStateOf<String?>(null) }
+    var isScanned by remember { mutableStateOf(false) }
+    val cityName by viewModel.weatherCityName.collectAsState()
 
     LaunchedEffect(Unit) {
-        val city = viewModel.scanAndFetchLocationWeather()
-        delay(600)
-        detectedCity = city
+        viewModel.fetchLiveWeatherForCurrentMode()
+        delay(1000)
+        isScanned = true
         delay(800)
         onScanComplete()
     }
@@ -272,13 +283,13 @@ private fun ScanningCurrentLocationStep(
 
         Surface(shape = RoundedCornerShape(20.dp), color = Color(0xFF1E1E1E), modifier = Modifier.fillMaxWidth().height(110.dp)) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                if (detectedCity == null) {
-                    CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp, modifier = Modifier.size(36.dp))
+                if (!isScanned) {
+                    CircularProgressIndicator(color = accentColor, strokeWidth = 3.dp, modifier = Modifier.size(36.dp))
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.LocationOn, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                        Icon(imageVector = Icons.Default.LocationOn, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = detectedCity!!, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(text = cityName, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
@@ -288,14 +299,14 @@ private fun ScanningCurrentLocationStep(
 }
 
 @Composable
-private fun FixedLocationPromptStep(onOkayAutoDetect: () -> Unit, onEnterManually: () -> Unit) {
+private fun FixedLocationPromptStep(accentColor: Color, onOkayAutoDetect: () -> Unit, onEnterManually: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
         Text(text = "Fixed location", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(modifier = Modifier.height(12.dp))
         Text(text = "Do you want us to detect your location automatically? This generally gives more accurate forecasts than entering it manually.", fontSize = 14.sp, color = Color.Gray)
         Spacer(modifier = Modifier.height(32.dp))
 
-        Button(onClick = onOkayAutoDetect, modifier = Modifier.fillMaxWidth().height(52.dp), shape = CircleShape, colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)) {
+        Button(onClick = onOkayAutoDetect, modifier = Modifier.fillMaxWidth().height(52.dp), shape = CircleShape, colors = ButtonDefaults.buttonColors(containerColor = accentColor, contentColor = Color.Black)) {
             Text(text = "Okay", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -306,7 +317,7 @@ private fun FixedLocationPromptStep(onOkayAutoDetect: () -> Unit, onEnterManuall
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ManualLocationInputStep(onCitySelected: (String) -> Unit) {
+private fun ManualLocationInputStep(accentColor: Color, onCitySelected: (String) -> Unit) {
     var query by remember { mutableStateOf("") }
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
         Text(text = "Fixed location", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -318,14 +329,14 @@ private fun ManualLocationInputStep(onCitySelected: (String) -> Unit) {
             label = { Text("Your city or address", color = Color.Gray) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color(0xFF4DD0E1), unfocusedBorderColor = Color.Gray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = accentColor, unfocusedBorderColor = Color.Gray, focusedTextColor = Color.White, unfocusedTextColor = Color.White)
         )
         Spacer(modifier = Modifier.height(16.dp))
 
         if (query.isNotBlank()) {
             Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFF222222), modifier = Modifier.fillMaxWidth().clickable { onCitySelected(query) }.padding(vertical = 4.dp)) {
                 Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF4DD0E1))
+                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = accentColor)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(text = "$query, India", color = Color.White, fontSize = 16.sp)
                 }
@@ -336,14 +347,14 @@ private fun ManualLocationInputStep(onCitySelected: (String) -> Unit) {
 }
 
 @Composable
-private fun ManualLocationConfirmStep(city: String, onConfirm: () -> Unit, onCancel: () -> Unit) {
+private fun ManualLocationConfirmStep(city: String, accentColor: Color, onConfirm: () -> Unit, onCancel: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(text = "Fixed location", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(modifier = Modifier.height(16.dp))
         Text(text = "$city, India", fontSize = 16.sp, color = Color.Gray)
         Spacer(modifier = Modifier.height(32.dp))
 
-        Button(onClick = onConfirm, modifier = Modifier.fillMaxWidth().height(52.dp), shape = CircleShape, colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)) {
+        Button(onClick = onConfirm, modifier = Modifier.fillMaxWidth().height(52.dp), shape = CircleShape, colors = ButtonDefaults.buttonColors(containerColor = accentColor, contentColor = Color.Black)) {
             Text(text = "Okay", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -353,19 +364,19 @@ private fun ManualLocationConfirmStep(city: String, onConfirm: () -> Unit, onCan
 }
 
 @Composable
-private fun TempUnitsStep(selectedUnit: String, onSelectUnit: (String) -> Unit) {
+private fun TempUnitsStep(selectedUnit: String, accentColor: Color, onSelectUnit: (String) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
         Text(text = "Temperature units", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(modifier = Modifier.height(24.dp))
 
         Row(modifier = Modifier.fillMaxWidth().clickable { onSelectUnit("CELSIUS") }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(text = "Celsius", fontSize = 16.sp, color = Color.White, modifier = Modifier.weight(1f))
-            RadioButton(selected = (selectedUnit == "CELSIUS"), onClick = { onSelectUnit("CELSIUS") }, colors = RadioButtonDefaults.colors(selectedColor = Color.White, unselectedColor = Color.Gray))
+            RadioButton(selected = (selectedUnit == "CELSIUS"), onClick = { onSelectUnit("CELSIUS") }, colors = RadioButtonDefaults.colors(selectedColor = accentColor, unselectedColor = Color.Gray))
         }
 
         Row(modifier = Modifier.fillMaxWidth().clickable { onSelectUnit("FAHRENHEIT") }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(text = "Fahrenheit", fontSize = 16.sp, color = Color.White, modifier = Modifier.weight(1f))
-            RadioButton(selected = (selectedUnit == "FAHRENHEIT"), onClick = { onSelectUnit("FAHRENHEIT") }, colors = RadioButtonDefaults.colors(selectedColor = Color.White, unselectedColor = Color.Gray))
+            RadioButton(selected = (selectedUnit == "FAHRENHEIT"), onClick = { onSelectUnit("FAHRENHEIT") }, colors = RadioButtonDefaults.colors(selectedColor = accentColor, unselectedColor = Color.Gray))
         }
         Spacer(modifier = Modifier.height(24.dp))
     }
