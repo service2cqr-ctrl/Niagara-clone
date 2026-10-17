@@ -14,9 +14,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.WidgetStackView
 
@@ -28,10 +31,28 @@ fun WidgetsScreen(
     onAddWidgetClick: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val lifecycleOwner = LocalLifecycleOwner.current
     val widgetIds by viewModel.widgetIds.collectAsState()
     val widgetHeight by viewModel.widgetHeight.collectAsState()
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
     val accentColor = Color(accentColorArgb)
+
+    // Force host to listen whenever this screen is active so widgets render immediately
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                try {
+                    appWidgetHost.startListening()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     BackHandler { onDismiss() }
 
@@ -41,7 +62,6 @@ fun WidgetsScreen(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (widgetIds.isEmpty()) {
-                // Empty state matching Niagara prompt
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -72,7 +92,6 @@ fun WidgetsScreen(
                     }
                 }
             } else {
-                // Scrollable list of active widgets
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
@@ -102,6 +121,7 @@ fun WidgetsScreen(
                             appWidgetManager = appWidgetManager,
                             onRemoveWidget = { viewModel.removeWidgetId(it) },
                             onAddWidgetClick = onAddWidgetClick,
+                            accentColor = accentColor,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
