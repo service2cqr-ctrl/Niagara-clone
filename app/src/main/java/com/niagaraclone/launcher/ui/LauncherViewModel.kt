@@ -1,16 +1,20 @@
 package com.niagaraclone.launcher.ui
 
+import android.Manifest
 import android.app.Application
 import android.app.WallpaperManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.LauncherApps
+import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
+import android.location.Location
+import android.location.LocationManager
 import android.net.Uri
 import android.os.Process
 import android.provider.CalendarContract
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
@@ -18,24 +22,21 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.palette.graphics.Palette
 import com.niagaraclone.launcher.backup.BackupManager
-import com.niagaraclone.launcher.data.AppModel
-import com.niagaraclone.launcher.data.AppRepository
-import com.niagaraclone.launcher.data.AppShortcutModel
-import com.niagaraclone.launcher.data.MediaWidgetTheme
-import com.niagaraclone.launcher.data.SettingsRepository
+import com.niagaraclone.launcher.data.*
+import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.ui.theme.AppTheme
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
     val repository = SettingsRepository(application)
     private val appRepository = AppRepository(application)
+    private val weatherRepository = WeatherRepository(application)
     private val backupManager = BackupManager(application, repository)
 
-    // Centralized apps flow from AppRepository
     val apps: StateFlow<List<AppModel>> = appRepository.installedApps
 
     val theme = repository.appTheme
@@ -62,15 +63,23 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val fabTapPackage = repository.fabTapPackage
     val fabSwipeActionType = repository.fabSwipeActionType
     val fabSwipePackage = repository.fabSwipePackage
-    val notificationCounts = repository.notificationCounts
-    val upcomingEvents = repository.upcomingEvents
-    val notificationSummaries = repository.notificationSummaries
     val hapticFeedbackEnabled = repository.hapticFeedbackEnabled
     val rotationEnabled = repository.rotationEnabled
     val selectedIconPack = repository.selectedIconPack
     val weatherCityName = repository.weatherCityName
     val weatherLocationMode = repository.weatherLocationMode
     val searchContactsEnabled = repository.searchContactsEnabled
+
+    val quickRepliesEnabled = repository.quickRepliesEnabled
+    val usageBreakerEnabled = repository.usageBreakerEnabled
+    val notificationSummaryEnabled = repository.notificationSummaryEnabled
+    val suggestAppsEnabled = repository.suggestAppsEnabled
+    val sortByUsageEnabled = repository.sortByUsageEnabled
+
+    // Live notification counts and summaries from MediaNotificationListener service
+    val notificationCounts = MediaNotificationListener.activeNotificationCounts
+    val notificationSummaries = MediaNotificationListener.notificationSummaries
+    val upcomingEvents = repository.upcomingEvents
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -83,6 +92,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         refreshPermissions()
         checkDefaultLauncherStatus()
         extractWallpaperAccentColor()
+        fetchLiveWeatherForCurrentMode()
 
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)
@@ -104,11 +114,43 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun loadInstalledApps() {
         viewModelScope.launch {
-            appRepository.loadInstalledApps()
+            appRepository.loadInstalledApps(repository.selectedIconPack.value)
         }
     }
 
     fun refreshApps() { loadInstalledApps() }
+
+    fun fetchLiveWeatherForCurrentMode() {
+        viewModelScope.launch {
+            try {
+                val context = getApplication<Application>()
+                val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+                if (hasFine || hasCoarse) {
+                    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                    val location = locationManager?.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                        ?: locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+
+                    if (location != null) {
+                        val weatherData = weatherRepository.fetchLiveWeather(location.latitude, location.longitude)
+                        if (weatherData != null) {
+                            repository.updateLiveWeather(weatherData.temperatureCelsius, weatherData.conditionIcon)
+                            repository.setWeatherCityName(weatherData.cityName)
+                        }
+                    } else {
+                        // Fallback default coordinates (Pune/India) if GPS is null
+                        val weatherData = weatherRepository.fetchLiveWeather(18.5204, 73.8567)
+                        if (weatherData != null) {
+                            repository.updateLiveWeather(weatherData.temperatureCelsius, weatherData.conditionIcon)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     fun extractWallpaperAccentColor() {
         viewModelScope.launch {
@@ -140,9 +182,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         context.startActivity(intent)
     }
 
-    fun setCustomAppLabel(packageName: String = "", newLabel: String = "") {
-        if (packageName.isEmpty()) return
-        // Custom label update logic can remain or hook into repository if needed
+    fun setCustomAppLabel(packageName: String, newLabel: String) {
+        if (packageName.isBlank()) return
+        viewModelScope.launch {
+            appRepository.setCustomAppLabel(packageName, newLabel)
+        }
     }
 
     fun setAppTheme(theme: AppTheme) { viewModelScope.launch { repository.setAppTheme(theme) } }
@@ -169,6 +213,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun setAccentColorArgb(color: Int) { viewModelScope.launch { repository.setAccentColorArgb(color) } }
     fun setAccentColor(color: Int) { setAccentColorArgb(color) }
     fun setHomeOffsetY(offsetY: Float) { viewModelScope.launch { repository.setHomeOffsetY(offsetY) } }
+    fun setWidgetHeight(height: Int) { viewModelScope.launch { repository.setWidgetHeight(height) } }
     fun removeWidgetId(widgetId: Int) { viewModelScope.launch { repository.removeWidgetId(widgetId) } }
     fun setWeatherEnabled(enabled: Boolean) { viewModelScope.launch { repository.setWeatherEnabled(enabled) } }
     fun setWeatherTempUnit(unit: String) { viewModelScope.launch { repository.setWeatherTempUnit(unit) } }
@@ -181,11 +226,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun setCascadiaButtonEnabled(enabled: Boolean) { viewModelScope.launch { repository.setCascadiaButtonEnabled(enabled) } }
     fun setRotationEnabled(enabled: Boolean) { viewModelScope.launch { repository.setRotationEnabled(enabled) } }
     fun setHapticFeedbackEnabled(enabled: Boolean) { viewModelScope.launch { repository.setHapticFeedbackEnabled(enabled) } }
-    fun setSelectedIconPack(pack: String) { viewModelScope.launch { repository.setSelectedIconPack(pack) } }
+    
+    fun setSelectedIconPack(pack: String) {
+        viewModelScope.launch {
+            repository.setSelectedIconPack(pack)
+            appRepository.loadInstalledApps(pack)
+        }
+    }
+
     fun setWeatherCityName(name: String) { viewModelScope.launch { repository.setWeatherCityName(name) } }
     fun setWeatherLocationMode(mode: String) { viewModelScope.launch { repository.setWeatherLocationMode(mode) } }
-    fun fetchLiveWeatherForCurrentMode() {}
-    fun scanAndFetchLocationWeather(): String? = null
 
     fun setFabTapAction(actionType: String, pkg: String = "") { viewModelScope.launch { repository.setFabTapAction(actionType, pkg) } }
     fun setFabSwipeAction(actionType: String, pkg: String = "") { viewModelScope.launch { repository.setFabSwipeAction(actionType, pkg) } }
