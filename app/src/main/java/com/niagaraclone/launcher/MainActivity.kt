@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val APPWIDGET_HOST_ID = 1024
         private const val REQUEST_CODE_PERMISSIONS = 101
+        private const val REQUEST_CODE_BIND_WIDGET = 126
     }
 
     private val roleLauncher = registerForActivityResult(
@@ -70,7 +71,7 @@ class MainActivity : ComponentActivity() {
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val widgetId = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1) ?: -1
-            if (widgetId != -1) configureWidget(widgetId)
+            if (widgetId != -1) configureOrBindWidget(widgetId)
         } else if (pendingWidgetId != -1) {
             appWidgetHost.deleteAppWidgetId(pendingWidgetId)
             pendingWidgetId = -1
@@ -236,9 +237,27 @@ class MainActivity : ComponentActivity() {
         selectWidgetLauncher.launch(pickIntent)
     }
 
-    private fun configureWidget(widgetId: Int) {
+    private fun configureOrBindWidget(widgetId: Int) {
         val widgetInfo = appWidgetManager.getAppWidgetInfo(widgetId)
-        if (widgetInfo?.configure != null) {
+        if (widgetInfo == null) {
+            // Widget needs system permission binding first
+            try {
+                val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, appWidgetManager.getInstalledProvidersForPackage(packageName, null).firstOrNull()?.provider)
+                }
+                startActivityForResult(intent, REQUEST_CODE_BIND_WIDGET)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                if (pendingWidgetId != -1) {
+                    appWidgetHost.deleteAppWidgetId(pendingWidgetId)
+                    pendingWidgetId = -1
+                }
+            }
+            return
+        }
+
+        if (widgetInfo.configure != null) {
             val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
                 component = widgetInfo.configure
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
@@ -247,6 +266,18 @@ class MainActivity : ComponentActivity() {
         } else {
             viewModel.addWidgetId(widgetId)
             pendingWidgetId = -1
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_BIND_WIDGET) {
+            if (resultCode == Activity.RESULT_OK && pendingWidgetId != -1) {
+                configureOrBindWidget(pendingWidgetId)
+            } else if (pendingWidgetId != -1) {
+                appWidgetHost.deleteAppWidgetId(pendingWidgetId)
+                pendingWidgetId = -1
+            }
         }
     }
 }
