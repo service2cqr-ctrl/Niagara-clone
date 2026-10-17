@@ -60,12 +60,14 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.niagaraclone.launcher.data.AppModel
+import com.niagaraclone.launcher.services.AudioConnectionReceiver
 import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.services.NotificationSummaryModel
 import com.niagaraclone.launcher.services.ScreenLockService
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.AddToCategorySheet
 import com.niagaraclone.launcher.ui.components.AppCustomizationSheet
+import com.niagaraclone.launcher.ui.components.AutoMusicPopUpCard
 import com.niagaraclone.launcher.ui.components.CalendarAgendaSheet
 import com.niagaraclone.launcher.ui.components.CascadiaButtonMenuSheet
 import com.niagaraclone.launcher.ui.components.EditPopUpFolderSheet
@@ -114,6 +116,7 @@ fun HomeScreen(
     val apps by viewModel.apps.collectAsState()
     val hiddenPackages by viewModel.hiddenPackages.collectAsState()
     val favoritePackages by viewModel.favoritePackages.collectAsState()
+    val musicPackages by viewModel.selectedMusicPackages.collectAsState()
     val homeLayoutOffsetY by viewModel.homeOffsetY.collectAsState()
     val widgetHeight by viewModel.widgetHeight.collectAsState()
     val widgetIds by viewModel.widgetIds.collectAsState()
@@ -131,6 +134,8 @@ fun HomeScreen(
     val liveWeather by viewModel.liveWeather.collectAsState()
 
     val mediaState by MediaNotificationListener.mediaState.collectAsState()
+    val isAudioConnected by AudioConnectionReceiver.isAudioDeviceConnected.collectAsState()
+    var dismissedMusicCard by remember { mutableStateOf(false) }
 
     val clockStyle by viewModel.clockStyle.collectAsState()
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
@@ -235,7 +240,6 @@ fun HomeScreen(
         }
     }
 
-    // On-demand permission launcher for Calendar feature
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -245,7 +249,6 @@ fun HomeScreen(
         }
     }
 
-    // On-demand permission launcher for Weather / Location feature
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -256,16 +259,9 @@ fun HomeScreen(
     }
 
     val openWeatherWithPermissionCheck = {
-        val hasFineLocation = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val hasCoarseLocation = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (hasFineLocation || hasCoarseLocation) {
+        val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (hasFine || hasCoarse) {
             viewModel.fetchLiveWeatherForCurrentMode()
             showWeatherSheet = true
         } else {
@@ -275,6 +271,11 @@ fun HomeScreen(
 
     val visibleApps = remember(apps, hiddenPackages) {
         apps.filter { !hiddenPackages.contains(it.packageName) }
+    }
+
+    val connectedMusicApps = remember(visibleApps, musicPackages, isAudioConnected) {
+        if (!isAudioConnected) emptyList()
+        else visibleApps.filter { musicPackages.contains(it.packageName) }
     }
 
     val assignedFabApp = remember(visibleApps, fabTapPackage) {
@@ -420,7 +421,6 @@ fun HomeScreen(
                 .padding(start = 24.dp, end = 56.dp, top = if (showHomeFavorites) 64.dp else 44.dp)
         ) {
             if (showHomeFavorites) {
-                // --- 1. HOME SCREEN HEADER & FAVORITES ---
                 Column(modifier = Modifier.fillMaxWidth()) {
                     if (homeLayoutOffsetY > 0f) Spacer(modifier = Modifier.height(homeLayoutOffsetY.dp))
 
@@ -559,7 +559,18 @@ fun HomeScreen(
                             appWidgetManager = appWidgetManager,
                             onRemoveWidget = { viewModel.removeWidgetId(it) },
                             onAddWidgetClick = onAddWidgetClick,
+                            onResizeWidgetHeight = { newHeight -> viewModel.setWidgetHeight(newHeight.toInt()) },
+                            accentColor = accentColor,
                             modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    if (isAudioConnected && connectedMusicApps.isNotEmpty() && !dismissedMusicCard) {
+                        AutoMusicPopUpCard(
+                            viewModel = viewModel,
+                            musicApps = connectedMusicApps,
+                            onDismiss = { dismissedMusicCard = true }
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                     }
@@ -588,7 +599,6 @@ fun HomeScreen(
                     }
                 }
             } else if (isScrubbingIndex) {
-                // --- 2. NIAGARA ACTIVE-LETTER-ONLY VIEW WHILE SCRUBBING THE WAVE ---
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -658,7 +668,6 @@ fun HomeScreen(
                     }
                 }
             } else {
-                // --- 3. FULL SCROLLABLE A-Z LIST AFTER RELEASING THE WAVE ---
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
@@ -720,7 +729,6 @@ fun HomeScreen(
             }
         }
 
-        // Right-edge Wave Indexer
         WaveSideIndex(
             isIndexerVisible = true,
             allowSystemBackOnRightEdge = isDrawerExpanded,
@@ -752,7 +760,6 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Bottom-Right Floating Action Button
         if (cascadiaButtonEnabled && !isScrubbingIndex) {
             var totalDragY by remember { mutableFloatStateOf(0f) }
 
