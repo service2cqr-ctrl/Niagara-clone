@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import com.niagaraclone.launcher.MainActivity
 import com.niagaraclone.launcher.data.MediaWidgetTheme
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.MusicAppSelectionSheet
@@ -110,6 +111,7 @@ fun SettingsScreen(
                 onBack = { currentPage = SettingsPage.MAIN }
             )
             SettingsPage.ADVANCED -> AdvancedSettingsContent(
+                viewModel = viewModel,
                 accentColor = accentColor,
                 onNavigateToBackup = { currentPage = SettingsPage.BACKUP_RESTORE },
                 onBack = { currentPage = SettingsPage.MAIN }
@@ -127,13 +129,10 @@ fun SettingsScreen(
     }
 
     if (showUserGuideSheet) {
-        UserGuideSheet(onDismiss = { showUserGuideSheet = false })
+        UserGuideSheet(viewModel = viewModel, onDismiss = { showUserGuideSheet = false })
     }
 }
 
-// -----------------------------------------------------------------------------
-// 1. MAIN SETTINGS HOME
-// -----------------------------------------------------------------------------
 @Composable
 private fun MainSettingsContent(
     accentColor: Color,
@@ -218,9 +217,6 @@ private fun MainSettingsContent(
     }
 }
 
-// -----------------------------------------------------------------------------
-// 2. PRODUCTIVITY PAGE
-// -----------------------------------------------------------------------------
 @Composable
 private fun ProductivitySettingsContent(
     viewModel: LauncherViewModel,
@@ -254,6 +250,12 @@ private fun ProductivitySettingsContent(
     val calendarPreviewEnabled by viewModel.repository.calendarPreviewEnabled.collectAsState()
     val searchContactsEnabled by viewModel.repository.searchContactsEnabled.collectAsState()
 
+    val quickRepliesEnabled by viewModel.quickRepliesEnabled.collectAsState()
+    val usageBreakerEnabled by viewModel.usageBreakerEnabled.collectAsState()
+    val notificationSummaryEnabled by viewModel.notificationSummaryEnabled.collectAsState()
+    val suggestAppsEnabled by viewModel.suggestAppsEnabled.collectAsState()
+    val sortByUsageEnabled by viewModel.sortByUsageEnabled.collectAsState()
+
     var showMediaThemeDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -267,7 +269,13 @@ private fun ProductivitySettingsContent(
         SubPageHeader(title = "Productivity", onBack = onBack)
 
         SectionHeader("Instant Access", accentColor)
-        ToggleSettingRow("Quick Replies", "Reply right from your home screen", true, accentColor = accentColor) {}
+        ToggleSettingRow(
+            title = "Quick Replies",
+            subtitle = "Reply right from your home screen",
+            checked = quickRepliesEnabled,
+            accentColor = accentColor,
+            onCheckedChange = { coroutineScope.launch { viewModel.repository.setQuickRepliesEnabled(it) } }
+        )
 
         ClickableSettingRow(
             icon = Icons.Outlined.CalendarMonth,
@@ -336,8 +344,20 @@ private fun ProductivitySettingsContent(
         )
 
         SectionHeader("Digital Wellbeing", accentColor)
-        ToggleSettingRow("Usage Breaker", "Get reminders to take breaks", false, accentColor = accentColor) {}
-        ToggleSettingRow("Notification Summary", "Bundle notifications to reduce distractions", false, accentColor = accentColor) {}
+        ToggleSettingRow(
+            title = "Usage Breaker",
+            subtitle = "Get reminders to take breaks",
+            checked = usageBreakerEnabled,
+            accentColor = accentColor,
+            onCheckedChange = { coroutineScope.launch { viewModel.repository.setUsageBreakerEnabled(it) } }
+        )
+        ToggleSettingRow(
+            title = "Notification Summary",
+            subtitle = "Bundle notifications to reduce distractions",
+            checked = notificationSummaryEnabled,
+            accentColor = accentColor,
+            onCheckedChange = { coroutineScope.launch { viewModel.repository.setNotificationSummaryEnabled(it) } }
+        )
 
         SectionHeader("App Organization", accentColor)
         ClickableSettingRow(
@@ -352,8 +372,20 @@ private fun ProductivitySettingsContent(
             subtitle = "Group apps to keep your app list tidy",
             onClick = { showFolderInfoDialog = true }
         )
-        ToggleSettingRow("Suggest Often-Used Apps", "Directly access often-used apps from your favorites", false, accentColor = accentColor) {}
-        ToggleSettingRow("Sort All Apps List By Usage", "Prioritize most-used apps for each letter", false, accentColor = accentColor) {}
+        ToggleSettingRow(
+            title = "Suggest Often-Used Apps",
+            subtitle = "Directly access often-used apps from your favorites",
+            checked = suggestAppsEnabled,
+            accentColor = accentColor,
+            onCheckedChange = { coroutineScope.launch { viewModel.repository.setSuggestAppsEnabled(it) } }
+        )
+        ToggleSettingRow(
+            title = "Sort All Apps List By Usage",
+            subtitle = "Prioritize most-used apps for each letter",
+            checked = sortByUsageEnabled,
+            accentColor = accentColor,
+            onCheckedChange = { coroutineScope.launch { viewModel.repository.setSortByUsageEnabled(it) } }
+        )
 
         SectionHeader("Smart Search", accentColor)
         ClickableSettingRow(
@@ -594,9 +626,6 @@ private fun ProductivitySettingsContent(
     }
 }
 
-// -----------------------------------------------------------------------------
-// 3. THEMES PAGE
-// -----------------------------------------------------------------------------
 @Composable
 private fun ThemesSettingsContent(
     viewModel: LauncherViewModel,
@@ -780,9 +809,6 @@ private fun ThemesSettingsContent(
     }
 }
 
-// -----------------------------------------------------------------------------
-// 4. PRO MEMBERSHIP PAGE
-// -----------------------------------------------------------------------------
 @Composable
 private fun CascadiaProContent(
     accentColor: Color,
@@ -818,11 +844,9 @@ private fun CascadiaProContent(
     }
 }
 
-// -----------------------------------------------------------------------------
-// 5. ADVANCED PAGE
-// -----------------------------------------------------------------------------
 @Composable
 private fun AdvancedSettingsContent(
+    viewModel: LauncherViewModel,
     accentColor: Color,
     onNavigateToBackup: () -> Unit,
     onBack: () -> Unit
@@ -891,7 +915,12 @@ private fun AdvancedSettingsContent(
             icon = Icons.Outlined.RestartAlt,
             title = "Restart launcher",
             subtitle = "Have you tried turning it off and on again?",
-            onClick = { }
+            onClick = {
+                val intent = Intent(context, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                }
+                context.startActivity(intent)
+            }
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -903,9 +932,6 @@ private fun AdvancedSettingsContent(
     }
 }
 
-// -----------------------------------------------------------------------------
-// 6. BACKUP & RESTORE PAGE
-// -----------------------------------------------------------------------------
 @Composable
 private fun BackupRestoreContent(
     viewModel: LauncherViewModel,
@@ -1001,9 +1027,6 @@ private fun BackupRestoreContent(
     }
 }
 
-// -----------------------------------------------------------------------------
-// REUSABLE UI COMPONENTS
-// -----------------------------------------------------------------------------
 @Composable
 private fun SubPageHeader(title: String, onBack: () -> Unit) {
     Row(
