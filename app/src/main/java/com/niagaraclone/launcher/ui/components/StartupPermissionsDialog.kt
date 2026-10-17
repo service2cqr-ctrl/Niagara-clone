@@ -26,6 +26,9 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.niagaraclone.launcher.ui.LauncherViewModel
 
+private const val PREFS_ONBOARDING = "cascadia_onboarding_prefs"
+private const val KEY_FIRST_LAUNCH_PERMISSIONS_SHOWN = "has_seen_startup_permissions_v1"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StartupPermissionsDialog(
@@ -33,6 +36,23 @@ fun StartupPermissionsDialog(
     onComplete: () -> Unit
 ) {
     val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences(PREFS_ONBOARDING, Context.MODE_PRIVATE) }
+
+    // Check if the user has already seen or skipped this dialog on first launch
+    var hasAlreadySeenDialog by remember {
+        mutableStateOf(prefs.getBoolean(KEY_FIRST_LAUNCH_PERMISSIONS_SHOWN, false))
+    }
+
+    val markOnboardingComplete = {
+        prefs.edit().putBoolean(KEY_FIRST_LAUNCH_PERMISSIONS_SHOWN, true).apply()
+        hasAlreadySeenDialog = true
+        onComplete()
+    }
+
+    if (hasAlreadySeenDialog) {
+        LaunchedEffect(Unit) { onComplete() }
+        return
+    }
 
     val hasLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     val hasCalendar = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
@@ -46,26 +66,27 @@ fun StartupPermissionsDialog(
 
     val calendarPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) {
+    ) { isGranted ->
+        if (isGranted) viewModel.loadCalendarEvents()
         requestCalendar = false
-        if (!requestLocation && !requestCalendar && !requestNotification) onComplete()
+        if (!requestLocation && !requestCalendar && !requestNotification) markOnboardingComplete()
     }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) {
         requestLocation = false
-        if (!requestLocation && !requestCalendar && !requestNotification) onComplete()
+        if (!requestLocation && !requestCalendar && !requestNotification) markOnboardingComplete()
     }
 
     if (!requestLocation && !requestCalendar && !requestNotification) {
-        LaunchedEffect(Unit) { onComplete() }
+        LaunchedEffect(Unit) { markOnboardingComplete() }
         return
     }
 
     ModalBottomSheet(
-        onDismissRequest = onComplete,
-        containerColor = Color(0xFF141414), // Rich dark container matching other sheets
+        onDismissRequest = { markOnboardingComplete() },
+        containerColor = Color(0xFF141414),
         contentColor = Color.White,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
@@ -106,6 +127,7 @@ fun StartupPermissionsDialog(
                             e.printStackTrace()
                         }
                         requestNotification = false
+                        if (!requestLocation && !requestCalendar && !requestNotification) markOnboardingComplete()
                     }
                 )
             }
@@ -140,7 +162,7 @@ fun StartupPermissionsDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = onComplete) {
+                TextButton(onClick = { markOnboardingComplete() }) {
                     Text("Skip for now", color = Color.Gray)
                 }
             }
