@@ -6,13 +6,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.BatteryManager
 import android.os.Build
-import android.provider.CalendarContract
 import android.provider.Settings
-import androidx.core.content.ContextCompat
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
-import com.niagaraclone.launcher.services.MediaNotificationListener
-import com.niagaraclone.launcher.services.NotificationSummaryModel
 import com.niagaraclone.launcher.ui.theme.AppTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +30,6 @@ class SettingsRepository(private val context: Context) {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
-    // DataStore Keys
     private val APP_THEME_KEY = stringPreferencesKey("app_theme")
     private val CLOCK_STYLE_KEY = stringPreferencesKey("clock_style")
     private val ACCENT_COLOR_KEY = intPreferencesKey("accent_color")
@@ -68,21 +63,20 @@ class SettingsRepository(private val context: Context) {
     private val SUGGEST_APPS_KEY = booleanPreferencesKey("suggest_apps_enabled")
     private val SORT_BY_USAGE_KEY = booleanPreferencesKey("sort_by_usage_enabled")
 
-    // StateFlow Exposures
     val appTheme: StateFlow<AppTheme> = context.dataStore.data.map {
         when (it[APP_THEME_KEY]) {
             "LIGHT" -> AppTheme.LIGHT
-            "DARK" -> AppTheme.DARK
-            else -> AppTheme.AUTO
+            "GLASS" -> AppTheme.GLASS
+            else -> AppTheme.PITCH_BLACK
         }
-    }.stateIn(scope, SharingStarted.Eagerly, AppTheme.AUTO)
+    }.stateIn(scope, SharingStarted.Eagerly, AppTheme.PITCH_BLACK)
 
     val clockStyle: StateFlow<String> = context.dataStore.data.map { it[CLOCK_STYLE_KEY] ?: "SPLIT_COLORS" }.stateIn(scope, SharingStarted.Eagerly, "SPLIT_COLORS")
-    val accentColorArgb: StateFlow<Int> = context.dataStore.data.map { it[ACCENT_COLOR_KEY] ?: 0xFF4DD0E1.toInt() }.stateIn(scope, SharingStarted.Eagerly, 0xFF4DD0E1.toInt())
+    val accentColorArgb: StateFlow<Int> = context.dataStore.data.map { it[ACCENT_COLOR_KEY] ?: 0xFFD98CE0.toInt() }.stateIn(scope, SharingStarted.Eagerly, 0xFFD98CE0.toInt())
     val homeOffsetY: StateFlow<Float> = context.dataStore.data.map { it[HOME_OFFSET_Y_KEY] ?: 0f }.stateIn(scope, SharingStarted.Eagerly, 0f)
     val widgetHeight: StateFlow<Int> = context.dataStore.data.map { it[WIDGET_HEIGHT_KEY] ?: 180 }.stateIn(scope, SharingStarted.Eagerly, 180)
     val widgetIds: StateFlow<Set<Int>> = context.dataStore.data.map { (it[WIDGET_IDS_KEY] ?: emptySet()).mapNotNull { id -> id.toIntOrNull() }.toSet() }.stateIn(scope, SharingStarted.Eagerly, emptySet())
-    val weatherEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[WEATHER_ENABLED_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
+    val weatherEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[WEATHER_ENABLED_KEY] ?: false }.stateIn(scope, SharingStarted.Eagerly, false)
     val weatherTempUnit: StateFlow<String> = context.dataStore.data.map { it[WEATHER_TEMP_UNIT_KEY] ?: "CELSIUS" }.stateIn(scope, SharingStarted.Eagerly, "CELSIUS")
     val showMediaWidget: StateFlow<Boolean> = context.dataStore.data.map { it[SHOW_MEDIA_WIDGET_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
     val mediaWidgetTheme: StateFlow<MediaWidgetTheme> = context.dataStore.data.map {
@@ -95,21 +89,21 @@ class SettingsRepository(private val context: Context) {
         }
     }.stateIn(scope, SharingStarted.Eagerly, MediaWidgetTheme.FROSTED_GLASS)
 
-    val quickLockEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[QUICK_LOCK_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
-    val showBatteryPercentage: StateFlow<Boolean> = context.dataStore.data.map { it[SHOW_BATTERY_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
-    val cascadiaButtonEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[CASCADIA_BTN_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
+    val quickLockEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[QUICK_LOCK_KEY] ?: false }.stateIn(scope, SharingStarted.Eagerly, false)
+    val showBatteryPercentage: StateFlow<Boolean> = context.dataStore.data.map { it[SHOW_BATTERY_KEY] ?: false }.stateIn(scope, SharingStarted.Eagerly, false)
+    val cascadiaButtonEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[CASCADIA_BTN_KEY] ?: false }.stateIn(scope, SharingStarted.Eagerly, false)
     val calendarPreviewEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[CALENDAR_PREVIEW_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
     val searchContactsEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[SEARCH_CONTACTS_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
 
-    val quickRepliesEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[QUICK_REPLIES_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
+    val quickRepliesEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[QUICK_REPLIES_KEY] ?: false }.stateIn(scope, SharingStarted.Eagerly, false)
     val usageBreakerEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[USAGE_BREAKER_KEY] ?: false }.stateIn(scope, SharingStarted.Eagerly, false)
     val notificationSummaryEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[NOTIFICATION_SUMMARY_SETTING_KEY] ?: false }.stateIn(scope, SharingStarted.Eagerly, false)
-    val suggestAppsEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[SUGGEST_APPS_KEY] ?: false }.stateIn(scope, SharingStarted.Eagerly, false)
-    val sortByUsageEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[SORT_BY_USAGE_KEY] ?: false }.stateIn(scope, SharingStarted.Eagerly, false)
+    val suggestAppsEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[SUGGEST_APPS_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
+    val sortByUsageEnabled: StateFlow<Boolean> = context.dataStore.data.map { it[SORT_BY_USAGE_KEY] ?: true }.stateIn(scope, SharingStarted.Eagerly, true)
 
-    val fabTapActionType: StateFlow<String> = context.dataStore.data.map { it[FAB_TAP_ACTION_KEY] ?: "PHONE" }.stateIn(scope, SharingStarted.Eagerly, "PHONE")
+    val fabTapActionType: StateFlow<String> = context.dataStore.data.map { it[FAB_TAP_ACTION_KEY] ?: "SEARCH" }.stateIn(scope, SharingStarted.Eagerly, "SEARCH")
     val fabTapPackage: StateFlow<String> = context.dataStore.data.map { it[FAB_TAP_PKG_KEY] ?: "" }.stateIn(scope, SharingStarted.Eagerly, "")
-    val fabSwipeActionType: StateFlow<String> = context.dataStore.data.map { it[FAB_SWIPE_ACTION_KEY] ?: "SEARCH" }.stateIn(scope, SharingStarted.Eagerly, "SEARCH")
+    val fabSwipeActionType: StateFlow<String> = context.dataStore.data.map { it[FAB_SWIPE_ACTION_KEY] ?: "VOICE_ASSISTANT" }.stateIn(scope, SharingStarted.Eagerly, "VOICE_ASSISTANT")
     val fabSwipePackage: StateFlow<String> = context.dataStore.data.map { it[FAB_SWIPE_PKG_KEY] ?: "" }.stateIn(scope, SharingStarted.Eagerly, "")
 
     val hiddenPackages: StateFlow<Set<String>> = context.dataStore.data.map { it[HIDDEN_PACKAGES_KEY] ?: emptySet() }.stateIn(scope, SharingStarted.Eagerly, emptySet())
@@ -182,7 +176,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCascadiaButtonEnabled(enabled: Boolean) { context.dataStore.edit { it[CASCADIA_BTN_KEY] = enabled } }
     suspend fun setCalendarPreviewEnabled(enabled: Boolean) { context.dataStore.edit { it[CALENDAR_PREVIEW_KEY] = enabled } }
     suspend fun setSearchContactsEnabled(enabled: Boolean) { context.dataStore.edit { it[SEARCH_CONTACTS_KEY] = enabled } }
-    
+
     suspend fun setQuickRepliesEnabled(enabled: Boolean) { context.dataStore.edit { it[QUICK_REPLIES_KEY] = enabled } }
     suspend fun setUsageBreakerEnabled(enabled: Boolean) { context.dataStore.edit { it[USAGE_BREAKER_KEY] = enabled } }
     suspend fun setNotificationSummaryEnabled(enabled: Boolean) { context.dataStore.edit { it[NOTIFICATION_SUMMARY_SETTING_KEY] = enabled } }
@@ -198,6 +192,12 @@ class SettingsRepository(private val context: Context) {
             val set = (it[FAVORITE_PACKAGES_KEY] ?: emptySet()).toMutableSet()
             if (set.contains(pkg)) set.remove(pkg) else set.add(pkg)
             it[FAVORITE_PACKAGES_KEY] = set
+        }
+    }
+
+    suspend fun setFavoritePackages(packages: Set<String>) {
+        context.dataStore.edit {
+            it[FAVORITE_PACKAGES_KEY] = packages
         }
     }
 
