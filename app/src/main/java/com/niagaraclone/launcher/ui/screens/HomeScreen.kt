@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
@@ -109,6 +110,7 @@ fun HomeScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var hasCompletedStartupCheck by remember { mutableStateOf(false) }
+    var isFullScreenOnboardingBlockingHome by remember { mutableStateOf(false) }
 
     val apps by viewModel.apps.collectAsState()
     val hiddenPackages by viewModel.hiddenPackages.collectAsState()
@@ -178,7 +180,8 @@ fun HomeScreen(
     var isDrawerExpanded by remember { mutableStateOf(false) }
     var isScrubbingIndex by remember { mutableStateOf(false) }
     var activeLetter by remember { mutableStateOf<String?>(null) }
-    var scrubFingerY by remember { mutableFloatStateOf(screenHeightPx * 0.5f) }
+    var scrubFingerY by remember { mutableFloatStateOf(screenHeightPx * 0.45f) }
+    var activeHeaderTopOffsetPx by remember { mutableIntStateOf(0) }
     var pendingScrollLetter by remember { mutableStateOf<String?>(null) }
     var activePopUpApp by remember { mutableStateOf<AppModel?>(null) }
 
@@ -314,8 +317,8 @@ fun HomeScreen(
 
     val (currentTime, currentDate) = rememberCurrentTimeState(timeFormatPattern = "h:mm", dateFormatPattern = "EEE, MMM d")
     val timeParts = remember(currentTime) { currentTime.split(":") }
-    val timeHours = timeParts.getOrNull(0) ?: "9"
-    val timeMinutes = timeParts.getOrNull(1) ?: "43"
+    val timeHours = timeParts.getOrNull(0) ?: "10"
+    val timeMinutes = timeParts.getOrNull(1) ?: "23"
 
     val liveTempDisplay = remember(liveWeather, tempUnit) {
         val c = liveWeather?.temperatureCelsius ?: 28f
@@ -332,6 +335,7 @@ fun HomeScreen(
         visibleApps.groupBy { it.firstLetter }.toSortedMap()
     }
 
+    // Only resolve to an existing letter so empty letters don't jump unexpectedly
     val resolvedScrubLetter = remember(activeLetter, groupedApps) {
         val charStr = activeLetter ?: return@remember null
         if (charStr == "☆" || charStr == "⭐" || charStr == "∘") return@remember charStr
@@ -373,12 +377,12 @@ fun HomeScreen(
         map
     }
 
-    LaunchedEffect(pendingScrollLetter, isDrawerExpanded, isScrubbingIndex) {
+    // Sync the full A-Z list scroll position to the exact same Y offset where the active letter sits while scrubbing!
+    LaunchedEffect(pendingScrollLetter, isDrawerExpanded, activeHeaderTopOffsetPx) {
         val targetChar = pendingScrollLetter ?: return@LaunchedEffect
         if (isDrawerExpanded) {
             val targetIdx = letterIndexMap[targetChar] ?: 0
-            val desiredTopOffsetPx = (scrubFingerY - with(density) { 140.dp.toPx() }).roundToInt().coerceAtLeast(0)
-            drawerListState.scrollToItem(targetIdx, scrollOffset = -desiredTopOffsetPx)
+            drawerListState.scrollToItem(targetIdx, scrollOffset = -activeHeaderTopOffsetPx)
         }
     }
 
@@ -401,7 +405,10 @@ fun HomeScreen(
             "APP" -> {
                 targetApp?.let { app ->
                     val intent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                    intent?.let { context.startActivity(it) }
+                    intent?.let {
+                        it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(it)
+                    }
                 }
             }
             else -> {
@@ -412,12 +419,14 @@ fun HomeScreen(
     }
 
     val showHomeFavorites = !isDrawerExpanded && (!isScrubbingIndex || activeLetter == "☆" || activeLetter == "⭐")
+    // Hide underlying home layers when full-screen Favorites Picker or Onboarding is active so nothing bleeds through!
+    val hideUnderlyingLayers = isFullScreenOnboardingBlockingHome || showEditFavoritesOverlay
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent)
-            .pointerInput(Unit) {
+            .pointerInput(quickLockEnabled) {
                 detectTapGestures(
                     onDoubleTap = {
                         if (quickLockEnabled) {
@@ -431,136 +440,417 @@ fun HomeScreen(
                 )
             }
     ) {
-        // --- LAYER 1: FULL SCROLLABLE A-Z LIST ---
-        if (isDrawerExpanded) {
-            LazyColumn(
-                state = drawerListState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(start = 24.dp, end = 56.dp)
-                    .alpha(if (isScrubbingIndex) 0f else 1f),
-                contentPadding = PaddingValues(top = 56.dp, bottom = 220.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                groupedApps.forEach { (letter, appGroup) ->
-                    item(key = "header_$letter") {
-                        Text(
-                            text = letter.toString(),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f)),
-                            modifier = Modifier.padding(top = 14.dp, bottom = 4.dp)
-                        )
+        if (!hideUnderlyingLayers) {
+            // --- LAYER 1: FULL SCROLLABLE A-Z LIST ---
+            // Added statusBarsPadding() + clipToBounds() so scrolling letters NEVER overlap the top status bar clock!
+            if (isDrawerExpanded) {
+                LazyColumn(
+                    state = drawerListState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .clipToBounds()
+                        .padding(start = 24.dp, end = 56.dp)
+                        .alpha(if (isScrubbingIndex) 0f else 1f),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 320.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    groupedApps.forEach { (letter, appGroup) ->
+                        item(key = "header_$letter") {
+                            Text(
+                                text = letter.toString(),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f)),
+                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                            )
+                        }
+                        items(appGroup, key = { "drawer_${it.packageName}" }) { app ->
+                            val appNotification = notificationSummaries.firstOrNull { it.packageName == app.packageName }
+                            FavoriteAppRow(
+                                app = app,
+                                badgeCount = notificationCounts[app.packageName] ?: 0,
+                                notificationSummary = appNotification,
+                                accentColor = accentColor,
+                                onClick = { context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) } },
+                                onLongClick = { selectedAppForCustomization = app },
+                                onSwipeRight = { yOffset ->
+                                    popupYOffset = yOffset
+                                    activePopUpApp = app
+                                }
+                            )
+                        }
                     }
-                    items(appGroup, key = { "drawer_${it.packageName}" }) { app ->
-                        val appNotification = notificationSummaries.firstOrNull { it.packageName == app.packageName }
-                        FavoriteAppRow(
-                            app = app,
-                            badgeCount = notificationCounts[app.packageName] ?: 0,
-                            notificationSummary = appNotification,
-                            accentColor = accentColor,
-                            onClick = { context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) } },
-                            onLongClick = { selectedAppForCustomization = app },
-                            onSwipeRight = { yOffset ->
-                                popupYOffset = yOffset
-                                activePopUpApp = app
-                            }
-                        )
+
+                    item(key = "drawer_footer") {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 24.dp, bottom = 40.dp)
+                        ) {
+                            Text(
+                                text = "Cascadia Launcher",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            DrawerFooterRow(
+                                icon = Icons.Default.History,
+                                title = "Recently installed",
+                                accentColor = accentColor,
+                                onClick = { showRecentlyInstalledDialog = true }
+                            )
+                            DrawerFooterRow(
+                                icon = Icons.Default.Settings,
+                                title = "Cascadia settings",
+                                accentColor = accentColor,
+                                onClick = onOpenSettings
+                            )
+                        }
                     }
                 }
+            }
 
-                item(key = "drawer_footer") {
+            // --- LAYER 2: NIAGARA ACTIVE-LETTER-ONLY VIEW AT EXACT FINGER Y POSITION ---
+            // Anchors the header at the exact same pixel offset that Layer 1 scrolls to, so releasing the finger has ZERO position jump!
+            if (isScrubbingIndex && !showHomeFavorites) {
+                var activeGroupHeightPx by remember { mutableIntStateOf(0) }
+                val minTopPx = with(density) { 16.dp.toPx() }
+                val maxBottomPx = screenHeightPx - with(density) { 140.dp.toPx() }
+
+                val calculatedTopPx = remember(scrubFingerY, activeGroupHeightPx, screenHeightPx) {
+                    val rawTop = scrubFingerY - with(density) { 110.dp.toPx() }
+                    val maxAllowedTop = (maxBottomPx - activeGroupHeightPx).coerceAtLeast(minTopPx)
+                    rawTop.coerceIn(minTopPx, maxAllowedTop).roundToInt()
+                }
+
+                LaunchedEffect(calculatedTopPx) {
+                    activeHeaderTopOffsetPx = calculatedTopPx
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .clipToBounds()
+                        .padding(start = 24.dp, end = 128.dp)
+                ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 24.dp, bottom = 40.dp)
+                            .offset { IntOffset(x = 0, y = calculatedTopPx) }
+                            .onGloballyPositioned { coords ->
+                                activeGroupHeightPx = coords.size.height
+                            },
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Text(
-                            text = "Cascadia Launcher",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        )
-                        DrawerFooterRow(
-                            icon = Icons.Default.History,
-                            title = "Recently installed",
-                            accentColor = accentColor,
-                            onClick = { showRecentlyInstalledDialog = true }
-                        )
-                        DrawerFooterRow(
-                            icon = Icons.Default.Settings,
-                            title = "Cascadia settings",
-                            accentColor = accentColor,
-                            onClick = onOpenSettings
-                        )
+                        if (resolvedScrubLetter == "∘") {
+                            Text(
+                                text = "Cascadia Launcher",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            DrawerFooterRow(
+                                icon = Icons.Default.History,
+                                title = "Recently installed",
+                                accentColor = accentColor,
+                                onClick = { showRecentlyInstalledDialog = true }
+                            )
+                            DrawerFooterRow(
+                                icon = Icons.Default.Settings,
+                                title = "Cascadia settings",
+                                accentColor = accentColor,
+                                onClick = onOpenSettings
+                            )
+                        } else {
+                            val letterChar = resolvedScrubLetter?.firstOrNull()
+                            val activeAppsForLetter = if (letterChar != null) groupedApps[letterChar].orEmpty() else emptyList()
+
+                            if (letterChar != null) {
+                                Text(
+                                    text = letterChar.toString(),
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.55f), blurRadius = 4f)),
+                                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                                )
+                            }
+                            activeAppsForLetter.take(8).forEach { app ->
+                                val appNotification = notificationSummaries.firstOrNull { it.packageName == app.packageName }
+                                FavoriteAppRow(
+                                    app = app,
+                                    badgeCount = notificationCounts[app.packageName] ?: 0,
+                                    notificationSummary = appNotification,
+                                    accentColor = accentColor,
+                                    onClick = {
+                                        context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) }
+                                    },
+                                    onLongClick = { selectedAppForCustomization = app },
+                                    onSwipeRight = { yOffset ->
+                                        popupYOffset = yOffset
+                                        activePopUpApp = app
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }
-        }
 
-        // --- LAYER 2: NIAGARA ACTIVE-LETTER-ONLY VIEW AT EXACT FINGER Y POSITION ---
-        if (isScrubbingIndex && !showHomeFavorites) {
-            var activeGroupHeightPx by remember { mutableIntStateOf(0) }
-            val minTopPx = with(density) { 56.dp.toPx() }
-            val maxBottomPx = screenHeightPx - with(density) { 80.dp.toPx() }
-
-            val calculatedTopPx = remember(scrubFingerY, activeGroupHeightPx, screenHeightPx) {
-                val rawTop = scrubFingerY - (activeGroupHeightPx * 0.45f)
-                val maxAllowedTop = (maxBottomPx - activeGroupHeightPx).coerceAtLeast(minTopPx)
-                rawTop.coerceIn(minTopPx, maxAllowedTop).roundToInt()
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(start = 24.dp, end = 128.dp)
-            ) {
+            // --- LAYER 3: NIAGARA HOME SCREEN ---
+            if (showHomeFavorites) {
+                val showInlinePrompts = hasCompletedStartupCheck && (!isDefaultLauncher || !dismissedAccessibilityPrompt || !dismissedCustomizePrompt || !dismissedProductivityPrompt)
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .offset { IntOffset(x = 0, y = calculatedTopPx) }
-                        .onGloballyPositioned { coords ->
-                            activeGroupHeightPx = coords.size.height
-                        },
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .padding(start = 28.dp, end = 56.dp)
                 ) {
-                    if (resolvedScrubLetter == "∘") {
-                        Text(
-                            text = "Cascadia Launcher",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                        DrawerFooterRow(
-                            icon = Icons.Default.History,
-                            title = "Recently installed",
-                            accentColor = accentColor,
-                            onClick = { showRecentlyInstalledDialog = true }
-                        )
-                        DrawerFooterRow(
-                            icon = Icons.Default.Settings,
-                            title = "Cascadia settings",
-                            accentColor = accentColor,
-                            onClick = onOpenSettings
-                        )
-                    } else {
-                        val letterChar = resolvedScrubLetter?.firstOrNull()
-                        val activeAppsForLetter = if (letterChar != null) groupedApps[letterChar].orEmpty() else emptyList()
+                    val baseTopWeight = if (widgetIds.isEmpty() && !showInlinePrompts) 0.26f else 0.08f
+                    Spacer(modifier = Modifier.weight(baseTopWeight))
+                    if (homeLayoutOffsetY > 0f) {
+                        Spacer(modifier = Modifier.height(homeLayoutOffsetY.dp))
+                    }
 
-                        if (letterChar != null) {
-                            Text(
-                                text = letterChar.toString(),
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.55f), blurRadius = 4f)),
-                                modifier = Modifier.padding(bottom = 4.dp)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .pointerInput(isMovingHeader) {
+                                if (isMovingHeader) {
+                                    detectDragGestures { change, dragAmount ->
+                                        change.consume()
+                                        val newOffset = (homeLayoutOffsetY + dragAmount.y / 2f).coerceIn(0f, 260f)
+                                        viewModel.setHomeOffsetY(newOffset)
+                                    }
+                                }
+                            }
+                            .combinedClickable(
+                                onClick = { openClockApp() },
+                                onLongClick = { isWidgetMenuOpen = true }
                             )
+                    ) {
+                        if (isMovingHeader) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = accentColor.copy(alpha = 0.9f),
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(text = "Drag vertically to position", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    IconButton(
+                                        onClick = { isMovingHeader = false },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(Icons.Default.Check, contentDescription = "Done", tint = Color.Black)
+                                    }
+                                }
+                            }
                         }
-                        activeAppsForLetter.take(9).forEach { app ->
+
+                        ClockHeaderDisplay(
+                            clockStyle = clockStyle,
+                            timeHours = timeHours,
+                            timeMinutes = timeMinutes,
+                            currentDate = currentDate,
+                            accentColor = accentColor
+                        )
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = currentDate.ifEmpty { "Sun, Oct 18" },
+                                color = Color.White.copy(alpha = 0.92f),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f)),
+                                modifier = Modifier.clickable {
+                                    val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
+                                    if (hasPermission) {
+                                        viewModel.loadCalendarEvents()
+                                        showAgendaSheet = true
+                                    } else {
+                                        calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+                                    }
+                                }
+                            )
+                            if (showBatteryPercentage) {
+                                Text(
+                                    text = batteryStatus,
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    fontSize = 15.sp,
+                                    style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f))
+                                )
+                            }
+                            if (weatherEnabled) {
+                                Text(
+                                    text = liveTempDisplay,
+                                    color = Color.White.copy(alpha = 0.92f),
+                                    fontSize = 15.sp,
+                                    style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f)),
+                                    modifier = Modifier.clickable { openWeatherWithPermissionCheck() }
+                                )
+                            }
+                        }
+
+                        AnimatedVisibility(visible = calendarPreviewEnabled && upcomingEvents.isNotEmpty()) {
+                            val nextEvent = upcomingEvents.firstOrNull()
+                            if (nextEvent != null) {
+                                val eventTime = if (nextEvent.isAllDay) "All day" else SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(nextEvent.startTimeMillis))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.clickable {
+                                        viewModel.loadCalendarEvents()
+                                        showAgendaSheet = true
+                                    }
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .background(accentColor, CircleShape)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "$eventTime • ${nextEvent.title}",
+                                        color = Color.White.copy(alpha = 0.88f),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    mediaState?.let { media ->
+                        if (showMediaWidget && media.isPlaying && media.title.isNotEmpty()) {
+                            MediaPlayerCard(
+                                albumArt = media.albumArt?.asImageBitmap(),
+                                trackTitle = media.title,
+                                artistName = media.artist,
+                                isPlaying = media.isPlaying,
+                                widgetTheme = mediaWidgetTheme,
+                                accentColor = accentColor,
+                                onPlayPauseToggle = { MediaNotificationListener.activeController?.transportControls?.let { if (media.isPlaying) it.pause() else it.play() } },
+                                onOpenApp = { context.packageManager.getLaunchIntentForPackage(media.packageName)?.let { context.startActivity(it) } },
+                                onNextTrack = { MediaNotificationListener.activeController?.transportControls?.skipToNext() },
+                                onPreviousTrack = { MediaNotificationListener.activeController?.transportControls?.skipToPrevious() },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
+
+                    if (widgetIds.isNotEmpty()) {
+                        WidgetStackView(
+                            widgetIds = widgetIds.toList(),
+                            widgetHeightDp = widgetHeight.toFloat(),
+                            appWidgetHost = appWidgetHost,
+                            appWidgetManager = appWidgetManager,
+                            onRemoveWidget = { viewModel.removeWidgetId(it) },
+                            onAddWidgetClick = onAddWidgetClick,
+                            onResizeWidgetHeight = { newHeight -> viewModel.setWidgetHeight(newHeight.toInt()) },
+                            accentColor = accentColor,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    if (isAudioConnected && connectedMusicApps.isNotEmpty() && !dismissedMusicCard) {
+                        AutoMusicPopUpCard(
+                            viewModel = viewModel,
+                            musicApps = connectedMusicApps,
+                            onDismiss = { dismissedMusicCard = true }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(0.74f, fill = true),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        contentPadding = PaddingValues(bottom = 96.dp)
+                    ) {
+                        // Only show inline setup prompts AFTER onboarding finishes so they never push Favorites down under the Spotlight!
+                        if (hasCompletedStartupCheck) {
+                            if (!isDefaultLauncher) {
+                                item(key = "prompt_set_default") {
+                                    HomeSetupPromptRow(
+                                        icon = Icons.Outlined.Home,
+                                        title = "Set Cascadia Launcher as your home screen?",
+                                        actionText = "Set as home screen",
+                                        accentColor = accentColor,
+                                        onClick = onRequestSetDefaultLauncher
+                                    )
+                                }
+                            }
+
+                            if (!dismissedAccessibilityPrompt && ScreenLockService.instance == null) {
+                                item(key = "prompt_accessibility") {
+                                    HomeSetupPromptRow(
+                                        icon = Icons.Outlined.Info,
+                                        title = "Some features use Accessibility access when turned on in Settings",
+                                        actionText = "Learn More",
+                                        accentColor = accentColor,
+                                        onClick = { showAccessibilityInfoSheet = true }
+                                    )
+                                }
+                            }
+
+                            if (!dismissedCustomizePrompt) {
+                                item(key = "prompt_customize") {
+                                    HomeSetupPromptRow(
+                                        icon = Icons.Outlined.Brush,
+                                        title = "Customize Your Home Screen",
+                                        actionText = "Customize",
+                                        accentColor = accentColor,
+                                        onClick = {
+                                            setupPrefs.edit().putBoolean("dismiss_customize", true).apply()
+                                            dismissedCustomizePrompt = true
+                                            onOpenSettings()
+                                        }
+                                    )
+                                }
+                            }
+
+                            if (!dismissedProductivityPrompt) {
+                                item(key = "prompt_productivity") {
+                                    HomeSetupPromptRow(
+                                        icon = Icons.Outlined.StarBorder,
+                                        title = "Choose Your Productivity Features",
+                                        actionText = "Choose",
+                                        accentColor = accentColor,
+                                        onClick = {
+                                            setupPrefs.edit().putBoolean("dismiss_productivity", true).apply()
+                                            dismissedProductivityPrompt = true
+                                            onOpenSettings()
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        items(favorites, key = { "fav_${it.packageName}" }) { app ->
                             val appNotification = notificationSummaries.firstOrNull { it.packageName == app.packageName }
                             FavoriteAppRow(
                                 app = app,
@@ -580,365 +870,107 @@ fun HomeScreen(
                     }
                 }
             }
-        }
 
-        // --- LAYER 3: NIAGARA HOME SCREEN ---
-        if (showHomeFavorites) {
-            val hasSetupPrompts = !isDefaultLauncher || !dismissedAccessibilityPrompt || !dismissedCustomizePrompt || !dismissedProductivityPrompt
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
-                    .padding(start = 28.dp, end = 56.dp)
-            ) {
-                val baseTopWeight = if (widgetIds.isEmpty() && !hasSetupPrompts) 0.28f else 0.08f
-                Spacer(modifier = Modifier.weight(baseTopWeight))
-                if (homeLayoutOffsetY > 0f) {
-                    Spacer(modifier = Modifier.height(homeLayoutOffsetY.dp))
-                }
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .pointerInput(isMovingHeader) {
-                            if (isMovingHeader) {
-                                detectDragGestures { change, dragAmount ->
-                                    change.consume()
-                                    val newOffset = (homeLayoutOffsetY + dragAmount.y / 2f).coerceIn(0f, 260f)
-                                    viewModel.setHomeOffsetY(newOffset)
-                                }
-                            }
-                        }
-                        .combinedClickable(
-                            onClick = { openClockApp() },
-                            onLongClick = { isWidgetMenuOpen = true }
-                        )
-                ) {
-                    if (isMovingHeader) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = accentColor.copy(alpha = 0.9f),
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(text = "Drag vertically to position", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.width(12.dp))
-                                IconButton(
-                                    onClick = { isMovingHeader = false },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(Icons.Default.Check, contentDescription = "Done", tint = Color.Black)
-                                }
-                            }
-                        }
-                    }
-
-                    ClockHeaderDisplay(
-                        clockStyle = clockStyle,
-                        timeHours = timeHours,
-                        timeMinutes = timeMinutes,
-                        currentDate = currentDate,
-                        accentColor = accentColor
-                    )
-
-                    Spacer(modifier = Modifier.height(2.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = currentDate.ifEmpty { "Sun, Oct 18" },
-                            color = Color.White.copy(alpha = 0.92f),
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                            style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f)),
-                            modifier = Modifier.clickable {
-                                val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
-                                if (hasPermission) {
-                                    viewModel.loadCalendarEvents()
-                                    showAgendaSheet = true
-                                } else {
-                                    calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
-                                }
-                            }
-                        )
-                        if (showBatteryPercentage) {
-                            Text(
-                                text = batteryStatus,
-                                color = Color.White.copy(alpha = 0.85f),
-                                fontSize = 15.sp,
-                                style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f))
-                            )
-                        }
-                        if (weatherEnabled) {
-                            Text(
-                                text = liveTempDisplay,
-                                color = Color.White.copy(alpha = 0.92f),
-                                fontSize = 15.sp,
-                                style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f)),
-                                modifier = Modifier.clickable { openWeatherWithPermissionCheck() }
-                            )
-                        }
-                    }
-
-                    AnimatedVisibility(visible = calendarPreviewEnabled && upcomingEvents.isNotEmpty()) {
-                        val nextEvent = upcomingEvents.firstOrNull()
-                        if (nextEvent != null) {
-                            val eventTime = if (nextEvent.isAllDay) "All day" else SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(nextEvent.startTimeMillis))
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clickable {
-                                    viewModel.loadCalendarEvents()
-                                    showAgendaSheet = true
-                                }
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .background(accentColor, CircleShape)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "$eventTime • ${nextEvent.title}",
-                                    color = Color.White.copy(alpha = 0.88f),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                mediaState?.let { media ->
-                    if (showMediaWidget && media.isPlaying && media.title.isNotEmpty()) {
-                        MediaPlayerCard(
-                            albumArt = media.albumArt?.asImageBitmap(),
-                            trackTitle = media.title,
-                            artistName = media.artist,
-                            isPlaying = media.isPlaying,
-                            widgetTheme = mediaWidgetTheme,
-                            accentColor = accentColor,
-                            onPlayPauseToggle = { MediaNotificationListener.activeController?.transportControls?.let { if (media.isPlaying) it.pause() else it.play() } },
-                            onOpenApp = { context.packageManager.getLaunchIntentForPackage(media.packageName)?.let { context.startActivity(it) } },
-                            onNextTrack = { MediaNotificationListener.activeController?.transportControls?.skipToNext() },
-                            onPreviousTrack = { MediaNotificationListener.activeController?.transportControls?.skipToPrevious() },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
-                }
-
-                if (widgetIds.isNotEmpty()) {
-                    WidgetStackView(
-                        widgetIds = widgetIds.toList(),
-                        widgetHeightDp = widgetHeight.toFloat(),
-                        appWidgetHost = appWidgetHost,
-                        appWidgetManager = appWidgetManager,
-                        onRemoveWidget = { viewModel.removeWidgetId(it) },
-                        onAddWidgetClick = onAddWidgetClick,
-                        onResizeWidgetHeight = { newHeight -> viewModel.setWidgetHeight(newHeight.toInt()) },
-                        accentColor = accentColor,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-
-                if (isAudioConnected && connectedMusicApps.isNotEmpty() && !dismissedMusicCard) {
-                    AutoMusicPopUpCard(
-                        viewModel = viewModel,
-                        musicApps = connectedMusicApps,
-                        onDismiss = { dismissedMusicCard = true }
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(0.72f, fill = true),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    contentPadding = PaddingValues(bottom = 96.dp)
-                ) {
-                    if (!isDefaultLauncher) {
-                        item(key = "prompt_set_default") {
-                            HomeSetupPromptRow(
-                                icon = Icons.Outlined.Home,
-                                title = "Set Cascadia Launcher as your home screen?",
-                                actionText = "Set as home screen",
-                                accentColor = accentColor,
-                                onClick = onRequestSetDefaultLauncher
-                            )
-                        }
-                    }
-
-                    if (!dismissedAccessibilityPrompt && ScreenLockService.instance == null) {
-                        item(key = "prompt_accessibility") {
-                            HomeSetupPromptRow(
-                                icon = Icons.Outlined.Info,
-                                title = "Some features use Accessibility access when turned on in Settings",
-                                actionText = "Learn More",
-                                accentColor = accentColor,
-                                onClick = { showAccessibilityInfoSheet = true }
-                            )
-                        }
-                    }
-
-                    if (!dismissedCustomizePrompt) {
-                        item(key = "prompt_customize") {
-                            HomeSetupPromptRow(
-                                icon = Icons.Outlined.Brush,
-                                title = "Customize Your Home Screen",
-                                actionText = "Customize",
-                                accentColor = accentColor,
-                                onClick = {
-                                    setupPrefs.edit().putBoolean("dismiss_customize", true).apply()
-                                    dismissedCustomizePrompt = true
-                                    onOpenSettings()
-                                }
-                            )
-                        }
-                    }
-
-                    if (!dismissedProductivityPrompt) {
-                        item(key = "prompt_productivity") {
-                            HomeSetupPromptRow(
-                                icon = Icons.Outlined.StarBorder,
-                                title = "Choose Your Productivity Features",
-                                actionText = "Choose",
-                                accentColor = accentColor,
-                                onClick = {
-                                    setupPrefs.edit().putBoolean("dismiss_productivity", true).apply()
-                                    dismissedProductivityPrompt = true
-                                    onOpenSettings()
-                                }
-                            )
-                        }
-                    }
-
-                    items(favorites, key = { "fav_${it.packageName}" }) { app ->
-                        val appNotification = notificationSummaries.firstOrNull { it.packageName == app.packageName }
-                        FavoriteAppRow(
-                            app = app,
-                            badgeCount = notificationCounts[app.packageName] ?: 0,
-                            notificationSummary = appNotification,
-                            accentColor = accentColor,
-                            onClick = {
-                                context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) }
-                            },
-                            onLongClick = { selectedAppForCustomization = app },
-                            onSwipeRight = { yOffset ->
-                                popupYOffset = yOffset
-                                activePopUpApp = app
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
-        // --- LAYER 4: RIGHT-EDGE WAVE INDEXER ---
-        WaveSideIndex(
-            isIndexerVisible = true,
-            allowSystemBackOnRightEdge = isDrawerExpanded,
-            notificationLetters = notificationLetters,
-            activeChar = activeLetter,
-            accentColor = accentColor,
-            onTouchStart = {
-                isScrubbingIndex = true
-                isDrawerExpanded = true
-            },
-            onCharSelectedWithY = { char, fingerY ->
-                activeLetter = char
-                scrubFingerY = fingerY
-                isScrubbingIndex = true
-                if (char != "☆" && char != "⭐") {
+            // --- LAYER 4: RIGHT-EDGE WAVE INDEXER ---
+            WaveSideIndex(
+                isIndexerVisible = true,
+                allowSystemBackOnRightEdge = isDrawerExpanded,
+                notificationLetters = notificationLetters,
+                activeChar = activeLetter,
+                accentColor = accentColor,
+                onTouchStart = {
+                    isScrubbingIndex = true
                     isDrawerExpanded = true
-                    pendingScrollLetter = resolvedScrubLetter ?: char
-                }
-            },
-            onDragEnd = { lastChar ->
-                isScrubbingIndex = false
-                if (lastChar == "☆" || lastChar == "⭐") {
-                    isDrawerExpanded = false
-                    activeLetter = null
-                } else {
-                    isDrawerExpanded = true
-                    val targetLetter = resolvedScrubLetter ?: lastChar
-                    pendingScrollLetter = targetLetter
-                    activeLetter = null
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+                },
+                onCharSelectedWithY = { char, fingerY ->
+                    activeLetter = char
+                    scrubFingerY = fingerY
+                    isScrubbingIndex = true
+                    if (char != "☆" && char != "⭐") {
+                        isDrawerExpanded = true
+                        pendingScrollLetter = resolvedScrubLetter ?: char
+                    }
+                },
+                onDragEnd = { lastChar ->
+                    isScrubbingIndex = false
+                    if (lastChar == "☆" || lastChar == "⭐") {
+                        isDrawerExpanded = false
+                        activeLetter = null
+                    } else {
+                        isDrawerExpanded = true
+                        val targetLetter = resolvedScrubLetter ?: lastChar
+                        pendingScrollLetter = targetLetter
+                        activeLetter = null
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
 
-        // --- LAYER 5: FLOATING CASCADIA / SEARCH BUTTON ---
-        if ((cascadiaButtonEnabled || isDrawerExpanded) && !isScrubbingIndex) {
-            var totalDragY by remember { mutableFloatStateOf(0f) }
+            // --- LAYER 5: FLOATING CASCADIA / SEARCH BUTTON (Fixed Swipe-Up & Tap state capture!) ---
+            if ((cascadiaButtonEnabled || isDrawerExpanded) && !isScrubbingIndex) {
+                val currentTapActionType by rememberUpdatedState(fabTapActionType)
+                val currentTapApp by rememberUpdatedState(assignedFabApp)
+                val currentSwipeActionType by rememberUpdatedState(fabSwipeActionType)
+                val currentSwipeApp by rememberUpdatedState(assignedFabSwipeApp)
+                val currentDrawerExpanded by rememberUpdatedState(isDrawerExpanded)
 
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = 44.dp, end = 52.dp)
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = if (isDrawerExpanded) Color(0xFF3F3D46).copy(alpha = 0.88f) else accentColor,
-                    shadowElevation = 6.dp,
+                Box(
                     modifier = Modifier
-                        .size(54.dp)
-                        .pointerInput(isDrawerExpanded) {
-                            detectDragGestures(
-                                onDragEnd = {
-                                    if (totalDragY < -40f) {
-                                        executeAction(fabSwipeActionType, assignedFabSwipeApp)
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 44.dp, end = 52.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isDrawerExpanded) Color(0xFF3F3D46).copy(alpha = 0.88f) else accentColor,
+                        shadowElevation = 6.dp,
+                        modifier = Modifier
+                            .size(54.dp)
+                            .pointerInput(Unit) {
+                                var totalDragY = 0f
+                                detectDragGestures(
+                                    onDragStart = { totalDragY = 0f },
+                                    onDragEnd = {
+                                        if (totalDragY < -28f) {
+                                            executeAction(currentSwipeActionType, currentSwipeApp)
+                                        }
+                                        totalDragY = 0f
+                                    },
+                                    onDragCancel = { totalDragY = 0f },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        totalDragY += dragAmount.y
                                     }
-                                    totalDragY = 0f
+                                )
+                            }
+                            .combinedClickable(
+                                onClick = {
+                                    if (currentDrawerExpanded) {
+                                        showSmartSearchSheet = true
+                                    } else {
+                                        executeAction(currentTapActionType, currentTapApp)
+                                    }
                                 },
-                                onDragCancel = { totalDragY = 0f },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    totalDragY += dragAmount.y
-                                }
+                                onLongClick = { showFabMenuSheet = true }
                             )
-                        }
-                        .combinedClickable(
-                            onClick = {
-                                if (isDrawerExpanded) {
-                                    showSmartSearchSheet = true
-                                } else {
-                                    executeAction(fabTapActionType, assignedFabApp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (isDrawerExpanded) {
+                                Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
+                            } else {
+                                when {
+                                    fabTapActionType == "APP" && assignedFabApp?.icon != null -> {
+                                        Image(
+                                            bitmap = assignedFabApp.icon!!.toBitmap(width = 36, height = 36).asImageBitmap(),
+                                            contentDescription = assignedFabApp.label,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                    fabTapActionType == "SEARCH" -> Icon(Icons.Default.Search, contentDescription = null, tint = Color.Black)
+                                    fabTapActionType == "AGENDA" -> Icon(Icons.Outlined.CalendarToday, contentDescription = null, tint = Color.Black)
+                                    fabTapActionType == "VOICE_ASSISTANT" -> Icon(Icons.Outlined.Mic, contentDescription = null, tint = Color.Black)
+                                    fabTapActionType == "LOCK" -> Icon(Icons.Default.Lock, contentDescription = null, tint = Color.Black)
+                                    else -> Icon(Icons.Default.Phone, contentDescription = null, tint = Color.Black)
                                 }
-                            },
-                            onLongClick = { showFabMenuSheet = true }
-                        )
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        if (isDrawerExpanded) {
-                            Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
-                        } else {
-                            when {
-                                fabTapActionType == "APP" && assignedFabApp?.icon != null -> {
-                                    Image(
-                                        bitmap = assignedFabApp.icon!!.toBitmap(width = 36, height = 36).asImageBitmap(),
-                                        contentDescription = assignedFabApp.label,
-                                        modifier = Modifier.size(28.dp)
-                                    )
-                                }
-                                fabTapActionType == "SEARCH" -> Icon(Icons.Default.Search, contentDescription = null, tint = Color.Black)
-                                fabTapActionType == "AGENDA" -> Icon(Icons.Outlined.CalendarToday, contentDescription = null, tint = Color.Black)
-                                fabTapActionType == "VOICE_ASSISTANT" -> Icon(Icons.Outlined.Mic, contentDescription = null, tint = Color.Black)
-                                fabTapActionType == "LOCK" -> Icon(Icons.Default.Lock, contentDescription = null, tint = Color.Black)
-                                else -> Icon(Icons.Default.Phone, contentDescription = null, tint = Color.Black)
                             }
                         }
                     }
@@ -950,7 +982,13 @@ fun HomeScreen(
         if (!hasCompletedStartupCheck) {
             StartupPermissionsDialog(
                 viewModel = viewModel,
-                onComplete = { hasCompletedStartupCheck = true }
+                onStageChanged = { shouldBlockHome ->
+                    isFullScreenOnboardingBlockingHome = shouldBlockHome
+                },
+                onComplete = {
+                    isFullScreenOnboardingBlockingHome = false
+                    hasCompletedStartupCheck = true
+                }
             )
         }
 
