@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +33,7 @@ fun EditPopUpFolderSheet(
     allApps: List<AppModel>,
     onDismiss: () -> Unit
 ) {
+    val palette = LocalLauncherPalette.current
     val existingSubApps = remember(parentApp) {
         viewModel.getFolderSubApps(parentApp.packageName).map { it.packageName }.toSet()
     }
@@ -50,8 +52,8 @@ fun EditPopUpFolderSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141414),
-        contentColor = Color.White,
+        containerColor = palette.sheetBackground,
+        contentColor = palette.textPrimary,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
@@ -69,12 +71,12 @@ fun EditPopUpFolderSheet(
                         text = "Edit ${parentApp.label} pop-up",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = palette.textPrimary
                     )
                     Text(
                         text = "${selectedPackages.value.size} apps selected",
                         fontSize = 12.sp,
-                        color = Color.Gray
+                        color = palette.textSecondary
                     )
                 }
 
@@ -97,14 +99,14 @@ fun EditPopUpFolderSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp),
-                placeholder = { Text("Search apps to add...", color = Color.Gray, fontSize = 14.sp) },
+                placeholder = { Text("Search apps to add...", color = palette.textSecondary, fontSize = 14.sp) },
                 leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray)
+                    Icon(Icons.Default.Search, contentDescription = "Search", tint = palette.textSecondary)
                 },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray)
+                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = palette.textSecondary)
                         }
                     }
                 },
@@ -113,11 +115,11 @@ fun EditPopUpFolderSheet(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = accentColor,
-                    unfocusedBorderColor = Color(0xFF2C2C2C),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color(0xFF1A1A1A),
-                    unfocusedContainerColor = Color(0xFF1A1A1A)
+                    unfocusedBorderColor = palette.borderColor,
+                    focusedTextColor = palette.textPrimary,
+                    unfocusedTextColor = palette.textPrimary,
+                    focusedContainerColor = palette.cardBackground,
+                    unfocusedContainerColor = palette.cardBackground
                 )
             )
 
@@ -156,7 +158,7 @@ fun EditPopUpFolderSheet(
                         Text(
                             text = app.label,
                             fontSize = 15.sp,
-                            color = Color.White,
+                            color = palette.textPrimary,
                             modifier = Modifier.weight(1f)
                         )
                         Checkbox(
@@ -169,7 +171,7 @@ fun EditPopUpFolderSheet(
                             colors = CheckboxDefaults.colors(
                                 checkedColor = accentColor,
                                 checkmarkColor = Color.Black,
-                                uncheckedColor = Color.Gray
+                                uncheckedColor = palette.textSecondary
                             )
                         )
                     }
