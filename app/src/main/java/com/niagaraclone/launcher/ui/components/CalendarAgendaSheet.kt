@@ -4,7 +4,6 @@ import android.content.ContentUris
 import android.content.Intent
 import android.provider.CalendarContract
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -65,7 +64,6 @@ fun CalendarAgendaSheet(
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
     val accentColor = Color(accentColorArgb)
 
-    // Refresh calendar events whenever the Agenda sheet opens
     LaunchedEffect(Unit) {
         viewModel.loadCalendarEvents()
     }
@@ -79,11 +77,10 @@ fun CalendarAgendaSheet(
     }
     val baseIcon = liveWeather?.conditionIcon ?: "☀️"
 
-    // Build realistic hourly forecast with real clock hours (Now, 3 pm, 4 pm...)
     val hourlyList = remember(liveWeather, tempUnit) {
         val hourFormatter = SimpleDateFormat("h a", Locale.getDefault())
         val cal = Calendar.getInstance()
-        val tempOffsets = listOf(0f, 0.5f, 0f, -1f, -1.8f, -2.5f, -3.2f, -3.8f)
+        val tempOffsets = listOf(0f, 0.5f, 0f, -1f, -1.8f, -2.5f)
 
         tempOffsets.mapIndexed { idx, delta ->
             val label = if (idx == 0) {
@@ -96,7 +93,7 @@ fun CalendarAgendaSheet(
             val iconForHour = when {
                 idx == 0 -> baseIcon
                 hourOfDay in 19..23 || hourOfDay in 0..5 -> "🌙"
-                idx >= 4 && baseIcon == "☀️" -> "🌤️"
+                idx >= 3 && baseIcon == "☀️" -> "🌤️"
                 else -> baseIcon
             }
             HourlyForecast(
@@ -108,7 +105,6 @@ fun CalendarAgendaSheet(
         }
     }
 
-    // Group events by day (always including Today even if Today has 0 events)
     val daySections = remember(events) {
         val dayHeaderFormatter = SimpleDateFormat("EEE, MMM d", Locale.getDefault())
         val todayCal = Calendar.getInstance()
@@ -120,7 +116,6 @@ fun CalendarAgendaSheet(
         val groupedMap = linkedMapOf<Int, MutableList<CalendarEventModel>>()
         val dateForDayKey = mutableMapOf<Int, Date>()
 
-        // Always seed Today first so the user sees today's date header
         groupedMap[todayKey] = mutableListOf()
         dateForDayKey[todayKey] = todayCal.time
 
@@ -170,20 +165,20 @@ fun CalendarAgendaSheet(
         onDismissRequest = onDismiss,
         containerColor = palette.sheetBackground,
         contentColor = palette.textPrimary,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 580.dp)
+                .heightIn(max = 520.dp)
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 8.dp)
+                .padding(horizontal = 20.dp, vertical = 6.dp)
         ) {
-            // --- HEADER ROW ("Your agenda" + Open Calendar App button) ---
+            // --- COMPACT HEADER ROW ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp),
+                    .padding(bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -192,12 +187,12 @@ fun CalendarAgendaSheet(
                         imageVector = Icons.Outlined.CalendarToday,
                         contentDescription = null,
                         tint = accentColor,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = "Your agenda",
-                        fontSize = 22.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = palette.textPrimary
                     )
@@ -205,50 +200,47 @@ fun CalendarAgendaSheet(
 
                 IconButton(
                     onClick = openCalendarApp,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.OpenInNew,
                         contentDescription = "Open Calendar App",
                         tint = palette.textSecondary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
-            // --- HOURLY WEATHER CAROUSEL (Shown when Weather is enabled) ---
+            // --- SLIM HOURLY WEATHER STRIP ---
             if (weatherEnabled) {
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(14.dp),
                     color = palette.cardBackground,
                     border = if (palette.isGlass) androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor) else null,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 16.dp)
+                        .padding(bottom = 12.dp)
                 ) {
                     LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         items(hourlyList) { item ->
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.width(48.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
                                     text = item.time,
                                     color = palette.textSecondary,
-                                    fontSize = 12.sp,
-                                    maxLines = 1
+                                    fontSize = 11.5.sp
                                 )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(text = item.icon, fontSize = 18.sp)
-                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(text = item.icon, fontSize = 14.sp)
                                 Text(
                                     text = item.tempStr,
                                     color = palette.textPrimary,
-                                    fontSize = 14.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -262,8 +254,8 @@ fun CalendarAgendaSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f, fill = false),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = 16.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 12.dp)
             ) {
                 daySections.forEach { section ->
                     item(key = "day_header_${section.dayKey}") {
@@ -272,17 +264,17 @@ fun CalendarAgendaSheet(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 6.dp, bottom = 2.dp)
+                                .padding(top = 4.dp, bottom = 2.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = section.dateHeader,
                                     color = palette.textPrimary,
-                                    fontSize = 16.sp,
+                                    fontSize = 14.5.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 if (section.relativeLabel.isNotEmpty()) {
-                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Surface(
                                         shape = CircleShape,
                                         color = accentColor.copy(alpha = 0.18f)
@@ -290,9 +282,9 @@ fun CalendarAgendaSheet(
                                         Text(
                                             text = section.relativeLabel,
                                             color = accentColor,
-                                            fontSize = 11.sp,
+                                            fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                         )
                                     }
                                 }
@@ -302,7 +294,7 @@ fun CalendarAgendaSheet(
                                 Text(
                                     text = "$baseIcon ${formatTemp(baseTempC)}",
                                     color = palette.textSecondary,
-                                    fontSize = 13.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium
                                 )
                             }
@@ -312,26 +304,26 @@ fun CalendarAgendaSheet(
                     if (section.events.isEmpty() && section.relativeLabel == "today") {
                         item(key = "empty_today") {
                             Surface(
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = palette.cardBackground,
                                 border = if (palette.isGlass) androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor) else null,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
                                         imageVector = Icons.Outlined.EventAvailable,
                                         contentDescription = null,
                                         tint = palette.textSecondary,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
                                     Text(
                                         text = if (events.isEmpty()) "No upcoming events scheduled" else "Nothing else scheduled for today",
                                         color = palette.textSecondary,
-                                        fontSize = 14.sp
+                                        fontSize = 13.sp
                                     )
                                 }
                             }
@@ -349,12 +341,12 @@ fun CalendarAgendaSheet(
                             }
 
                             Surface(
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = palette.cardBackground,
                                 border = if (palette.isGlass) androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor) else null,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(16.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .clickable {
                                         viewModel.openCalendarEvent(context, event.id)
                                         onDismiss()
@@ -363,26 +355,26 @@ fun CalendarAgendaSheet(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .width(4.dp)
-                                            .height(36.dp)
-                                            .background(indicatorColor, RoundedCornerShape(2.dp))
+                                            .width(3.dp)
+                                            .height(28.dp)
+                                            .background(indicatorColor, RoundedCornerShape(1.5.dp))
                                     )
-                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = event.title,
                                             color = palette.textPrimary,
-                                            fontSize = 15.sp,
+                                            fontSize = 14.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
-                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Spacer(modifier = Modifier.height(1.dp))
                                         val subLine = if (event.location.isNotBlank()) {
                                             "$timeText · ${event.location}"
                                         } else {
@@ -391,7 +383,7 @@ fun CalendarAgendaSheet(
                                         Text(
                                             text = subLine,
                                             color = palette.textSecondary,
-                                            fontSize = 12.5.sp,
+                                            fontSize = 12.sp,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
@@ -403,31 +395,31 @@ fun CalendarAgendaSheet(
                 }
             }
 
-            // --- BOTTOM "+ New event" PILL BUTTON ---
+            // --- COMPACT NEW EVENT BUTTON ---
             OutlinedButton(
                 onClick = {
                     viewModel.launchCalendarNewEvent(context)
                     onDismiss()
                 },
                 shape = CircleShape,
-                border = androidx.compose.foundation.BorderStroke(1.5.dp, accentColor),
+                border = androidx.compose.foundation.BorderStroke(1.dp, accentColor),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.textPrimary),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp, bottom = 16.dp)
-                    .height(48.dp)
+                    .padding(top = 2.dp, bottom = 12.dp)
+                    .height(42.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = null,
                     tint = accentColor,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "New event",
                     color = palette.textPrimary,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
