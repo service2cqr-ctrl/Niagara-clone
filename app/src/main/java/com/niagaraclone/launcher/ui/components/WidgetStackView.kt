@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -27,6 +28,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -41,6 +43,7 @@ fun WidgetStackView(
     modifier: Modifier = Modifier,
     accentColor: Color = Color(0xFF4DD0E1)
 ) {
+    val palette = LocalLauncherPalette.current
     var showWidgetOptionsDialog by remember { mutableStateOf<Int?>(null) }
     var liveHeight by remember(widgetHeightDp) { mutableFloatStateOf(widgetHeightDp) }
     val density = LocalDensity.current
@@ -58,7 +61,8 @@ fun WidgetStackView(
                 .fillMaxWidth()
                 .height(liveHeight.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF141414))
+                .background(palette.cardBackground)
+                .border(1.dp, palette.borderColor, RoundedCornerShape(16.dp))
         ) {
             HorizontalPager(
                 state = pagerState,
@@ -168,7 +172,7 @@ fun WidgetStackView(
             Icon(
                 imageVector = Icons.Default.DragHandle,
                 contentDescription = "Resize Stack",
-                tint = Color.White.copy(alpha = 0.35f),
+                tint = palette.textSecondary.copy(alpha = 0.6f),
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -177,9 +181,9 @@ fun WidgetStackView(
     showWidgetOptionsDialog?.let { targetWidgetId ->
         AlertDialog(
             onDismissRequest = { showWidgetOptionsDialog = null },
-            containerColor = Color(0xFF161616),
+            containerColor = palette.sheetBackground,
             title = {
-                Text(text = "Widget options", color = Color.White, fontSize = 18.sp)
+                Text(text = "Widget options", color = palette.textPrimary, fontSize = 18.sp)
             },
             text = {
                 Column {
@@ -221,7 +225,7 @@ fun WidgetStackView(
             },
             confirmButton = {
                 TextButton(onClick = { showWidgetOptionsDialog = null }) {
-                    Text(text = "Close", color = Color.Gray)
+                    Text(text = "Close", color = palette.textSecondary)
                 }
             }
         )
