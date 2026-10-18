@@ -6,6 +6,7 @@ import android.app.Activity
 import android.app.role.RoleManager
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProviderInfo
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHeadset
 import android.content.Context
@@ -17,6 +18,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,6 +38,7 @@ import com.niagaraclone.launcher.gestures.GestureHost
 import com.niagaraclone.launcher.gestures.SwipeDirection
 import com.niagaraclone.launcher.services.AudioConnectionReceiver
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.components.WidgetPickerSheet
 import com.niagaraclone.launcher.ui.screens.HomeScreen
 import com.niagaraclone.launcher.ui.screens.SettingsScreen
 import com.niagaraclone.launcher.ui.screens.SmartSearchOverlay
@@ -54,11 +57,12 @@ class MainActivity : ComponentActivity() {
     private val audioReceiver = AudioConnectionReceiver()
 
     private var pendingWidgetId: Int = -1
+    private var pendingProviderInfo: AppWidgetProviderInfo? = null
 
     companion object {
         const val APPWIDGET_HOST_ID = 1024
         private const val REQUEST_CODE_PERMISSIONS = 101
-        private const val REQUEST_CODE_BIND_WIDGET = 126
+        private const val REQUEST_CODE_CONFIGURE_WIDGET = 127
     }
 
     private val roleLauncher = registerForActivityResult(
@@ -67,28 +71,21 @@ class MainActivity : ComponentActivity() {
         viewModel.checkDefaultLauncherStatus()
     }
 
-    private val selectWidgetLauncher = registerForActivityResult(
+    // Handles the system "Allow Cascadia Launcher to create widgets?" dialog
+    private val bindWidgetLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val widgetId = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1) ?: -1
-            if (widgetId != -1) configureOrBindWidget(widgetId)
-        } else if (pendingWidgetId != -1) {
-            appWidgetHost.deleteAppWidgetId(pendingWidgetId)
+        val widgetId = pendingWidgetId
+        val providerInfo = pendingProviderInfo
+        if (result.resultCode == Activity.RESULT_OK && widgetId != -1 && providerInfo != null) {
+            launchWidgetConfigureOrSave(widgetId, providerInfo)
+        } else {
+            if (widgetId != -1) {
+                appWidgetHost.deleteAppWidgetId(widgetId)
+            }
             pendingWidgetId = -1
+            pendingProviderInfo = null
         }
-    }
-
-    private val configureWidgetLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val widgetId = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingWidgetId) ?: pendingWidgetId
-            if (widgetId != -1) viewModel.addWidgetId(widgetId)
-        } else if (pendingWidgetId != -1) {
-            appWidgetHost.deleteAppWidgetId(pendingWidgetId)
-        }
-        pendingWidgetId = -1
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -131,8 +128,8 @@ class MainActivity : ComponentActivity() {
             val accentArgb by viewModel.accentColorArgb.collectAsState()
             var page by remember { mutableStateOf(Page.HOME) }
             var triggerWidgetMoveEdit by remember { mutableStateOf(false) }
+            var showCustomWidgetPicker by remember { mutableStateOf(false) }
 
-            // Hardware Window Blur on Android 12+ when in GLASS mode on Secondary Screens
             LaunchedEffect(currentAppTheme, page) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     try {
@@ -175,7 +172,7 @@ class MainActivity : ComponentActivity() {
                                 appWidgetHost = appWidgetHost,
                                 appWidgetManager = appWidgetManager,
                                 isEditingWidgetExternal = triggerWidgetMoveEdit,
-                                onAddWidgetClick = { launchWidgetPicker() },
+                                onAddWidgetClick = { showCustomWidgetPicker = true },
                                 onOpenSettings = {
                                     triggerWidgetMoveEdit = false
                                     page = Page.SETTINGS
@@ -187,13 +184,16 @@ class MainActivity : ComponentActivity() {
                                 viewModel = viewModel,
                                 appWidgetHost = appWidgetHost,
                                 appWidgetManager = appWidgetManager,
-                                onAddWidgetClick = { launchWidgetPicker() },
+                                onAddWidgetClick = { showCustomWidgetPicker = true },
                                 onDismiss = { page = Page.HOME }
                             )
                             Page.SETTINGS -> SettingsScreen(
                                 viewModel = viewModel,
                                 onDismiss = { page = Page.HOME },
-                                onAddWidgetClick = { launchWidgetPicker() },
+                                onAddWidgetClick = {
+                                    page = Page.HOME
+                                    showCustomWidgetPicker = true
+                                },
                                 onMoveWidgetClick = {
                                     triggerWidgetMoveEdit = true
                                     page = Page.HOME
@@ -205,6 +205,18 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+
+                    if (showCustomWidgetPicker) {
+                        WidgetPickerSheet(
+                            appWidgetManager = appWidgetManager,
+                            accentColor = Color(accentArgb),
+                            onWidgetSelected = { providerInfo ->
+                                showCustomWidgetPicker = false
+                                bindAndConfigureWidget(providerInfo)
+                            },
+                            onDismiss = { showCustomWidgetPicker = false }
+                        )
+                    }
                 }
             }
         }
@@ -212,13 +224,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        appWidgetHost.startListening()
+        try {
+            appWidgetHost.startListening()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         AudioConnectionReceiver.checkAudioConnectionState(this)
     }
 
     override fun onStop() {
         super.onStop()
-        appWidgetHost.stopListening()
+        try {
+            appWidgetHost.stopListening()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onDestroy() {
@@ -247,55 +267,69 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun launchWidgetPicker() {
-        val newWidgetId = appWidgetHost.allocateAppWidgetId()
-        pendingWidgetId = newWidgetId
-        val pickIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
-            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, newWidgetId)
+    private fun bindAndConfigureWidget(providerInfo: AppWidgetProviderInfo) {
+        val widgetId = appWidgetHost.allocateAppWidgetId()
+        pendingWidgetId = widgetId
+        pendingProviderInfo = providerInfo
+
+        val isBound = try {
+            appWidgetManager.bindAppWidgetIdIfAllowed(widgetId, providerInfo.provider)
+        } catch (e: Exception) {
+            false
         }
-        selectWidgetLauncher.launch(pickIntent)
+
+        if (isBound) {
+            launchWidgetConfigureOrSave(widgetId, providerInfo)
+        } else {
+            // Request user permission to bind the widget to the selected provider
+            val bindIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, providerInfo.provider)
+            }
+            bindWidgetLauncher.launch(bindIntent)
+        }
     }
 
-    private fun configureOrBindWidget(widgetId: Int) {
-        val widgetInfo = appWidgetManager.getAppWidgetInfo(widgetId)
-        if (widgetInfo == null) {
+    private fun launchWidgetConfigureOrSave(widgetId: Int, providerInfo: AppWidgetProviderInfo) {
+        if (providerInfo.configure != null) {
             try {
-                val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, appWidgetManager.getInstalledProvidersForPackage(packageName, null).firstOrNull()?.provider)
-                }
-                startActivityForResult(intent, REQUEST_CODE_BIND_WIDGET)
+                // Must use AppWidgetHost.startAppWidgetConfigureActivityForResult on Android 11+ to avoid SecurityException!
+                appWidgetHost.startAppWidgetConfigureActivityForResult(
+                    this,
+                    widgetId,
+                    0,
+                    REQUEST_CODE_CONFIGURE_WIDGET,
+                    null
+                )
             } catch (e: Exception) {
                 e.printStackTrace()
-                if (pendingWidgetId != -1) {
-                    appWidgetHost.deleteAppWidgetId(pendingWidgetId)
-                    pendingWidgetId = -1
-                }
+                // Some widgets declare a configure activity that isn't exported; save the widget directly as fallback
+                viewModel.addWidgetId(widgetId)
+                Toast.makeText(this, "Widget added to home screen", Toast.LENGTH_SHORT).show()
+                pendingWidgetId = -1
+                pendingProviderInfo = null
             }
-            return
-        }
-
-        if (widgetInfo.configure != null) {
-            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
-                component = widgetInfo.configure
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
-            }
-            configureWidgetLauncher.launch(intent)
         } else {
             viewModel.addWidgetId(widgetId)
+            Toast.makeText(this, "Widget added to home screen", Toast.LENGTH_SHORT).show()
             pendingWidgetId = -1
+            pendingProviderInfo = null
         }
     }
 
+    @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_CODE_BIND_WIDGET) {
-            if (resultCode == Activity.RESULT_OK && pendingWidgetId != -1) {
-                configureOrBindWidget(pendingWidgetId)
-            } else if (pendingWidgetId != -1) {
-                appWidgetHost.deleteAppWidgetId(pendingWidgetId)
-                pendingWidgetId = -1
+        if (requestCode == REQUEST_CODE_CONFIGURE_WIDGET) {
+            val widgetId = data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingWidgetId) ?: pendingWidgetId
+            if (resultCode == Activity.RESULT_OK && widgetId != -1) {
+                viewModel.addWidgetId(widgetId)
+                Toast.makeText(this, "Widget added to home screen", Toast.LENGTH_SHORT).show()
+            } else if (widgetId != -1) {
+                appWidgetHost.deleteAppWidgetId(widgetId)
             }
+            pendingWidgetId = -1
+            pendingProviderInfo = null
         }
     }
 }
