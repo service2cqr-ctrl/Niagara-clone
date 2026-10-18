@@ -27,24 +27,48 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Widgets
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import androidx.core.view.WindowCompat
 import com.niagaraclone.launcher.gestures.GestureHost
 import com.niagaraclone.launcher.gestures.SwipeDirection
 import com.niagaraclone.launcher.services.AudioConnectionReceiver
 import com.niagaraclone.launcher.ui.LauncherViewModel
-import com.niagaraclone.launcher.ui.components.WidgetPickerSheet
 import com.niagaraclone.launcher.ui.screens.HomeScreen
 import com.niagaraclone.launcher.ui.screens.SettingsScreen
 import com.niagaraclone.launcher.ui.screens.SmartSearchOverlay
 import com.niagaraclone.launcher.ui.screens.WidgetsScreen
 import com.niagaraclone.launcher.ui.theme.AppTheme
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 import com.niagaraclone.launcher.ui.theme.NiagaraCloneTheme
+import com.niagaraclone.launcher.ui.theme.glassSurface
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private enum class Page { HOME, WIDGETS, SETTINGS, SEARCH }
 
@@ -71,7 +95,6 @@ class MainActivity : ComponentActivity() {
         viewModel.checkDefaultLauncherStatus()
     }
 
-    // Handles the system "Allow Cascadia Launcher to create widgets?" dialog
     private val bindWidgetLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -128,7 +151,7 @@ class MainActivity : ComponentActivity() {
             val accentArgb by viewModel.accentColorArgb.collectAsState()
             var page by remember { mutableStateOf(Page.HOME) }
             var triggerWidgetMoveEdit by remember { mutableStateOf(false) }
-            var showCustomWidgetPicker by remember { mutableStateOf(false) }
+            var showWidgetPickerSheet by remember { mutableStateOf(false) }
 
             LaunchedEffect(currentAppTheme, page) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -172,7 +195,7 @@ class MainActivity : ComponentActivity() {
                                 appWidgetHost = appWidgetHost,
                                 appWidgetManager = appWidgetManager,
                                 isEditingWidgetExternal = triggerWidgetMoveEdit,
-                                onAddWidgetClick = { showCustomWidgetPicker = true },
+                                onAddWidgetClick = { showWidgetPickerSheet = true },
                                 onOpenSettings = {
                                     triggerWidgetMoveEdit = false
                                     page = Page.SETTINGS
@@ -184,7 +207,7 @@ class MainActivity : ComponentActivity() {
                                 viewModel = viewModel,
                                 appWidgetHost = appWidgetHost,
                                 appWidgetManager = appWidgetManager,
-                                onAddWidgetClick = { showCustomWidgetPicker = true },
+                                onAddWidgetClick = { showWidgetPickerSheet = true },
                                 onDismiss = { page = Page.HOME }
                             )
                             Page.SETTINGS -> SettingsScreen(
@@ -192,7 +215,7 @@ class MainActivity : ComponentActivity() {
                                 onDismiss = { page = Page.HOME },
                                 onAddWidgetClick = {
                                     page = Page.HOME
-                                    showCustomWidgetPicker = true
+                                    showWidgetPickerSheet = true
                                 },
                                 onMoveWidgetClick = {
                                     triggerWidgetMoveEdit = true
@@ -206,15 +229,15 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    if (showCustomWidgetPicker) {
-                        WidgetPickerSheet(
+                    if (showWidgetPickerSheet) {
+                        InstalledWidgetPickerSheet(
                             appWidgetManager = appWidgetManager,
                             accentColor = Color(accentArgb),
                             onWidgetSelected = { providerInfo ->
-                                showCustomWidgetPicker = false
+                                showWidgetPickerSheet = false
                                 bindAndConfigureWidget(providerInfo)
                             },
-                            onDismiss = { showCustomWidgetPicker = false }
+                            onDismiss = { showWidgetPickerSheet = false }
                         )
                     }
                 }
@@ -224,21 +247,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        try {
-            appWidgetHost.startListening()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        try { appWidgetHost.startListening() } catch (e: Exception) { e.printStackTrace() }
         AudioConnectionReceiver.checkAudioConnectionState(this)
     }
 
     override fun onStop() {
         super.onStop()
-        try {
-            appWidgetHost.stopListening()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        try { appWidgetHost.stopListening() } catch (e: Exception) { e.printStackTrace() }
     }
 
     override fun onDestroy() {
@@ -281,7 +296,6 @@ class MainActivity : ComponentActivity() {
         if (isBound) {
             launchWidgetConfigureOrSave(widgetId, providerInfo)
         } else {
-            // Request user permission to bind the widget to the selected provider
             val bindIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, providerInfo.provider)
@@ -293,7 +307,6 @@ class MainActivity : ComponentActivity() {
     private fun launchWidgetConfigureOrSave(widgetId: Int, providerInfo: AppWidgetProviderInfo) {
         if (providerInfo.configure != null) {
             try {
-                // Must use AppWidgetHost.startAppWidgetConfigureActivityForResult on Android 11+ to avoid SecurityException!
                 appWidgetHost.startAppWidgetConfigureActivityForResult(
                     this,
                     widgetId,
@@ -303,7 +316,6 @@ class MainActivity : ComponentActivity() {
                 )
             } catch (e: Exception) {
                 e.printStackTrace()
-                // Some widgets declare a configure activity that isn't exported; save the widget directly as fallback
                 viewModel.addWidgetId(widgetId)
                 Toast.makeText(this, "Widget added to home screen", Toast.LENGTH_SHORT).show()
                 pendingWidgetId = -1
@@ -330,6 +342,203 @@ class MainActivity : ComponentActivity() {
             }
             pendingWidgetId = -1
             pendingProviderInfo = null
+        }
+    }
+}
+
+private data class InstalledWidgetItem(
+    val appLabel: String,
+    val widgetLabel: String,
+    val providerInfo: AppWidgetProviderInfo,
+    val previewDrawable: android.graphics.drawable.Drawable?
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun InstalledWidgetPickerSheet(
+    appWidgetManager: AppWidgetManager,
+    accentColor: Color,
+    onWidgetSelected: (AppWidgetProviderInfo) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val palette = LocalLauncherPalette.current
+    var searchQuery by remember { mutableStateOf("") }
+    var allWidgets by remember { mutableStateOf<List<InstalledWidgetItem>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val pm = context.packageManager
+            val providers = appWidgetManager.installedProviders
+            val mapped = providers.mapNotNull { info ->
+                try {
+                    val pkgName = info.provider.packageName
+                    val appInfo = pm.getApplicationInfo(pkgName, 0)
+                    val appName = pm.getApplicationLabel(appInfo).toString()
+                    val widgetTitle = info.loadLabel(pm) ?: appName
+                    val icon = info.loadPreviewImage(context, 0)
+                        ?: info.loadIcon(context, 0)
+                        ?: pm.getApplicationIcon(pkgName)
+
+                    InstalledWidgetItem(
+                        appLabel = appName,
+                        widgetLabel = widgetTitle,
+                        providerInfo = info,
+                        previewDrawable = icon
+                    )
+                } catch (e: Exception) {
+                    null
+                }
+            }.sortedWith(compareBy({ it.appLabel.lowercase() }, { it.widgetLabel.lowercase() }))
+
+            allWidgets = mapped
+            isLoading = false
+        }
+    }
+
+    val filteredWidgets = remember(allWidgets, searchQuery) {
+        if (searchQuery.isBlank()) {
+            allWidgets
+        } else {
+            val q = searchQuery.trim()
+            allWidgets.filter {
+                it.appLabel.contains(q, ignoreCase = true) ||
+                        it.widgetLabel.contains(q, ignoreCase = true)
+            }
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = palette.sheetBackground,
+        contentColor = palette.textPrimary,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 600.dp)
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Widgets,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "Select a widget",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = palette.textPrimary
+                )
+            }
+
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Search widgets or apps...", color = palette.textSecondary, fontSize = 14.sp) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = accentColor) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = palette.textSecondary)
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = accentColor,
+                    unfocusedBorderColor = palette.borderColor,
+                    focusedTextColor = palette.textPrimary,
+                    unfocusedTextColor = palette.textPrimary,
+                    focusedContainerColor = palette.cardBackground,
+                    unfocusedContainerColor = palette.cardBackground
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            )
+
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = accentColor)
+                }
+            } else if (filteredWidgets.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No widgets found", color = palette.textSecondary, fontSize = 15.sp)
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(
+                        items = filteredWidgets,
+                        key = { "${it.providerInfo.provider.packageName}/${it.providerInfo.provider.className}" }
+                    ) { item ->
+                        val rowShape = RoundedCornerShape(16.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .glassSurface(shape = rowShape, isSheet = false, borderWidth = 1.dp)
+                                .clickable { onWidgetSelected(item.providerInfo) }
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            item.previewDrawable?.let { drawable ->
+                                Image(
+                                    bitmap = drawable.toBitmap(width = 72, height = 72).asImageBitmap(),
+                                    contentDescription = item.widgetLabel,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                )
+                                Spacer(modifier = Modifier.width(16.dp))
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.widgetLabel,
+                                    color = palette.textPrimary,
+                                    fontSize = 15.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "${item.appLabel} • ${item.providerInfo.minWidth}×${item.providerInfo.minHeight} dp",
+                                    color = palette.textSecondary,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
