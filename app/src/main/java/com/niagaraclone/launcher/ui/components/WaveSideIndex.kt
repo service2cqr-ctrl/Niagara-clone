@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.PI
 import kotlin.math.abs
@@ -53,6 +54,7 @@ fun WaveSideIndex(
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
     val hostView = LocalView.current
+    val palette = LocalLauncherPalette.current
 
     // Never block Android's native edge back gesture
     DisposableEffect(hostView) {
@@ -105,7 +107,6 @@ fun WaveSideIndex(
             lastSelectedIndex = closestIdx
             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         }
-        // Always report both character and current finger Y so the active app list tracks smoothly
         onCharSelected(currentChar)
         onCharSelectedWithY(currentChar, rootY)
     }
@@ -126,7 +127,6 @@ fun WaveSideIndex(
             var isQuickTapReleased = false
             var initialTouchY = startY
 
-            // Wait up to 95ms to distinguish a horizontal Back-swipe or a quick Tap from a continuous Drag
             withTimeoutOrNull(95L) {
                 while (true) {
                     val event = awaitPointerEvent()
@@ -137,7 +137,6 @@ fun WaveSideIndex(
                         break
                     }
 
-                    // Finger already lifted within 95ms -> it's a direct tap!
                     if (!change.pressed) {
                         val totalDx = abs(change.position.x - startX)
                         if (totalDx < with(density) { 12.dp.toPx() }) {
@@ -153,13 +152,11 @@ fun WaveSideIndex(
                     val dx = abs(change.position.x - startX)
                     val dy = abs(change.position.y - startY)
 
-                    // Horizontal swipe inward -> user is doing Android system Back gesture
                     if (dx > with(density) { 10.dp.toPx() } && dx > dy * 1.15f) {
                         isRejectedAsBackSwipe = true
                         break
                     }
 
-                    // Vertical slide -> start continuous wave scrub immediately
                     if (dy > with(density) { 4.dp.toPx() }) {
                         change.consume()
                         initialTouchY = change.position.y
@@ -172,7 +169,6 @@ fun WaveSideIndex(
                 return@awaitEachGesture
             }
 
-            // CASE 1: Direct Quick Tap on a letter -> jump immediately without entering the drag loop!
             if (isQuickTapReleased) {
                 val clampedY = initialTouchY.coerceIn(topBoundPx, bottomBoundPx)
                 onTouchStart()
@@ -188,7 +184,6 @@ fun WaveSideIndex(
                 return@awaitEachGesture
             }
 
-            // CASE 2: Finger is still pressed -> run continuous wave scrubbing loop
             var selectedCharOnRelease = "☆"
             var wasCancelledBySystem = false
             try {
@@ -246,7 +241,6 @@ fun WaveSideIndex(
                 containerHeightPx = coordinates.size.height.toFloat()
             }
     ) {
-        // Touch target strip inset by 16.dp from the physical right edge
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
@@ -256,7 +250,6 @@ fun WaveSideIndex(
                 .pointerInput(Unit, handleIndexPointerInput)
         )
 
-        // Visual Alphabet Column shifted inward (end = 24.dp) away from screen edge
         Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
@@ -309,7 +302,7 @@ fun WaveSideIndex(
                                 blurRadius = 4f
                             )
                         ),
-                        color = Color.White.copy(alpha = 0.92f),
+                        color = palette.textPrimary.copy(alpha = 0.92f),
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -317,7 +310,6 @@ fun WaveSideIndex(
             }
         }
 
-        // Smooth continuous floating letter bubble
         if (waveProgress > 0.05f && lastSelectedIndex in INDEX_ITEMS.indices) {
             val currentActiveChar = INDEX_ITEMS[lastSelectedIndex]
             val badgeSizeDp = 48.dp
@@ -325,7 +317,7 @@ fun WaveSideIndex(
 
             val badgeOffsetY = (touchY - badgeSizePx / 2f).roundToInt()
             val peakX = basePeakOffsetPx * pullFactor * waveProgress
-            val badgeOffsetX = -(peakX + with(density) { 38.dp.toPx() }).roundToInt()
+            val badgeOffsetX = -(peakX + with(density) { 38.dp.toPx() }).roundCent()
 
             Box(
                 modifier = Modifier
@@ -346,7 +338,7 @@ fun WaveSideIndex(
                     Box(contentAlignment = Alignment.Center) {
                         Text(
                             text = currentActiveChar,
-                            color = Color.White,
+                            color = Color.Black,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
                         )
