@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 import kotlin.math.roundToInt
 
 private enum class WidgetSubPage {
@@ -42,6 +43,7 @@ fun WidgetMenuSheet(
     onOpenEditFavorites: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val palette = LocalLauncherPalette.current
     var currentPage by remember { mutableStateOf(WidgetSubPage.MAIN) }
 
     val clockStyle by viewModel.clockStyle.collectAsState()
@@ -64,8 +66,8 @@ fun WidgetMenuSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141414),
-        contentColor = Color.White,
+        containerColor = palette.sheetBackground,
+        contentColor = palette.textPrimary,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
         AnimatedContent(
@@ -84,13 +86,14 @@ fun WidgetMenuSheet(
                             text = "Cascadia widget",
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = palette.textPrimary,
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
 
                         WidgetMenuItemRow(
                             icon = Icons.Outlined.Schedule,
                             title = "Clock style",
+                            palette = palette,
                             onClick = { currentPage = WidgetSubPage.CLOCK_STYLE }
                         )
 
@@ -98,6 +101,7 @@ fun WidgetMenuSheet(
                             icon = Icons.Outlined.CalendarToday,
                             title = "Calendar",
                             subtitle = "Show upcoming events, Show date",
+                            palette = palette,
                             onClick = { currentPage = WidgetSubPage.CALENDAR }
                         )
 
@@ -107,6 +111,7 @@ fun WidgetMenuSheet(
                             subtitle = "Location, Temperature units",
                             checked = weatherEnabled,
                             accentColor = accentColor,
+                            palette = palette,
                             onCheckedChange = { viewModel.setWeatherEnabled(it) },
                             onClick = { currentPage = WidgetSubPage.WEATHER }
                         )
@@ -114,6 +119,7 @@ fun WidgetMenuSheet(
                         WidgetMenuItemRow(
                             icon = Icons.Outlined.AddBox,
                             title = "Add Custom Widget",
+                            palette = palette,
                             onClick = {
                                 onDismiss()
                                 onAddWidgetClick()
@@ -124,6 +130,7 @@ fun WidgetMenuSheet(
                             icon = Icons.Outlined.UnfoldMore,
                             title = "Move Widget",
                             subtitle = "Adjust header vertical position",
+                            palette = palette,
                             onClick = {
                                 onDismiss()
                                 onMoveWidgetClick()
@@ -136,6 +143,7 @@ fun WidgetMenuSheet(
                             subtitle = "While playing music",
                             checked = rawShowMediaWidget,
                             accentColor = accentColor,
+                            palette = palette,
                             onCheckedChange = { viewModel.setShowMediaWidget(it) }
                         )
 
@@ -144,17 +152,19 @@ fun WidgetMenuSheet(
                             title = "Show Battery Percentage",
                             checked = showBatteryPercentage,
                             accentColor = accentColor,
+                            palette = palette,
                             onCheckedChange = { viewModel.setShowBatteryPercentage(it) }
                         )
 
                         HorizontalDivider(
-                            color = Color.White.copy(alpha = 0.12f),
+                            color = palette.borderColor,
                             modifier = Modifier.padding(vertical = 12.dp)
                         )
 
                         WidgetMenuItemRow(
                             icon = Icons.Outlined.Star,
                             title = "Edit favourites",
+                            palette = palette,
                             onClick = {
                                 onDismiss()
                                 onOpenEditFavorites()
@@ -164,6 +174,7 @@ fun WidgetMenuSheet(
                         WidgetMenuItemRow(
                             icon = Icons.Outlined.Settings,
                             title = "Cascadia settings",
+                            palette = palette,
                             onClick = {
                                 onDismiss()
                                 onOpenSettings()
@@ -178,6 +189,7 @@ fun WidgetMenuSheet(
                     ClockStyleSubPage(
                         selectedStyle = clockStyle,
                         accentColor = accentColor,
+                        palette = palette,
                         onSelectStyle = {
                             viewModel.setClockStyle(it)
                             currentPage = WidgetSubPage.MAIN
@@ -189,6 +201,7 @@ fun WidgetMenuSheet(
                     CalendarSettingsSubPage(
                         previewEnabled = calendarPreviewEnabled,
                         accentColor = accentColor,
+                        palette = palette,
                         onTogglePreview = { viewModel.setCalendarPreviewEnabled(it) },
                         onOpenFilter = { currentPage = WidgetSubPage.CALENDAR_FILTER }
                     )
@@ -197,6 +210,7 @@ fun WidgetMenuSheet(
                 WidgetSubPage.CALENDAR_FILTER -> {
                     CalendarFilterSubPage(
                         accentColor = accentColor,
+                        palette = palette,
                         onClose = { currentPage = WidgetSubPage.CALENDAR }
                     )
                 }
@@ -207,6 +221,7 @@ fun WidgetMenuSheet(
                         tempUnit = tempUnit,
                         liveTemp = liveWeather?.temperatureCelsius ?: 28f,
                         accentColor = accentColor,
+                        palette = palette,
                         onToggleWeather = { viewModel.setWeatherEnabled(it) },
                         onSelectTempUnit = { viewModel.setWeatherTempUnit(it) },
                         onClose = { currentPage = WidgetSubPage.MAIN }
@@ -221,6 +236,7 @@ fun WidgetMenuSheet(
 private fun ClockStyleSubPage(
     selectedStyle: String,
     accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onSelectStyle: (String) -> Unit
 ) {
     val styles = listOf(
@@ -237,7 +253,7 @@ private fun ClockStyleSubPage(
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
             Icon(Icons.Outlined.Schedule, contentDescription = null, tint = accentColor, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(12.dp))
-            Text(text = "Clock style", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(text = "Clock style", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = palette.textPrimary)
         }
 
         LazyVerticalGrid(
@@ -250,13 +266,13 @@ private fun ClockStyleSubPage(
                 val isSelected = styleKey == selectedStyle
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = if (isSelected) accentColor.copy(alpha = 0.2f) else Color(0xFF222222),
+                    color = if (isSelected) accentColor.copy(alpha = 0.2f) else palette.cardBackground,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(110.dp)
                         .border(
-                            width = if (isSelected) 2.dp else 0.dp,
-                            color = if (isSelected) accentColor else Color.Transparent,
+                            width = if (isSelected) 2.dp else 1.dp,
+                            color = if (isSelected) accentColor else palette.borderColor,
                             shape = RoundedCornerShape(16.dp)
                         )
                         .clickable { onSelectStyle(styleKey) }
@@ -269,9 +285,9 @@ private fun ClockStyleSubPage(
                             text = if (styleKey == "DIGITAL_MINIMAL") "10:28" else "10 28",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isSelected) accentColor else Color.White
+                            color = if (isSelected) accentColor else palette.textPrimary
                         )
-                        Text(text = title, fontSize = 12.sp, color = Color.Gray)
+                        Text(text = title, fontSize = 12.sp, color = palette.textSecondary)
                     }
                 }
             }
@@ -285,6 +301,7 @@ private fun ClockStyleSubPage(
 private fun CalendarSettingsSubPage(
     previewEnabled: Boolean,
     accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onTogglePreview: (Boolean) -> Unit,
     onOpenFilter: () -> Unit
 ) {
@@ -293,19 +310,21 @@ private fun CalendarSettingsSubPage(
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 12.dp)
     ) {
-        Text(text = "Calendar", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 16.dp))
+        Text(text = "Calendar", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = palette.textPrimary, modifier = Modifier.padding(bottom = 16.dp))
 
         WidgetMenuItemToggleRow(
             icon = Icons.Outlined.CalendarToday,
             title = "Show upcoming events",
             checked = previewEnabled,
             accentColor = accentColor,
+            palette = palette,
             onCheckedChange = onTogglePreview
         )
 
         WidgetMenuItemRow(
             icon = Icons.Outlined.FilterList,
             title = "Filter events",
+            palette = palette,
             onClick = onOpenFilter
         )
 
@@ -316,6 +335,7 @@ private fun CalendarSettingsSubPage(
 @Composable
 private fun CalendarFilterSubPage(
     accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onClose: () -> Unit
 ) {
     val sampleAccounts = listOf(
@@ -329,7 +349,7 @@ private fun CalendarFilterSubPage(
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 12.dp)
     ) {
-        Text(text = "Filter events", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 16.dp))
+        Text(text = "Filter events", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = palette.textPrimary, modifier = Modifier.padding(bottom = 16.dp))
 
         sampleAccounts.forEach { (name, dotColor) ->
             var isChecked by remember { mutableStateOf(true) }
@@ -342,7 +362,7 @@ private fun CalendarFilterSubPage(
             ) {
                 Box(modifier = Modifier.size(10.dp).background(dotColor, RoundedCornerShape(5.dp)))
                 Spacer(modifier = Modifier.width(16.dp))
-                Text(text = name, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                Text(text = name, color = palette.textPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
                 Checkbox(
                     checked = isChecked,
                     onCheckedChange = { isChecked = it },
@@ -371,6 +391,7 @@ private fun WeatherSettingsSubPage(
     tempUnit: String,
     liveTemp: Float,
     accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onToggleWeather: (Boolean) -> Unit,
     onSelectTempUnit: (String) -> Unit,
     onClose: () -> Unit
@@ -380,11 +401,12 @@ private fun WeatherSettingsSubPage(
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 12.dp)
     ) {
-        Text(text = "Weather", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(bottom = 16.dp))
+        Text(text = "Weather", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = palette.textPrimary, modifier = Modifier.padding(bottom = 16.dp))
 
         Surface(
             shape = RoundedCornerShape(18.dp),
-            color = Color(0xFF222222),
+            color = palette.cardBackground,
+            border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor),
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
         ) {
             Row(
@@ -393,7 +415,7 @@ private fun WeatherSettingsSubPage(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text(text = "Current location", fontSize = 12.sp, color = Color.Gray)
+                    Text(text = "Current location", fontSize = 12.sp, color = palette.textSecondary)
                     Text(
                         text = if (tempUnit == "CELSIUS") "${liveTemp.roundToInt()}° C" else "${(liveTemp * 9 / 5 + 32).roundToInt()}° F",
                         fontSize = 28.sp,
@@ -410,7 +432,7 @@ private fun WeatherSettingsSubPage(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Temperature units", color = Color.White, fontSize = 15.sp)
+            Text("Temperature units", color = palette.textPrimary, fontSize = 15.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = tempUnit == "CELSIUS",
@@ -435,8 +457,8 @@ private fun WeatherSettingsSubPage(
                 onClose()
             },
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (weatherEnabled) Color(0xFF333333) else accentColor,
-                contentColor = if (weatherEnabled) Color.White else Color.Black
+                containerColor = if (weatherEnabled) palette.cardBackground else accentColor,
+                contentColor = if (weatherEnabled) palette.textPrimary else Color.Black
             ),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -452,6 +474,7 @@ private fun WidgetMenuItemRow(
     icon: ImageVector,
     title: String,
     subtitle: String? = null,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onClick: () -> Unit
 ) {
     Row(
@@ -461,15 +484,15 @@ private fun WidgetMenuItemRow(
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(24.dp))
+        Icon(imageVector = icon, contentDescription = null, tint = palette.textPrimary.copy(alpha = 0.9f), modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 16.sp, color = Color.White, fontWeight = FontWeight.Medium)
+            Text(text = title, fontSize = 16.sp, color = palette.textPrimary, fontWeight = FontWeight.Medium)
             if (subtitle != null) {
-                Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
+                Text(text = subtitle, fontSize = 12.sp, color = palette.textSecondary)
             }
         }
-        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = palette.textSecondary, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -480,6 +503,7 @@ private fun WidgetMenuItemToggleRow(
     subtitle: String? = null,
     checked: Boolean,
     accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onCheckedChange: (Boolean) -> Unit,
     onClick: (() -> Unit)? = null
 ) {
@@ -490,12 +514,12 @@ private fun WidgetMenuItemToggleRow(
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(24.dp))
+        Icon(imageVector = icon, contentDescription = null, tint = palette.textPrimary.copy(alpha = 0.9f), modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 16.sp, color = Color.White, fontWeight = FontWeight.Medium)
+            Text(text = title, fontSize = 16.sp, color = palette.textPrimary, fontWeight = FontWeight.Medium)
             if (subtitle != null) {
-                Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
+                Text(text = subtitle, fontSize = 12.sp, color = palette.textSecondary)
             }
         }
         Switch(
@@ -503,7 +527,9 @@ private fun WidgetMenuItemToggleRow(
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.Black,
-                checkedTrackColor = accentColor
+                checkedTrackColor = accentColor,
+                uncheckedThumbColor = palette.textSecondary,
+                uncheckedTrackColor = palette.cardBackground
             )
         )
     }
