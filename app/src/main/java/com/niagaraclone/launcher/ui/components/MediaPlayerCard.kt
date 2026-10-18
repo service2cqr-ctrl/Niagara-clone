@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.data.MediaWidgetTheme
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -45,40 +46,49 @@ fun MediaPlayerCard(
     onPreviousTrack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val backgroundColor = when (widgetTheme) {
-        MediaWidgetTheme.LIGHT -> Color.White.copy(alpha = 0.85f)
-        MediaWidgetTheme.DARK -> Color(0xFF1E1E1E).copy(alpha = 0.90f)
-        MediaWidgetTheme.MATCH_ACCENT -> accentColor.copy(alpha = 0.35f)
-        MediaWidgetTheme.FROSTED_GLASS, MediaWidgetTheme.ALBUM_ART -> Color.White.copy(alpha = 0.22f)
+    val palette = LocalLauncherPalette.current
+
+    val backgroundColor = when {
+        palette.isGlass -> palette.cardBackground
+        widgetTheme == MediaWidgetTheme.LIGHT -> Color.White.copy(alpha = 0.88f)
+        widgetTheme == MediaWidgetTheme.DARK -> Color(0xFF16161C).copy(alpha = 0.92f)
+        widgetTheme == MediaWidgetTheme.MATCH_ACCENT -> accentColor.copy(alpha = 0.35f)
+        else -> palette.cardBackground
     }
 
-    val borderBrush = when (widgetTheme) {
-        MediaWidgetTheme.LIGHT -> Brush.verticalGradient(
+    val borderBrush = when {
+        palette.isGlass -> Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = 0.35f), Color.White.copy(alpha = 0.1f))
+        )
+        widgetTheme == MediaWidgetTheme.LIGHT -> Brush.verticalGradient(
             listOf(Color.Black.copy(alpha = 0.1f), Color.Black.copy(alpha = 0.05f))
         )
-        MediaWidgetTheme.DARK -> Brush.verticalGradient(
+        widgetTheme == MediaWidgetTheme.DARK -> Brush.verticalGradient(
             listOf(Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.05f))
         )
-        MediaWidgetTheme.MATCH_ACCENT -> Brush.verticalGradient(
+        widgetTheme == MediaWidgetTheme.MATCH_ACCENT -> Brush.verticalGradient(
             listOf(accentColor.copy(alpha = 0.7f), accentColor.copy(alpha = 0.2f))
         )
         else -> Brush.verticalGradient(
-            listOf(Color.White.copy(alpha = 0.55f), Color.White.copy(alpha = 0.15f))
+            listOf(Color.White.copy(alpha = 0.45f), Color.White.copy(alpha = 0.12f))
         )
     }
 
-    val textColorPrimary = when (widgetTheme) {
-        MediaWidgetTheme.LIGHT -> Color(0xFF111111)
-        else -> Color.White
+    val textColorPrimary = when {
+        palette.isGlass -> Color.White
+        widgetTheme == MediaWidgetTheme.LIGHT -> Color(0xFF111111)
+        else -> palette.textPrimary
     }
 
-    val textColorSecondary = when (widgetTheme) {
-        MediaWidgetTheme.LIGHT -> Color.Black.copy(alpha = 0.6f)
-        else -> Color.White.copy(alpha = 0.75f)
+    val textColorSecondary = when {
+        palette.isGlass -> Color(0xFFE4E4E7)
+        widgetTheme == MediaWidgetTheme.LIGHT -> Color.Black.copy(alpha = 0.6f)
+        else -> palette.textSecondary
     }
 
-    val equalizerColor = when (widgetTheme) {
-        MediaWidgetTheme.LIGHT -> Color.Black.copy(alpha = 0.8f)
+    val equalizerColor = when {
+        palette.isGlass -> accentColor
+        widgetTheme == MediaWidgetTheme.LIGHT -> Color.Black.copy(alpha = 0.8f)
         else -> Color.White
     }
 
