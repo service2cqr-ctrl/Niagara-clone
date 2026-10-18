@@ -32,7 +32,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -75,6 +74,7 @@ fun StartupPermissionsDialog(
     onComplete: () -> Unit
 ) {
     val context = LocalContext.current
+    val palette = LocalLauncherPalette.current
     val prefs = remember { context.getSharedPreferences(PREFS_ONBOARDING, Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
 
@@ -105,7 +105,6 @@ fun StartupPermissionsDialog(
 
     var stage by remember { mutableStateOf(OnboardingStage.WELCOME_SHOWCASE) }
 
-    // Tell HomeScreen whether to hide background elements so they never bleed through!
     LaunchedEffect(stage) {
         val shouldHideHomeContent = stage != OnboardingStage.WAVE_HAND_TUTORIAL
         onStageChanged(shouldHideHomeContent)
@@ -173,11 +172,13 @@ fun StartupPermissionsDialog(
 
             OnboardingStage.SWITCH_LAUNCHER_PROMPT -> SwitchLauncherPromptSheet(
                 accentColor = accentColor,
+                palette = palette,
                 onContinue = { triggerSystemDefaultHomeDialog() }
             )
 
             OnboardingStage.NOT_SELECTED_YET_PROMPT -> NotSelectedYetSheet(
                 accentColor = accentColor,
+                palette = palette,
                 onTryAgain = { triggerSystemDefaultHomeDialog() },
                 onNotNow = { stage = OnboardingStage.GIVE_FEW_DAYS_GRAPH }
             )
@@ -312,7 +313,7 @@ private fun WelcomeShowcaseStep(
 }
 
 // ---------------------------------------------------------------------------
-// STEP 2: "Your favorites" SELECTION SCREEN (Clean background, no home bleed)
+// STEP 2: "Your favorites" SELECTION SCREEN
 // ---------------------------------------------------------------------------
 @Composable
 fun FavoritesPickerScreen(
@@ -442,7 +443,6 @@ fun FavoritesPickerScreen(
             }
         }
 
-        // Top Sticky Pill ("5 selected · 8 recommended")
         Surface(
             shape = CircleShape,
             color = Color(0xFF1F1624),
@@ -460,7 +460,6 @@ fun FavoritesPickerScreen(
             )
         }
 
-        // Bottom-Right Floating "✓ Done" Pill Button
         Button(
             onClick = { onDone(selectedPackages) },
             shape = RoundedCornerShape(20.dp),
@@ -563,9 +562,9 @@ private fun FavoritePickerRow(
 @Composable
 private fun SwitchLauncherPromptSheet(
     accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onContinue: () -> Unit
 ) {
-    val palette = LocalLauncherPalette.current
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -595,6 +594,7 @@ private fun SwitchLauncherPromptSheet(
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = palette.cardBackground,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -619,6 +619,7 @@ private fun SwitchLauncherPromptSheet(
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = palette.cardBackground,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -658,10 +659,10 @@ private fun SwitchLauncherPromptSheet(
 @Composable
 private fun NotSelectedYetSheet(
     accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onTryAgain: () -> Unit,
     onNotNow: () -> Unit
 ) {
-    val palette = LocalLauncherPalette.current
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -692,6 +693,7 @@ private fun NotSelectedYetSheet(
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = palette.cardBackground,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -714,6 +716,7 @@ private fun NotSelectedYetSheet(
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = palette.cardBackground,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -887,7 +890,7 @@ private fun GiveFewDaysGraphStep(
 }
 
 // ---------------------------------------------------------------------------
-// STEP 5: SPOTLIGHT FAVORITES CARD + TOOLTIP BELOW IT (Exact match to video 01:08)
+// STEP 5: SPOTLIGHT FAVORITES CARD + TOOLTIP BELOW IT
 // ---------------------------------------------------------------------------
 @Composable
 private fun HomeFavoritesSpotlightOverlay(
@@ -910,7 +913,6 @@ private fun HomeFavoritesSpotlightOverlay(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.Center
         ) {
-            // Dimmed Clock above the spotlight card (just like video 01:08)
             Column(modifier = Modifier.padding(start = 8.dp, bottom = 18.dp)) {
                 Text(
                     text = currentTime.ifEmpty { "9:43" },
@@ -925,7 +927,6 @@ private fun HomeFavoritesSpotlightOverlay(
                 )
             }
 
-            // Bright Elevated Spotlight Card displaying the user's selected Favorite Apps!
             Surface(
                 shape = RoundedCornerShape(24.dp),
                 color = Color(0xFF18141C).copy(alpha = 0.92f),
@@ -965,7 +966,6 @@ private fun HomeFavoritesSpotlightOverlay(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Tooltip Card placed cleanly BELOW the favorites card (never covering the apps!)
             Surface(
                 shape = RoundedCornerShape(22.dp),
                 color = Color(0xFF1F1624),
