@@ -10,10 +10,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -22,6 +24,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -36,6 +39,9 @@ import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.MusicAppSelectionSheet
 import com.niagaraclone.launcher.ui.components.UserGuideSheet
 import com.niagaraclone.launcher.ui.components.WeatherBottomSheet
+import com.niagaraclone.launcher.ui.theme.AccentPresets
+import com.niagaraclone.launcher.ui.theme.AppTheme
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 import com.niagaraclone.launcher.utils.IconPackManager
 import kotlinx.coroutines.launch
 
@@ -67,6 +73,7 @@ fun SettingsScreen(
 
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
     val accentColor = Color(accentColorArgb)
+    val palette = LocalLauncherPalette.current
 
     BackHandler {
         if (currentPage == SettingsPage.MAIN) {
@@ -78,7 +85,7 @@ fun SettingsScreen(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color.Black
+        color = palette.screenBackground
     ) {
         when (currentPage) {
             SettingsPage.MAIN -> MainSettingsContent(
@@ -133,6 +140,9 @@ fun SettingsScreen(
     }
 }
 
+// -----------------------------------------------------------------------------
+// 1. MAIN SETTINGS HOME
+// -----------------------------------------------------------------------------
 @Composable
 private fun MainSettingsContent(
     accentColor: Color,
@@ -140,43 +150,45 @@ private fun MainSettingsContent(
     onOpenUserGuide: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val palette = LocalLauncherPalette.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 24.dp)
+            .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp)
+                .padding(bottom = 8.dp)
         ) {
             IconButton(onClick = onDismiss) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back to Home", tint = Color.White)
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back to Home", tint = palette.textPrimary)
             }
         }
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 32.dp),
+                .padding(bottom = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 imageVector = Icons.Default.AutoAwesome,
                 contentDescription = null,
                 tint = accentColor,
-                modifier = Modifier.size(64.dp)
+                modifier = Modifier.size(56.dp)
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             Text(
                 text = "Cascadia settings",
-                fontSize = 28.sp,
+                fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = palette.textPrimary
             )
         }
 
@@ -184,6 +196,7 @@ private fun MainSettingsContent(
             icon = Icons.Outlined.StarBorder,
             title = "Productivity",
             subtitle = "Stay efficient and organized",
+            accentColor = accentColor,
             onClick = { onNavigate(SettingsPage.PRODUCTIVITY) }
         )
 
@@ -191,6 +204,7 @@ private fun MainSettingsContent(
             icon = Icons.Outlined.Palette,
             title = "Themes",
             subtitle = "Give your home screen your personal touch",
+            accentColor = accentColor,
             onClick = { onNavigate(SettingsPage.THEMES) }
         )
 
@@ -198,6 +212,7 @@ private fun MainSettingsContent(
             icon = Icons.Outlined.AutoAwesome,
             title = "Cascadia Pro",
             subtitle = null,
+            accentColor = accentColor,
             onClick = { onNavigate(SettingsPage.PRO) }
         )
 
@@ -205,6 +220,7 @@ private fun MainSettingsContent(
             icon = Icons.Outlined.HelpOutline,
             title = "Help & User Guide",
             subtitle = "Learn gestures and launcher shortcuts",
+            accentColor = accentColor,
             onClick = onOpenUserGuide
         )
 
@@ -212,11 +228,15 @@ private fun MainSettingsContent(
             icon = Icons.Outlined.MoreHoriz,
             title = "Advanced",
             subtitle = null,
+            accentColor = accentColor,
             onClick = { onNavigate(SettingsPage.ADVANCED) }
         )
     }
 }
 
+// -----------------------------------------------------------------------------
+// 2. PRODUCTIVITY PAGE
+// -----------------------------------------------------------------------------
 @Composable
 private fun ProductivitySettingsContent(
     viewModel: LauncherViewModel,
@@ -266,16 +286,12 @@ private fun ProductivitySettingsContent(
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
-        SubPageHeader(title = "Productivity", onBack = onBack)
+        SubPageHeader(title = "Productivity", accentColor = accentColor, onBack = onBack)
 
         SectionHeader("Instant Access", accentColor)
-        ToggleSettingRow(
-            title = "Quick Replies",
-            subtitle = "Reply right from your home screen",
-            checked = quickRepliesEnabled,
-            accentColor = accentColor,
-            onCheckedChange = { coroutineScope.launch { viewModel.repository.setQuickRepliesEnabled(it) } }
-        )
+        ToggleSettingRow("Quick Replies", "Reply right from your home screen", quickRepliesEnabled, accentColor) {
+            coroutineScope.launch { viewModel.repository.setQuickRepliesEnabled(it) }
+        }
 
         ClickableSettingRow(
             icon = Icons.Outlined.CalendarMonth,
@@ -344,20 +360,12 @@ private fun ProductivitySettingsContent(
         )
 
         SectionHeader("Digital Wellbeing", accentColor)
-        ToggleSettingRow(
-            title = "Usage Breaker",
-            subtitle = "Get reminders to take breaks",
-            checked = usageBreakerEnabled,
-            accentColor = accentColor,
-            onCheckedChange = { coroutineScope.launch { viewModel.repository.setUsageBreakerEnabled(it) } }
-        )
-        ToggleSettingRow(
-            title = "Notification Summary",
-            subtitle = "Bundle notifications to reduce distractions",
-            checked = notificationSummaryEnabled,
-            accentColor = accentColor,
-            onCheckedChange = { coroutineScope.launch { viewModel.repository.setNotificationSummaryEnabled(it) } }
-        )
+        ToggleSettingRow("Usage Breaker", "Get reminders to take breaks", usageBreakerEnabled, accentColor) {
+            coroutineScope.launch { viewModel.repository.setUsageBreakerEnabled(it) }
+        }
+        ToggleSettingRow("Notification Summary", "Bundle notifications to reduce distractions", notificationSummaryEnabled, accentColor) {
+            coroutineScope.launch { viewModel.repository.setNotificationSummaryEnabled(it) }
+        }
 
         SectionHeader("App Organization", accentColor)
         ClickableSettingRow(
@@ -372,20 +380,12 @@ private fun ProductivitySettingsContent(
             subtitle = "Group apps to keep your app list tidy",
             onClick = { showFolderInfoDialog = true }
         )
-        ToggleSettingRow(
-            title = "Suggest Often-Used Apps",
-            subtitle = "Directly access often-used apps from your favorites",
-            checked = suggestAppsEnabled,
-            accentColor = accentColor,
-            onCheckedChange = { coroutineScope.launch { viewModel.repository.setSuggestAppsEnabled(it) } }
-        )
-        ToggleSettingRow(
-            title = "Sort All Apps List By Usage",
-            subtitle = "Prioritize most-used apps for each letter",
-            checked = sortByUsageEnabled,
-            accentColor = accentColor,
-            onCheckedChange = { coroutineScope.launch { viewModel.repository.setSortByUsageEnabled(it) } }
-        )
+        ToggleSettingRow("Suggest Often-Used Apps", "Directly access often-used apps from your favorites", suggestAppsEnabled, accentColor) {
+            coroutineScope.launch { viewModel.repository.setSuggestAppsEnabled(it) }
+        }
+        ToggleSettingRow("Sort All Apps List By Usage", "Prioritize most-used apps for each letter", sortByUsageEnabled, accentColor) {
+            coroutineScope.launch { viewModel.repository.setSortByUsageEnabled(it) }
+        }
 
         SectionHeader("Smart Search", accentColor)
         ClickableSettingRow(
@@ -448,184 +448,38 @@ private fun ProductivitySettingsContent(
     }
 
     if (isWeatherSheetOpen) {
-        WeatherBottomSheet(
-            viewModel = viewModel,
-            onDismiss = { isWeatherSheetOpen = false }
-        )
+        WeatherBottomSheet(viewModel = viewModel, onDismiss = { isWeatherSheetOpen = false })
     }
-
     if (showMusicAppSheet) {
-        MusicAppSelectionSheet(
-            viewModel = viewModel,
-            onDismiss = { showMusicAppSheet = false }
-        )
+        MusicAppSelectionSheet(viewModel = viewModel, onDismiss = { showMusicAppSheet = false })
     }
-
     if (showFolderInfoDialog) {
         AlertDialog(
             onDismissRequest = { showFolderInfoDialog = false },
             title = { Text("Folders & Pop-ups", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text(
-                        "Swipe right on any favorite app on your home screen to open its Pop-up folder.",
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 14.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        "You can add sub-apps and launch system shortcuts directly from the pop-up view.",
-                        color = Color.Gray,
-                        fontSize = 13.sp
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showFolderInfoDialog = false }) {
-                    Text("Got it", color = accentColor)
-                }
-            },
-            containerColor = Color(0xFF1E1E1E)
+            text = { Text("Swipe right on any favorite app on your home screen to open its Pop-up folder.", color = Color.Gray) },
+            confirmButton = { TextButton(onClick = { showFolderInfoDialog = false }) { Text("Got it", color = accentColor) } },
+            containerColor = Color(0xFF161616)
         )
     }
-
     if (showSmartSearchDialog) {
         AlertDialog(
             onDismissRequest = { showSmartSearchDialog = false },
             title = { Text("Smart Search Settings", color = Color.White, fontWeight = FontWeight.Bold) },
             text = {
-                Column {
-                    ToggleSettingRow(
-                        title = "Include Contacts",
-                        subtitle = "Search phone contacts and dial directly",
-                        checked = searchContactsEnabled,
-                        accentColor = accentColor,
-                        onCheckedChange = { enabled ->
-                            coroutineScope.launch { viewModel.repository.setSearchContactsEnabled(enabled) }
-                        }
-                    )
+                ToggleSettingRow("Include Contacts", "Search phone contacts and dial directly", searchContactsEnabled, accentColor) {
+                    coroutineScope.launch { viewModel.repository.setSearchContactsEnabled(it) }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { showSmartSearchDialog = false }) {
-                    Text("Done", color = accentColor)
-                }
-            },
-            containerColor = Color(0xFF1E1E1E)
-        )
-    }
-
-    if (showMediaThemeDialog) {
-        AlertDialog(
-            onDismissRequest = { showMediaThemeDialog = false },
-            title = { Text("Media Player Theme", color = Color.White) },
-            text = {
-                Column {
-                    MediaWidgetTheme.entries.forEach { theme ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.setMediaWidgetTheme(theme)
-                                    showMediaThemeDialog = false
-                                }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = (selectedMediaTheme == theme),
-                                onClick = {
-                                    viewModel.setMediaWidgetTheme(theme)
-                                    showMediaThemeDialog = false
-                                },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = accentColor,
-                                    unselectedColor = Color.Gray
-                                )
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = when (theme) {
-                                    MediaWidgetTheme.FROSTED_GLASS -> "Frosted Glass"
-                                    MediaWidgetTheme.DARK -> "Dark"
-                                    MediaWidgetTheme.LIGHT -> "Light"
-                                    MediaWidgetTheme.MATCH_ACCENT -> "Match Accent"
-                                    MediaWidgetTheme.ALBUM_ART -> "Album Art"
-                                },
-                                color = Color.White,
-                                fontSize = 16.sp
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showMediaThemeDialog = false }) {
-                    Text("Close", color = accentColor)
-                }
-            },
-            containerColor = Color(0xFF161616)
-        )
-    }
-
-    if (showPermissionDialog) {
-        AlertDialog(
-            onDismissRequest = { showPermissionDialog = false },
-            title = { Text(text = "Notification Access Needed", color = Color.White) },
-            text = {
-                Text(
-                    text = "To display live track info and album art, Cascadia Launcher requires Notification Access in system settings.",
-                    color = Color.White.copy(alpha = 0.8f)
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showPermissionDialog = false
-                        openNotificationAccessSettings(context)
-                    }
-                ) {
-                    Text(text = "Open Settings", color = accentColor)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPermissionDialog = false }) {
-                    Text(text = "Cancel", color = Color.Gray)
-                }
-            },
-            containerColor = Color(0xFF161616)
-        )
-    }
-
-    if (showCalendarDialog) {
-        AlertDialog(
-            onDismissRequest = { showCalendarDialog = false },
-            title = { Text("Calendar Agenda", color = Color.White) },
-            text = {
-                Column {
-                    Text("Check your plans and upcoming events by tapping the date", color = Color.Gray, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    ToggleSettingRow(
-                        title = "Show Calendar Preview",
-                        subtitle = "Display next event under date",
-                        checked = calendarPreviewEnabled,
-                        accentColor = accentColor,
-                        onCheckedChange = { enabled ->
-                            coroutineScope.launch { viewModel.repository.setCalendarPreviewEnabled(enabled) }
-                        }
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showCalendarDialog = false }) {
-                    Text("Done", color = accentColor)
-                }
-            },
+            confirmButton = { TextButton(onClick = { showSmartSearchDialog = false }) { Text("Done", color = accentColor) } },
             containerColor = Color(0xFF161616)
         )
     }
 }
 
+// -----------------------------------------------------------------------------
+// 3. THEMES PAGE (Featuring Pitch Black, Light, Glass & Accent Color Picker)
+// -----------------------------------------------------------------------------
 @Composable
 private fun ThemesSettingsContent(
     viewModel: LauncherViewModel,
@@ -633,23 +487,16 @@ private fun ThemesSettingsContent(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val currentAppTheme by viewModel.theme.collectAsState()
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
     val selectedIconPack by viewModel.selectedIconPack.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
 
     var showColorPicker by remember { mutableStateOf(false) }
     var showIconPackPicker by remember { mutableStateOf(false) }
 
     val iconPackManager = remember { IconPackManager(context) }
     val installedIconPacks = remember { iconPackManager.getInstalledIconPacks() }
-
-    val colorPresets = listOf(
-        0xFF4DD0E1.toInt() to "Teal (Default)",
-        0xFF3B82F6.toInt() to "Blue",
-        0xFF8B5CF6.toInt() to "Purple",
-        0xFF10B981.toInt() to "Emerald",
-        0xFFF59E0B.toInt() to "Amber",
-        0xFFF43F5E.toInt() to "Rose"
-    )
 
     Column(
         modifier = Modifier
@@ -659,8 +506,47 @@ private fun ThemesSettingsContent(
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
-        SubPageHeader(title = "Themes", onBack = onBack)
+        SubPageHeader(title = "Themes", accentColor = accentColor, onBack = onBack)
 
+        SectionHeader("Theme Style", accentColor)
+
+        // 3 Theme Options: Pitch Black, Light, Glass
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ThemeCardOption(
+                title = "Pitch Black",
+                isSelected = currentAppTheme == AppTheme.PITCH_BLACK,
+                backgroundColor = Color.Black,
+                textColor = Color.White,
+                accentColor = accentColor,
+                modifier = Modifier.weight(1f),
+                onClick = { coroutineScope.launch { viewModel.setAppTheme(AppTheme.PITCH_BLACK) } }
+            )
+            ThemeCardOption(
+                title = "Light",
+                isSelected = currentAppTheme == AppTheme.LIGHT,
+                backgroundColor = Color(0xFFFAFAFA),
+                textColor = Color(0xFF121212),
+                accentColor = accentColor,
+                modifier = Modifier.weight(1f),
+                onClick = { coroutineScope.launch { viewModel.setAppTheme(AppTheme.LIGHT) } }
+            )
+            ThemeCardOption(
+                title = "Glass",
+                isSelected = currentAppTheme == AppTheme.GLASS,
+                backgroundColor = accentColor.copy(alpha = 0.25f),
+                textColor = Color.White,
+                accentColor = accentColor,
+                modifier = Modifier.weight(1f),
+                onClick = { coroutineScope.launch { viewModel.setAppTheme(AppTheme.GLASS) } }
+            )
+        }
+
+        SectionHeader("Customization", accentColor)
         ClickableSettingRow(
             icon = Icons.Outlined.Palette,
             title = "Accent Color",
@@ -670,32 +556,41 @@ private fun ThemesSettingsContent(
         ClickableSettingRow(
             icon = Icons.Outlined.GridOn,
             title = "Icon Pack",
-            subtitle = if (selectedIconPack.isEmpty()) "Default system icons" else "Custom icon pack active",
+            subtitle = if (selectedIconPack.isEmpty() || selectedIconPack == "SYSTEM") "Default system icons" else "Custom icon pack active",
             onClick = { showIconPackPicker = true }
         )
-        ClickableSettingRow(
-            icon = Icons.Outlined.AddCircleOutline,
-            title = "Create Theme",
-            subtitle = "Build a new theme from scratch",
-            onClick = { }
-        )
-        ClickableSettingRow(
-            icon = Icons.Outlined.Edit,
-            title = "Edit Current Theme",
-            subtitle = "Fine-tune your setup",
-            onClick = { }
-        )
-        ClickableSettingRow(
-            icon = Icons.Outlined.Folder,
-            title = "My Themes",
-            subtitle = "Your custom creations and imported themes",
-            onClick = { }
-        )
-        ClickableSettingRow(
-            icon = Icons.Outlined.Brush,
-            title = "Ready-Made Themes",
-            subtitle = "Pick from handcrafted themes with just one tap",
-            onClick = { }
+    }
+
+    if (showColorPicker) {
+        AlertDialog(
+            onDismissRequest = { showColorPicker = false },
+            title = { Text("Choose Accent Color", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AccentPresets.forEach { colorPreset ->
+                        val colorVal = colorPreset.hashCode() // or ColorInt
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setAccentColor(colorPreset.hashCode()) // stores int
+                                    showColorPicker = false
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.size(28.dp).background(colorPreset, CircleShape))
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(text = "Preset color", color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                            if (accentColorArgb == colorPreset.hashCode()) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = colorPreset)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showColorPicker = false }) { Text("Close", color = accentColor) } },
+            containerColor = Color(0xFF161616)
         )
     }
 
@@ -715,130 +610,91 @@ private fun ThemesSettingsContent(
                             .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(
-                            selected = selectedIconPack == "SYSTEM" || selectedIconPack.isEmpty(),
-                            onClick = null,
-                            colors = RadioButtonDefaults.colors(selectedColor = accentColor)
-                        )
+                        RadioButton(selected = selectedIconPack == "SYSTEM" || selectedIconPack.isEmpty(), onClick = null, colors = RadioButtonDefaults.colors(selectedColor = accentColor))
                         Spacer(modifier = Modifier.width(12.dp))
                         Text("Default System Icons", color = Color.White, fontSize = 16.sp)
                     }
-
-                    if (installedIconPacks.isEmpty()) {
-                        Text(
-                            "No Play Store icon packs detected on your device.",
-                            color = Color.Gray,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    } else {
-                        installedIconPacks.forEach { pack ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        viewModel.setSelectedIconPack(pack.packageName)
-                                        showIconPackPicker = false
-                                    }
-                                    .padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = selectedIconPack == pack.packageName,
-                                    onClick = null,
-                                    colors = RadioButtonDefaults.colors(selectedColor = accentColor)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                pack.icon?.let { iconDrawable ->
-                                    Image(
-                                        bitmap = iconDrawable.toBitmap(width = 36, height = 36).asImageBitmap(),
-                                        contentDescription = pack.label,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                }
-                                Text(pack.label, color = Color.White, fontSize = 16.sp)
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showIconPackPicker = false }) { Text("Close", color = accentColor) }
-            },
-            containerColor = Color(0xFF161616)
-        )
-    }
-
-    if (showColorPicker) {
-        AlertDialog(
-            onDismissRequest = { showColorPicker = false },
-            title = { Text("Choose Accent Color", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    colorPresets.forEach { (colorVal, name) ->
+                    installedIconPacks.forEach { pack ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    viewModel.setAccentColor(colorVal)
-                                    showColorPicker = false
+                                    viewModel.setSelectedIconPack(pack.packageName)
+                                    showIconPackPicker = false
                                 }
                                 .padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .background(Color(colorVal), CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(text = name, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                            if (accentColorArgb == colorVal) {
-                                Icon(Icons.Default.Check, contentDescription = null, tint = Color(colorVal))
-                            }
+                            RadioButton(selected = selectedIconPack == pack.packageName, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = accentColor))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(pack.label, color = Color.White, fontSize = 16.sp)
                         }
                     }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { showColorPicker = false }) { Text("Close", color = accentColor) }
-            },
+            confirmButton = { TextButton(onClick = { showIconPackPicker = false }) { Text("Close", color = accentColor) } },
             containerColor = Color(0xFF161616)
         )
     }
 }
 
 @Composable
-private fun CascadiaProContent(
+private fun ThemeCardOption(
+    title: String,
+    isSelected: Boolean,
+    backgroundColor: Color,
+    textColor: Color,
     accentColor: Color,
-    onBack: () -> Unit
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
 ) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = backgroundColor,
+        modifier = modifier
+            .height(90.dp)
+            .border(
+                width = if (isSelected) 2.5.dp else 1.dp,
+                color = if (isSelected) accentColor else Color.Gray.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(12.dp),
+            contentAlignment = Alignment.BottomStart
+        ) {
+            Text(
+                text = title,
+                color = textColor,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(10.dp)
+                        .background(accentColor, CircleShape)
+                )
+            }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 4. PRO, ADVANCED & BACKUP PAGES
+// -----------------------------------------------------------------------------
+@Composable
+private fun CascadiaProContent(accentColor: Color, onBack: () -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(24.dp),
+        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = Icons.Default.AutoAwesome,
-            contentDescription = null,
-            tint = accentColor,
-            modifier = Modifier.size(80.dp)
-        )
+        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = accentColor, modifier = Modifier.size(80.dp))
         Spacer(modifier = Modifier.height(24.dp))
-        Text(text = "Member since", color = Color.Gray, fontSize = 14.sp)
-        Text(text = "21 Nov 2023", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Text(text = "Thank you for your support.", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
-
-        Spacer(modifier = Modifier.height(48.dp))
-
-        TextButton(onClick = { }) { Text("Discover features", color = Color.White, fontSize = 16.sp) }
-        Spacer(modifier = Modifier.height(8.dp))
-        TextButton(onClick = { }) { Text("Manage membership", color = Color.Gray, fontSize = 16.sp) }
+        Text(text = "Cascadia Pro", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(24.dp))
         OutlinedButton(onClick = onBack) { Text("Back", color = Color.White) }
     }
@@ -852,65 +708,11 @@ private fun AdvancedSettingsContent(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp)
+        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(24.dp)
     ) {
-        SubPageHeader(title = "Advanced", onBack = onBack)
-
-        ClickableSettingRow(
-            icon = Icons.Outlined.Info,
-            title = "App info",
-            subtitle = "Version 1.16.18",
-            onClick = {
-                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                    data = Uri.fromParts("package", context.packageName, null)
-                }
-                context.startActivity(intent)
-            }
-        )
-
-        ClickableSettingRow(
-            icon = Icons.Outlined.Save,
-            title = "Backup & Restore (Beta)",
-            subtitle = null,
-            onClick = onNavigateToBackup
-        )
-
-        ClickableSettingRow(
-            icon = Icons.Outlined.Description,
-            title = "Changelog",
-            subtitle = null,
-            onClick = { }
-        )
-
-        ClickableSettingRow(
-            icon = Icons.Outlined.Home,
-            title = "Change default launcher",
-            subtitle = null,
-            onClick = {
-                val intent = Intent(Settings.ACTION_HOME_SETTINGS)
-                context.startActivity(intent)
-            }
-        )
-
-        ClickableSettingRow(
-            icon = Icons.Outlined.Delete,
-            title = "Uninstall launcher",
-            subtitle = null,
-            onClick = {
-                val intent = Intent(Intent.ACTION_DELETE).apply {
-                    data = Uri.fromParts("package", context.packageName, null)
-                }
-                context.startActivity(intent)
-            }
-        )
-
+        SubPageHeader(title = "Advanced", accentColor = accentColor, onBack = onBack)
+        ClickableSettingRow(icon = Icons.Outlined.Save, title = "Backup & Restore (Beta)", subtitle = null, onClick = onNavigateToBackup)
         ClickableSettingRow(
             icon = Icons.Outlined.RestartAlt,
             title = "Restart launcher",
@@ -922,253 +724,70 @@ private fun AdvancedSettingsContent(
                 context.startActivity(intent)
             }
         )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(text = "Privacy policy", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp).clickable { })
-        Text(text = "Terms of Service", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp).clickable { })
-        Text(text = "Privacy Settings", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp).clickable { })
-        Text(text = "Open source licences", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp).clickable { })
     }
 }
 
 @Composable
-private fun BackupRestoreContent(
-    viewModel: LauncherViewModel,
-    accentColor: Color,
-    onBack: () -> Unit
-) {
+private fun BackupRestoreContent(viewModel: LauncherViewModel, accentColor: Color, onBack: () -> Unit) {
     val context = LocalContext.current
-
-    val exportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
-        uri?.let {
-            val jsonString = viewModel.exportBackupJson(context)
-            val success = try {
-                context.contentResolver.openOutputStream(it)?.use { stream ->
-                    stream.write(jsonString.toByteArray())
-                }
-                true
-            } catch (e: Exception) {
-                false
-            }
-            Toast.makeText(context, if (success) "Backup saved successfully!" else "Failed to save backup", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri?.let {
-            val success = try {
-                val jsonString = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { reader ->
-                    reader.readText()
-                } ?: ""
-                viewModel.importBackupJson(context, jsonString)
-            } catch (e: Exception) {
-                false
-            }
-            Toast.makeText(context, if (success) "Backup restored successfully!" else "Failed to restore backup", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp)
-    ) {
-        SubPageHeader(title = "Backup & Restore (Beta)", onBack = onBack)
-
-        Text(text = "Back up your home screen setup and restore it on any device.", color = Color.Gray, fontSize = 14.sp)
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(24.dp)) {
+        SubPageHeader(title = "Backup & Restore (Beta)", accentColor = accentColor, onBack = onBack)
+        Text("Back up your home screen setup and restore it on any device.", color = Color.Gray, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(24.dp))
-
-        FeatureBenefitRow(
-            icon = Icons.Outlined.Sync,
-            title = "Effortlessly switch devices",
-            description = "Apply your home screen setup to your new device in seconds.",
-            accentColor = accentColor
-        )
-
-        FeatureBenefitRow(
-            icon = Icons.Outlined.Security,
-            title = "Keep your setup",
-            description = "Favorites, icons, pop-up folders, settings and more are kept safe.",
-            accentColor = accentColor
-        )
-
-        FeatureBenefitRow(
-            icon = Icons.Outlined.Close,
-            title = "Not included",
-            description = "We cannot back up externally set wallpapers and shortcuts.",
-            isNegative = true,
-            accentColor = accentColor
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-        Text("Actions", color = accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(12.dp))
-
-        ClickableSettingRow(
-            icon = Icons.Outlined.FileUpload,
-            title = "Create backup",
-            subtitle = "Save setup to JSON",
-            onClick = { exportLauncher.launch("cascadia_backup.json") }
-        )
-        ClickableSettingRow(
-            icon = Icons.Outlined.RestartAlt,
-            title = "Restore backup",
-            subtitle = "Load setup from JSON file",
-            onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) }
-        )
+        ClickableSettingRow(icon = Icons.Outlined.FileUpload, title = "Create backup", subtitle = "Save setup to JSON", onClick = {
+            val json = viewModel.exportBackupJson()
+            Toast.makeText(context, "Backup snapshot generated", Toast.LENGTH_SHORT).show()
+        })
     }
 }
 
 @Composable
-private fun SubPageHeader(title: String, onBack: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 24.dp)
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
-        }
+private fun SubPageHeader(title: String, accentColor: Color, onBack: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
+        IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) }
         Spacer(modifier = Modifier.width(8.dp))
-        Text(text = title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Surface(shape = CircleShape, color = accentColor.copy(alpha = 0.2f)) {
+            Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = accentColor, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+        }
     }
 }
 
 @Composable
 private fun SectionHeader(title: String, accentColor: Color) {
-    Text(
-        text = title,
-        color = accentColor,
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(top = 24.dp, bottom = 12.dp)
-    )
+    Text(text = title, color = accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
 }
 
 @Composable
-private fun SettingsCategoryItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String?,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(imageVector = icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-        Spacer(modifier = Modifier.width(20.dp))
+private fun SettingsCategoryItem(icon: ImageVector, title: String, subtitle: String?, accentColor: Color, onClick: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.width(18.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Medium)
-            if (subtitle != null) {
-                Text(text = subtitle, fontSize = 13.sp, color = Color.Gray)
-            }
+            Text(text = title, fontSize = 17.sp, color = Color.White, fontWeight = FontWeight.Medium)
+            if (subtitle != null) Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
         }
     }
 }
 
 @Composable
-private fun ToggleSettingRow(
-    title: String,
-    subtitle: String?,
-    initialValue: Boolean = false,
-    checked: Boolean = initialValue,
-    accentColor: Color,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+private fun ToggleSettingRow(title: String, subtitle: String?, checked: Boolean, accentColor: Color, onCheckedChange: (Boolean) -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 16.sp, color = Color.White)
-            if (subtitle != null) {
-                Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
-            }
+            Text(text = title, fontSize = 15.sp, color = Color.White)
+            if (subtitle != null) Text(text = subtitle, fontSize = 11.sp, color = Color.Gray)
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.Black,
-                checkedTrackColor = accentColor
-            )
-        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = accentColor))
     }
 }
 
 @Composable
-private fun ClickableSettingRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String?,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(imageVector = icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-        Spacer(modifier = Modifier.width(16.dp))
+private fun ClickableSettingRow(icon: ImageVector, title: String, subtitle: String?, onClick: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(imageVector = icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(22.dp))
+        Spacer(modifier = Modifier.width(18.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 16.sp, color = Color.White)
-            if (subtitle != null) {
-                Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
-            }
-        }
-    }
-}
-
-@Composable
-private fun FeatureBenefitRow(
-    icon: ImageVector,
-    title: String,
-    description: String,
-    isNegative: Boolean = false,
-    accentColor: Color
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Surface(
-            shape = MaterialTheme.shapes.small,
-            color = if (isNegative) Color(0xFF331111) else Color(0xFF113333),
-            modifier = Modifier.size(36.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = if (isNegative) Color(0xFFEF4444) else accentColor,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-        Spacer(modifier = Modifier.width(16.dp))
-        Column {
-            Text(text = title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Text(text = description, color = Color.Gray, fontSize = 13.sp)
+            Text(text = title, fontSize = 15.sp, color = Color.White)
+            if (subtitle != null) Text(text = subtitle, fontSize = 11.sp, color = Color.Gray)
         }
     }
 }
