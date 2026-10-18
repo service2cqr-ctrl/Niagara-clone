@@ -25,9 +25,7 @@ import com.niagaraclone.launcher.backup.BackupManager
 import com.niagaraclone.launcher.data.*
 import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.ui.theme.AppTheme
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
@@ -79,9 +77,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     val notificationCounts = MediaNotificationListener.activeNotificationCounts
     val notificationSummaries = MediaNotificationListener.notificationSummaries
-
-    private val _upcomingEvents = MutableStateFlow<List<CalendarEventModel>>(emptyList())
-    val upcomingEvents: StateFlow<List<CalendarEventModel>> = _upcomingEvents.asStateFlow()
+    val upcomingEvents = repository.upcomingEvents
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -103,7 +99,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             addAction(Intent.ACTION_PACKAGE_CHANGED)
             addDataScheme("package")
         }
-        getApplication<Application>().registerReceiver(packageReceiver, filter)
+        try {
+            getApplication<Application>().registerReceiver(packageReceiver, filter)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onCleared() {
@@ -162,10 +162,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 drawable?.let {
                     val bitmap = it.toBitmap(width = 100, height = 100)
                     Palette.from(bitmap).generate { palette ->
-                        val vibrantColor = palette?.getVibrantColor(0xFF4DD0E1.toInt())
-                            ?: palette?.getDominantColor(0xFF4DD0E1.toInt())
-                            ?: 0xFF4DD0E1.toInt()
-                        setAccentColorArgb(vibrantColor)
+                        val vibrantColor = palette?.getVibrantColor(0xFFD98CE0.toInt())
+                            ?: palette?.getDominantColor(0xFFD98CE0.toInt())
+                            ?: 0xFFD98CE0.toInt()
+                        viewModelScope.launch { setAccentColorArgb(vibrantColor) }
                     }
                 }
             } catch (e: Exception) {
@@ -244,7 +244,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun loadCalendarEvents() {
         viewModelScope.launch {
-            _upcomingEvents.value = calendarRepository.getUpcomingEvents(2)
+            val events = calendarRepository.getUpcomingEvents(14)
+            repository.updateUpcomingEvents(events)
         }
     }
 
