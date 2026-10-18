@@ -38,6 +38,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 data class ContactResultModel(
     val id: String,
@@ -52,6 +53,7 @@ fun SmartSearchOverlay(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val palette = LocalLauncherPalette.current
     var query by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
 
@@ -127,7 +129,7 @@ fun SmartSearchOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.92f))
+            .background(palette.sheetBackground.copy(alpha = 0.94f))
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -138,7 +140,8 @@ fun SmartSearchOverlay(
         ) {
             Surface(
                 shape = RoundedCornerShape(28.dp),
-                color = Color(0xFF161616),
+                color = palette.cardBackground,
+                border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
@@ -148,13 +151,13 @@ fun SmartSearchOverlay(
                     modifier = Modifier.padding(horizontal = 8.dp)
                 ) {
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = palette.textPrimary)
                     }
 
                     TextField(
                         value = query,
                         onValueChange = { query = it },
-                        placeholder = { Text("Search apps, contacts, or web", color = Color.Gray, fontSize = 15.sp) },
+                        placeholder = { Text("Search apps, contacts, or web", color = palette.textSecondary, fontSize = 15.sp) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(
@@ -170,8 +173,8 @@ fun SmartSearchOverlay(
                             unfocusedContainerColor = Color.Transparent,
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
+                            focusedTextColor = palette.textPrimary,
+                            unfocusedTextColor = palette.textPrimary,
                             cursorColor = accentColor
                         ),
                         modifier = Modifier
@@ -181,7 +184,7 @@ fun SmartSearchOverlay(
 
                     if (query.isNotEmpty()) {
                         IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray)
+                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = palette.textSecondary)
                         }
                     }
                 }
@@ -198,7 +201,7 @@ fun SmartSearchOverlay(
                     item(key = "header_apps") {
                         Text(
                             text = if (query.isBlank()) "SUGGESTED APPS" else "APPS",
-                            color = Color.Gray,
+                            color = accentColor,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
@@ -212,6 +215,7 @@ fun SmartSearchOverlay(
                         SearchAppResultRow(
                             app = app,
                             subText = "Tap to launch",
+                            palette = palette,
                             onClick = {
                                 viewModel.trackAppLaunch(app.packageName)
                                 context.packageManager.getLaunchIntentForPackage(app.packageName)?.let {
@@ -227,7 +231,7 @@ fun SmartSearchOverlay(
                     item(key = "header_contacts") {
                         Text(
                             text = "CONTACTS",
-                            color = Color.Gray,
+                            color = accentColor,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(start = 12.dp, top = 16.dp, bottom = 4.dp)
@@ -256,7 +260,7 @@ fun SmartSearchOverlay(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(50),
-                                color = Color(0xFF222222),
+                                color = palette.cardBackground,
                                 modifier = Modifier.size(36.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
@@ -265,8 +269,8 @@ fun SmartSearchOverlay(
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(text = contact.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                                Text(text = contact.phoneNumber, color = Color.Gray, fontSize = 12.sp)
+                                Text(text = contact.name, color = palette.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                                Text(text = contact.phoneNumber, color = palette.textSecondary, fontSize = 12.sp)
                             }
                         }
                     }
@@ -276,7 +280,7 @@ fun SmartSearchOverlay(
                     item(key = "header_web") {
                         Text(
                             text = "WEB SEARCH",
-                            color = Color.Gray,
+                            color = accentColor,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(start = 12.dp, top = 16.dp, bottom = 4.dp)
@@ -297,9 +301,9 @@ fun SmartSearchOverlay(
                                 .padding(vertical = 10.dp, horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.Search, contentDescription = null, tint = palette.textSecondary, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(16.dp))
-                            Text(text = suggestion, color = Color.White, fontSize = 16.sp)
+                            Text(text = suggestion, color = palette.textPrimary, fontSize = 16.sp)
                         }
                     }
 
@@ -334,7 +338,7 @@ fun SmartSearchOverlay(
 }
 
 @Composable
-private fun SearchAppResultRow(app: AppModel, subText: String, onClick: () -> Unit) {
+private fun SearchAppResultRow(app: AppModel, subText: String, palette: com.niagaraclone.launcher.ui.theme.LauncherPalette, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -351,8 +355,8 @@ private fun SearchAppResultRow(app: AppModel, subText: String, onClick: () -> Un
             Spacer(modifier = Modifier.width(16.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = app.label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-            Text(text = subText, color = Color.Gray, fontSize = 12.sp)
+            Text(text = app.label, color = palette.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Text(text = subText, color = palette.textSecondary, fontSize = 12.sp)
         }
     }
 }
