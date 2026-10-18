@@ -3,7 +3,6 @@ package com.niagaraclone.launcher.ui.screens
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +21,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.WidgetStackView
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 @Composable
 fun WidgetsScreen(
@@ -32,6 +32,8 @@ fun WidgetsScreen(
     onDismiss: () -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
+    val palette = LocalLauncherPalette.current
+
     val widgetIds by viewModel.widgetIds.collectAsState()
     val widgetHeight by viewModel.widgetHeight.collectAsState()
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
@@ -58,7 +60,7 @@ fun WidgetsScreen(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color.Black
+        color = palette.screenBackground
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (widgetIds.isEmpty()) {
@@ -73,18 +75,18 @@ fun WidgetsScreen(
                         text = "No widgets added",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = palette.textPrimary
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Add Android widgets to access them quickly from your home screen page.",
                         fontSize = 14.sp,
-                        color = Color.Gray,
+                        color = palette.textSecondary,
                         modifier = Modifier.padding(bottom = 24.dp)
                     )
                     Button(
                         onClick = onAddWidgetClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+                        colors = ButtonDefaults.buttonColors(containerColor = accentColor, contentColor = Color.Black)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black)
                         Spacer(modifier = Modifier.width(8.dp))
@@ -105,7 +107,7 @@ fun WidgetsScreen(
                             text = "Widgets",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = palette.textPrimary,
                             modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
                         )
                     }
@@ -135,11 +137,12 @@ fun WidgetsScreen(
                         ) {
                             OutlinedButton(
                                 onClick = onAddWidgetClick,
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = accentColor)
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = accentColor),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, accentColor)
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = null)
+                                Icon(Icons.Default.Add, contentDescription = null, tint = accentColor)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "Add another widget")
+                                Text(text = "Add another widget", color = palette.textPrimary)
                             }
                         }
                     }
