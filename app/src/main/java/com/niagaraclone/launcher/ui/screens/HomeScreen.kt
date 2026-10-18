@@ -125,8 +125,6 @@ fun HomeScreen(
 
     val rawShowMediaWidget by viewModel.showMediaWidget.collectAsState()
     val mediaWidgetTheme by viewModel.mediaWidgetTheme.collectAsState()
-    val isPermissionGranted by viewModel.notificationPermissionGranted.collectAsState()
-    val showMediaWidget = rawShowMediaWidget && isPermissionGranted
 
     val weatherEnabled by viewModel.weatherEnabled.collectAsState()
     val tempUnit by viewModel.weatherTempUnit.collectAsState()
@@ -335,7 +333,6 @@ fun HomeScreen(
         visibleApps.groupBy { it.firstLetter }.toSortedMap()
     }
 
-    // Only resolve to an existing letter so empty letters don't jump unexpectedly
     val resolvedScrubLetter = remember(activeLetter, groupedApps) {
         val charStr = activeLetter ?: return@remember null
         if (charStr == "☆" || charStr == "⭐" || charStr == "∘") return@remember charStr
@@ -377,7 +374,6 @@ fun HomeScreen(
         map
     }
 
-    // Sync the full A-Z list scroll position to the exact same Y offset where the active letter sits while scrubbing!
     LaunchedEffect(pendingScrollLetter, isDrawerExpanded, activeHeaderTopOffsetPx) {
         val targetChar = pendingScrollLetter ?: return@LaunchedEffect
         if (isDrawerExpanded) {
@@ -419,7 +415,6 @@ fun HomeScreen(
     }
 
     val showHomeFavorites = !isDrawerExpanded && (!isScrubbingIndex || activeLetter == "☆" || activeLetter == "⭐")
-    // Hide underlying home layers when full-screen Favorites Picker or Onboarding is active so nothing bleeds through!
     val hideUnderlyingLayers = isFullScreenOnboardingBlockingHome || showEditFavoritesOverlay
 
     Box(
@@ -442,7 +437,6 @@ fun HomeScreen(
     ) {
         if (!hideUnderlyingLayers) {
             // --- LAYER 1: FULL SCROLLABLE A-Z LIST ---
-            // Added statusBarsPadding() + clipToBounds() so scrolling letters NEVER overlap the top status bar clock!
             if (isDrawerExpanded) {
                 LazyColumn(
                     state = drawerListState,
@@ -515,7 +509,6 @@ fun HomeScreen(
             }
 
             // --- LAYER 2: NIAGARA ACTIVE-LETTER-ONLY VIEW AT EXACT FINGER Y POSITION ---
-            // Anchors the header at the exact same pixel offset that Layer 1 scrolls to, so releasing the finger has ZERO position jump!
             if (isScrubbingIndex && !showHomeFavorites) {
                 var activeGroupHeightPx by remember { mutableIntStateOf(0) }
                 val minTopPx = with(density) { 16.dp.toPx() }
@@ -730,7 +723,7 @@ fun HomeScreen(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = "$eventTime • ${nextEvent.title}",
-                                        color = Color.White.copy(alpha = 0.88f),
+                                        color = Color.White.copy(alpha = 0.85f),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Medium
                                     )
@@ -741,23 +734,31 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    mediaState?.let { media ->
-                        if (showMediaWidget && media.isPlaying && media.title.isNotEmpty()) {
-                            MediaPlayerCard(
-                                albumArt = media.albumArt?.asImageBitmap(),
-                                trackTitle = media.title,
-                                artistName = media.artist,
-                                isPlaying = media.isPlaying,
-                                widgetTheme = mediaWidgetTheme,
-                                accentColor = accentColor,
-                                onPlayPauseToggle = { MediaNotificationListener.activeController?.transportControls?.let { if (media.isPlaying) it.pause() else it.play() } },
-                                onOpenApp = { context.packageManager.getLaunchIntentForPackage(media.packageName)?.let { context.startActivity(it) } },
-                                onNextTrack = { MediaNotificationListener.activeController?.transportControls?.skipToNext() },
-                                onPreviousTrack = { MediaNotificationListener.activeController?.transportControls?.skipToPrevious() },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
+                    // --- ROBUST MEDIA PLAYER WIDGET ACTIVATION ---
+                    val activeMedia = mediaState
+                    if (rawShowMediaWidget && activeMedia != null && activeMedia.isPlaying && activeMedia.title.isNotEmpty()) {
+                        MediaPlayerCard(
+                            albumArt = activeMedia.albumArt?.asImageBitmap(),
+                            trackTitle = activeMedia.title,
+                            artistName = activeMedia.artist,
+                            isPlaying = activeMedia.isPlaying,
+                            widgetTheme = mediaWidgetTheme,
+                            accentColor = accentColor,
+                            onPlayPauseToggle = {
+                                MediaNotificationListener.activeController?.transportControls?.let {
+                                    if (activeMedia.isPlaying) it.pause() else it.play()
+                                }
+                            },
+                            onOpenApp = {
+                                context.packageManager.getLaunchIntentForPackage(activeMedia.packageName)?.let {
+                                    context.startActivity(it)
+                                }
+                            },
+                            onNextTrack = { MediaNotificationListener.activeController?.transportControls?.skipToNext() },
+                            onPreviousTrack = { MediaNotificationListener.activeController?.transportControls?.skipToPrevious() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
 
                     if (widgetIds.isNotEmpty()) {
@@ -791,7 +792,6 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                         contentPadding = PaddingValues(bottom = 96.dp)
                     ) {
-                        // Only show inline setup prompts AFTER onboarding finishes so they never push Favorites down under the Spotlight!
                         if (hasCompletedStartupCheck) {
                             if (!isDefaultLauncher) {
                                 item(key = "prompt_set_default") {
@@ -906,7 +906,7 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // --- LAYER 5: FLOATING CASCADIA / SEARCH BUTTON (Fixed Swipe-Up & Tap state capture!) ---
+            // --- LAYER 5: FLOATING CASCADIA / SEARCH BUTTON ---
             if ((cascadiaButtonEnabled || isDrawerExpanded) && !isScrubbingIndex) {
                 val currentTapActionType by rememberUpdatedState(fabTapActionType)
                 val currentTapApp by rememberUpdatedState(assignedFabApp)
