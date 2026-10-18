@@ -40,6 +40,7 @@ import com.niagaraclone.launcher.ui.screens.HomeScreen
 import com.niagaraclone.launcher.ui.screens.SettingsScreen
 import com.niagaraclone.launcher.ui.screens.SmartSearchOverlay
 import com.niagaraclone.launcher.ui.screens.WidgetsScreen
+import com.niagaraclone.launcher.ui.theme.AppTheme
 import com.niagaraclone.launcher.ui.theme.NiagaraCloneTheme
 
 private enum class Page { HOME, WIDGETS, SETTINGS, SEARCH }
@@ -126,17 +127,32 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
 
         setContent {
-            // Collect both appTheme (Pitch Black / Light / Glass) and accentColorArgb!
             val currentAppTheme by viewModel.theme.collectAsState()
             val accentArgb by viewModel.accentColorArgb.collectAsState()
+            var page by remember { mutableStateOf(Page.HOME) }
+            var triggerWidgetMoveEdit by remember { mutableStateOf(false) }
+
+            // Hardware Window Blur on Android 12+ when in GLASS mode on Secondary Screens
+            LaunchedEffect(currentAppTheme, page) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    try {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                        val blurRadius = when {
+                            currentAppTheme == AppTheme.GLASS && page != Page.HOME -> 65
+                            currentAppTheme == AppTheme.GLASS && page == Page.HOME -> 18
+                            else -> 0
+                        }
+                        window.setBackgroundBlurRadius(blurRadius)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
 
             NiagaraCloneTheme(
                 appTheme = currentAppTheme,
                 accentColor = Color(accentArgb)
             ) {
-                var page by remember { mutableStateOf(Page.HOME) }
-                var triggerWidgetMoveEdit by remember { mutableStateOf(false) }
-
                 GestureHost(
                     modifier = Modifier.fillMaxSize(),
                     onTriggerAction = { direction ->
@@ -147,7 +163,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-                ) { offsetY ->
+                ) { _ ->
                     AnimatedContent(
                         targetState = page,
                         label = "page_transition",
