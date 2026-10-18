@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.TouchApp
@@ -33,6 +32,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -54,7 +54,6 @@ import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 private const val PREFS_ONBOARDING = "cascadia_onboarding_prefs"
 private const val KEY_ONBOARDING_COMPLETED_V2 = "has_completed_niagara_onboarding_v2"
@@ -72,6 +71,7 @@ private enum class OnboardingStage {
 @Composable
 fun StartupPermissionsDialog(
     viewModel: LauncherViewModel,
+    onStageChanged: (Boolean) -> Unit = {},
     onComplete: () -> Unit
 ) {
     val context = LocalContext.current
@@ -85,11 +85,15 @@ fun StartupPermissionsDialog(
     val finishOnboarding = {
         prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED_V2, true).apply()
         hasCompletedOnboarding = true
+        onStageChanged(false)
         onComplete()
     }
 
     if (hasCompletedOnboarding) {
-        LaunchedEffect(Unit) { onComplete() }
+        LaunchedEffect(Unit) {
+            onStageChanged(false)
+            onComplete()
+        }
         return
     }
 
@@ -100,6 +104,16 @@ fun StartupPermissionsDialog(
     val accentColor = Color(accentColorArgb)
 
     var stage by remember { mutableStateOf(OnboardingStage.WELCOME_SHOWCASE) }
+
+    // Tell HomeScreen whether to hide background elements so they never bleed through!
+    LaunchedEffect(stage) {
+        val shouldHideHomeContent = stage != OnboardingStage.WAVE_HAND_TUTORIAL
+        onStageChanged(shouldHideHomeContent)
+    }
+
+    val favoriteAppsList = remember(apps, favorites) {
+        apps.filter { favorites.contains(it.packageName) }
+    }
 
     val homeRoleLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -138,7 +152,6 @@ fun StartupPermissionsDialog(
     ) { currentStage ->
         when (currentStage) {
             OnboardingStage.WELCOME_SHOWCASE -> WelcomeShowcaseStep(
-                accentColor = accentColor,
                 onAgreeContinue = { stage = OnboardingStage.FAVORITES_PICKER }
             )
 
@@ -170,11 +183,11 @@ fun StartupPermissionsDialog(
             )
 
             OnboardingStage.GIVE_FEW_DAYS_GRAPH -> GiveFewDaysGraphStep(
-                accentColor = accentColor,
                 onGetStarted = { stage = OnboardingStage.HOME_FAVORITES_SPOTLIGHT }
             )
 
             OnboardingStage.HOME_FAVORITES_SPOTLIGHT -> HomeFavoritesSpotlightOverlay(
+                favoriteApps = favoriteAppsList,
                 accentColor = accentColor,
                 onNext = { stage = OnboardingStage.WAVE_HAND_TUTORIAL }
             )
@@ -188,11 +201,10 @@ fun StartupPermissionsDialog(
 }
 
 // ---------------------------------------------------------------------------
-// STEP 1: WELCOME SHOWCASE ("A New Home Screen That Fits Your Style")
+// STEP 1: WELCOME SHOWCASE
 // ---------------------------------------------------------------------------
 @Composable
 private fun WelcomeShowcaseStep(
-    accentColor: Color,
     onAgreeContinue: () -> Unit
 ) {
     Box(
@@ -210,7 +222,6 @@ private fun WelcomeShowcaseStep(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Phone Mockup Preview matching video 00:13-00:19
             Surface(
                 shape = RoundedCornerShape(36.dp),
                 color = Color(0xFF0F1E46),
@@ -249,7 +260,6 @@ private fun WelcomeShowcaseStep(
                         }
                     }
 
-                    // Mini alphabet bar on right of mockup
                     Column(
                         modifier = Modifier.align(Alignment.CenterEnd),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -302,7 +312,7 @@ private fun WelcomeShowcaseStep(
 }
 
 // ---------------------------------------------------------------------------
-// STEP 2: "Your favorites" SELECTION SCREEN (Video 00:23-00:34)
+// STEP 2: "Your favorites" SELECTION SCREEN (Clean background, no home bleed)
 // ---------------------------------------------------------------------------
 @Composable
 fun FavoritesPickerScreen(
@@ -336,7 +346,15 @@ fun FavoritesPickerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f))
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color.Black.copy(alpha = 0.45f),
+                        Color(0xFF0E0B14).copy(alpha = 0.94f),
+                        Color(0xFF0A080E)
+                    )
+                )
+            )
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -390,7 +408,6 @@ fun FavoritesPickerScreen(
                     FavoritePickerRow(
                         app = app,
                         isSelected = true,
-                        accentColor = accentColor,
                         showDragHandle = true,
                         onToggle = {
                             val next = selectedPackages.toMutableSet()
@@ -415,7 +432,6 @@ fun FavoritesPickerScreen(
                 FavoritePickerRow(
                     app = app,
                     isSelected = false,
-                    accentColor = accentColor,
                     showDragHandle = false,
                     onToggle = {
                         val next = selectedPackages.toMutableSet()
@@ -426,7 +442,7 @@ fun FavoritesPickerScreen(
             }
         }
 
-        // Top Sticky Pill ("5 selected · 8 recommended") matching video 00:26-00:34
+        // Top Sticky Pill ("5 selected · 8 recommended")
         Surface(
             shape = CircleShape,
             color = Color(0xFF1F1624),
@@ -444,7 +460,7 @@ fun FavoritesPickerScreen(
             )
         }
 
-        // Bottom-Right Floating "✓ Done" Pill Button matching video 00:24-00:34
+        // Bottom-Right Floating "✓ Done" Pill Button
         Button(
             onClick = { onDone(selectedPackages) },
             shape = RoundedCornerShape(20.dp),
@@ -494,7 +510,6 @@ private fun FavoriteInfoBanner(
 private fun FavoritePickerRow(
     app: AppModel,
     isSelected: Boolean,
-    accentColor: Color,
     showDragHandle: Boolean,
     onToggle: () -> Unit
 ) {
@@ -543,7 +558,7 @@ private fun FavoritePickerRow(
 }
 
 // ---------------------------------------------------------------------------
-// STEP 3: "Switch to Cascadia Launcher" & "Isn't Selected Yet" (Video 00:35-00:54)
+// STEP 3: "Switch to Cascadia Launcher" & "Isn't Selected Yet"
 // ---------------------------------------------------------------------------
 @Composable
 private fun SwitchLauncherPromptSheet(
@@ -740,11 +755,10 @@ private fun NotSelectedYetSheet(
 }
 
 // ---------------------------------------------------------------------------
-// STEP 4: "Give Cascadia Launcher a Few Days" Graph (Video 00:55-01:02)
+// STEP 4: "Give Cascadia Launcher a Few Days" Graph
 // ---------------------------------------------------------------------------
 @Composable
 private fun GiveFewDaysGraphStep(
-    accentColor: Color,
     onGetStarted: () -> Unit
 ) {
     Box(
@@ -799,7 +813,6 @@ private fun GiveFewDaysGraphStep(
                 }
             }
 
-            // Familiarity Curve Canvas matching video 00:55-01:02
             Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -874,53 +887,118 @@ private fun GiveFewDaysGraphStep(
 }
 
 // ---------------------------------------------------------------------------
-// STEP 5: HOME FAVORITES SPOTLIGHT & WAVE HAND TUTORIAL (Video 01:08-01:22)
+// STEP 5: SPOTLIGHT FAVORITES CARD + TOOLTIP BELOW IT (Exact match to video 01:08)
 // ---------------------------------------------------------------------------
 @Composable
 private fun HomeFavoritesSpotlightOverlay(
+    favoriteApps: List<AppModel>,
     accentColor: Color,
     onNext: () -> Unit
 ) {
-    val palette = LocalLauncherPalette.current
+    val (currentTime, currentDate) = rememberCurrentTimeState(timeFormatPattern = "h:mm", dateFormatPattern = "EEE, MMM d")
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.55f))
-            .clickable(enabled = false) {},
-        contentAlignment = Alignment.BottomCenter
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 24.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = palette.sheetBackground,
-            border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor),
-            shadowElevation = 12.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 32.dp, vertical = 90.dp)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.Center
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+            // Dimmed Clock above the spotlight card (just like video 01:08)
+            Column(modifier = Modifier.padding(start = 8.dp, bottom = 18.dp)) {
                 Text(
-                    text = "Your Favorites for Quick Access",
-                    color = palette.textPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
+                    text = currentTime.ifEmpty { "9:43" },
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontSize = 54.sp,
+                    fontWeight = FontWeight.Normal
                 )
-                Spacer(modifier = Modifier.height(14.dp))
-                Button(
-                    onClick = onNext,
-                    shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = palette.cardBackground,
-                        contentColor = palette.textPrimary
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
+                Text(
+                    text = currentDate.ifEmpty { "Sun, Oct 18" },
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontSize = 15.sp
+                )
+            }
+
+            // Bright Elevated Spotlight Card displaying the user's selected Favorite Apps!
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFF18141C).copy(alpha = 0.92f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+                shadowElevation = 20.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = 28.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Next", fontWeight = FontWeight.Bold)
+                    favoriteApps.take(6).forEach { app ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            app.icon?.let { drawable ->
+                                Image(
+                                    bitmap = drawable.toBitmap(width = 48, height = 48).asImageBitmap(),
+                                    contentDescription = app.label,
+                                    modifier = Modifier.size(34.dp)
+                                )
+                                Spacer(modifier = Modifier.width(18.dp))
+                            }
+                            Text(
+                                text = app.label,
+                                color = Color.White,
+                                fontSize = 16.5.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Tooltip Card placed cleanly BELOW the favorites card (never covering the apps!)
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = Color(0xFF1F1624),
+                shadowElevation = 12.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .padding(end = 28.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Your Favorites for Quick Access",
+                        color = Color.White,
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Button(
+                        onClick = onNext,
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF35283C),
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                    ) {
+                        Text("Next", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    }
                 }
             }
         }
@@ -943,7 +1021,6 @@ private fun WaveHandTutorialOverlay(
         label = "hand_y"
     )
 
-    // Auto-complete after 2 sweeps or when user touches anywhere
     LaunchedEffect(Unit) {
         delay(3400L)
         onFinish()
