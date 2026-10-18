@@ -2,10 +2,10 @@ package com.niagaraclone.launcher.ui.components
 
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
+import android.os.Bundle
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
+import com.niagaraclone.launcher.ui.theme.glassSurface
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -51,6 +52,7 @@ fun WidgetStackView(
     if (widgetIds.isEmpty()) return
 
     val pagerState = rememberPagerState(pageCount = { widgetIds.size })
+    val stackShape = RoundedCornerShape(22.dp)
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -60,9 +62,7 @@ fun WidgetStackView(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(liveHeight.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(palette.cardBackground)
-                .border(1.dp, palette.borderColor, RoundedCornerShape(16.dp))
+                .glassSurface(shape = stackShape, isSheet = false, borderWidth = 1.2.dp)
         ) {
             HorizontalPager(
                 state = pagerState,
@@ -70,14 +70,21 @@ fun WidgetStackView(
             ) { page ->
                 val widgetId = widgetIds[page]
 
-                Box(
-                    modifier = Modifier.fillMaxSize()
-                ) {
+                Box(modifier = Modifier.fillMaxSize()) {
                     AndroidView(
                         factory = { context ->
                             val widgetInfo = appWidgetManager.getAppWidgetInfo(widgetId)
                             if (widgetInfo != null) {
-                                appWidgetHost.createView(context, widgetId, widgetInfo)
+                                appWidgetHost.createView(context.applicationContext, widgetId, widgetInfo).apply {
+                                    setAppWidget(widgetId, widgetInfo)
+                                    val options = Bundle().apply {
+                                        putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 280)
+                                        putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 380)
+                                        putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, liveHeight.toInt())
+                                        putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, liveHeight.toInt())
+                                    }
+                                    updateAppWidgetOptions(options)
+                                }
                             } else {
                                 android.view.View(context)
                             }
@@ -88,7 +95,9 @@ fun WidgetStackView(
                                 android.view.ViewGroup.LayoutParams.MATCH_PARENT
                             )
                         },
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(6.dp)
                     )
 
                     Box(
@@ -103,14 +112,14 @@ fun WidgetStackView(
                         ) {
                             Surface(
                                 shape = CircleShape,
-                                color = Color.Black.copy(alpha = 0.4f),
+                                color = Color.Black.copy(alpha = 0.45f),
                                 modifier = Modifier.size(24.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Settings,
                                         contentDescription = "Widget Options",
-                                        tint = Color.White.copy(alpha = 0.8f),
+                                        tint = Color.White.copy(alpha = 0.85f),
                                         modifier = Modifier.size(14.dp)
                                     )
                                 }
