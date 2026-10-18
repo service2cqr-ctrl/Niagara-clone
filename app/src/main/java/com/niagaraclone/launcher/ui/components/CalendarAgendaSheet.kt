@@ -1,33 +1,52 @@
 package com.niagaraclone.launcher.ui.components
 
+import android.content.ContentUris
+import android.content.Intent
+import android.provider.CalendarContract
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.EventAvailable
+import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.data.CalendarEventModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.roundToInt
 
 data class HourlyForecast(
     val time: String,
     val icon: String,
     val tempStr: String,
     val popStr: String
+)
+
+private data class DayAgendaSection(
+    val dayKey: Int,
+    val dateHeader: String,
+    val relativeLabel: String,
+    val events: List<CalendarEventModel>
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,141 +57,379 @@ fun CalendarAgendaSheet(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-    val currentDateStr = remember { SimpleDateFormat("EEE d MMM", Locale.getDefault()).format(Date()) }
+    val palette = LocalLauncherPalette.current
 
+    val weatherEnabled by viewModel.weatherEnabled.collectAsState()
     val liveWeather by viewModel.liveWeather.collectAsState()
     val tempUnit by viewModel.weatherTempUnit.collectAsState()
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
     val accentColor = Color(accentColorArgb)
 
-    val currentTempNum = liveWeather?.temperatureCelsius ?: 28f
-    val currentTempFormatted = if (tempUnit == "CELSIUS") "${currentTempNum.toInt()}°" else "${(currentTempNum * 9 / 5 + 32).toInt()}°"
-    val weatherIcon = liveWeather?.conditionIcon ?: "☀️"
+    // Refresh calendar events whenever the Agenda sheet opens
+    LaunchedEffect(Unit) {
+        viewModel.loadCalendarEvents()
+    }
 
-    // Dynamic hourly forecast building around current conditions
+    val timeFormat = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
+
+    val baseTempC = liveWeather?.temperatureCelsius ?: 28f
+    val formatTemp: (Float) -> String = { tempC ->
+        val value = if (tempUnit == "CELSIUS") tempC.roundToInt() else (tempC * 9f / 5f + 32f).roundToInt()
+        "$value°"
+    }
+    val baseIcon = liveWeather?.conditionIcon ?: "☀️"
+
+    // Build realistic hourly forecast with real clock hours (Now, 3 pm, 4 pm...)
     val hourlyList = remember(liveWeather, tempUnit) {
-        listOf(
-            HourlyForecast("Now", weatherIcon, currentTempFormatted, ""),
-            HourlyForecast("+2h", weatherIcon, currentTempFormatted, "20%"),
-            HourlyForecast("+4h", "☁️", currentTempFormatted, ""),
-            HourlyForecast("+6h", "🌧️", currentTempFormatted, "60%"),
-            HourlyForecast("+8h", "🌙", currentTempFormatted, "")
-        )
+        val hourFormatter = SimpleDateFormat("h a", Locale.getDefault())
+        val cal = Calendar.getInstance()
+        val tempOffsets = listOf(0f, 0.5f, 0f, -1f, -1.8f, -2.5f, -3.2f, -3.8f)
+
+        tempOffsets.mapIndexed { idx, delta ->
+            val label = if (idx == 0) {
+                "now"
+            } else {
+                cal.add(Calendar.HOUR_OF_DAY, 1)
+                hourFormatter.format(cal.time).lowercase(Locale.getDefault())
+            }
+            val hourOfDay = cal.get(Calendar.HOUR_OF_DAY)
+            val iconForHour = when {
+                idx == 0 -> baseIcon
+                hourOfDay in 19..23 || hourOfDay in 0..5 -> "🌙"
+                idx >= 4 && baseIcon == "☀️" -> "🌤️"
+                else -> baseIcon
+            }
+            HourlyForecast(
+                time = label,
+                icon = iconForHour,
+                tempStr = formatTemp(baseTempC + delta),
+                popStr = ""
+            )
+        }
+    }
+
+    // Group events by day (always including Today even if Today has 0 events)
+    val daySections = remember(events) {
+        val dayHeaderFormatter = SimpleDateFormat("EEE, MMM d", Locale.getDefault())
+        val todayCal = Calendar.getInstance()
+        val todayKey = todayCal.get(Calendar.YEAR) * 1000 + todayCal.get(Calendar.DAY_OF_YEAR)
+
+        val tomorrowCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }
+        val tomorrowKey = tomorrowCal.get(Calendar.YEAR) * 1000 + tomorrowCal.get(Calendar.DAY_OF_YEAR)
+
+        val groupedMap = linkedMapOf<Int, MutableList<CalendarEventModel>>()
+        val dateForDayKey = mutableMapOf<Int, Date>()
+
+        // Always seed Today first so the user sees today's date header
+        groupedMap[todayKey] = mutableListOf()
+        dateForDayKey[todayKey] = todayCal.time
+
+        val eventCal = Calendar.getInstance()
+        events.forEach { event ->
+            eventCal.timeInMillis = event.startTimeMillis
+            val key = eventCal.get(Calendar.YEAR) * 1000 + eventCal.get(Calendar.DAY_OF_YEAR)
+            val effectiveKey = if (key < todayKey) todayKey else key
+            val list = groupedMap.getOrPut(effectiveKey) { mutableListOf() }
+            list.add(event)
+            if (!dateForDayKey.containsKey(effectiveKey)) {
+                dateForDayKey[effectiveKey] = Date(event.startTimeMillis)
+            }
+        }
+
+        groupedMap.entries.map { (key, dayEvents) ->
+            val dateObj = dateForDayKey[key] ?: todayCal.time
+            val rel = when (key) {
+                todayKey -> "today"
+                tomorrowKey -> "tomorrow"
+                else -> ""
+            }
+            DayAgendaSection(
+                dayKey = key,
+                dateHeader = dayHeaderFormatter.format(dateObj),
+                relativeLabel = rel,
+                events = dayEvents
+            )
+        }
+    }
+
+    val openCalendarApp = {
+        try {
+            val builder = CalendarContract.CONTENT_URI.buildUpon().appendPath("time")
+            ContentUris.appendId(builder, System.currentTimeMillis())
+            val intent = Intent(Intent.ACTION_VIEW).setData(builder.build()).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            onDismiss()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141414),
-        contentColor = Color.White,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        containerColor = palette.sheetBackground,
+        contentColor = palette.textPrimary,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .heightIn(max = 580.dp)
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 8.dp)
         ) {
-            Text(
-                text = "Your agenda",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            // Hourly Weather Carousel
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 20.dp)
-            ) {
-                items(hourlyList) { item ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(52.dp)
-                    ) {
-                        Text(text = item.time, color = Color.Gray, fontSize = 12.sp)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(text = item.icon, fontSize = 18.sp)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(text = item.tempStr, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        if (item.popStr.isNotEmpty()) {
-                            Text(text = item.popStr, color = accentColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-
-            // + New Event Button
+            // --- HEADER ROW ("Your agenda" + Open Calendar App button) ---
             Row(
                 modifier = Modifier
-                    .clickable {
-                        viewModel.launchCalendarNewEvent(context)
-                    }
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = accentColor, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "New event", color = accentColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.CalendarToday,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Your agenda",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = palette.textPrimary
+                    )
+                }
+
+                IconButton(
+                    onClick = openCalendarApp,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.OpenInNew,
+                        contentDescription = "Open Calendar App",
+                        tint = palette.textSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Events List
-            if (events.isEmpty()) {
-                Text(
-                    text = "No upcoming events scheduled.",
-                    color = Color.Gray,
-                    fontSize = 15.sp,
-                    modifier = Modifier.padding(vertical = 24.dp)
-                )
-            } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.padding(bottom = 24.dp)
+            // --- HOURLY WEATHER CAROUSEL (Shown when Weather is enabled) ---
+            if (weatherEnabled) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = palette.cardBackground,
+                    border = if (palette.isGlass) androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor) else null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
                 ) {
-                    item {
-                        Column {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(hourlyList) { item ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.width(48.dp)
                             ) {
-                                Text(text = "$currentDateStr  today", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                Text(text = "$currentTempFormatted • live update", color = Color.Gray, fontSize = 12.sp)
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
-
-                    items(events) { event ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.openCalendarEvent(context, event.id)
-                                }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(4.dp)
-                                    .height(32.dp)
-                                    .background(accentColor, RoundedCornerShape(2.dp))
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(text = event.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                                val timeText = if (event.isAllDay) "All Day"
-                                else "${timeFormat.format(Date(event.startTimeMillis))} - ${timeFormat.format(Date(event.endTimeMillis))}"
-                                Text(text = timeText, color = Color.Gray, fontSize = 13.sp)
+                                Text(
+                                    text = item.time,
+                                    color = palette.textSecondary,
+                                    fontSize = 12.sp,
+                                    maxLines = 1
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(text = item.icon, fontSize = 18.sp)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = item.tempStr,
+                                    color = palette.textPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             }
                         }
                     }
                 }
+            }
+
+            // --- AGENDA TIMELINE LIST ---
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                daySections.forEach { section ->
+                    item(key = "day_header_${section.dayKey}") {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp, bottom = 2.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = section.dateHeader,
+                                    color = palette.textPrimary,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (section.relativeLabel.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = accentColor.copy(alpha = 0.18f)
+                                    ) {
+                                        Text(
+                                            text = section.relativeLabel,
+                                            color = accentColor,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (section.relativeLabel == "today" && weatherEnabled) {
+                                Text(
+                                    text = "$baseIcon ${formatTemp(baseTempC)}",
+                                    color = palette.textSecondary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    if (section.events.isEmpty() && section.relativeLabel == "today") {
+                        item(key = "empty_today") {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = palette.cardBackground,
+                                border = if (palette.isGlass) androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor) else null,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.EventAvailable,
+                                        contentDescription = null,
+                                        tint = palette.textSecondary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = if (events.isEmpty()) "No upcoming events scheduled" else "Nothing else scheduled for today",
+                                        color = palette.textSecondary,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        items(
+                            items = section.events,
+                            key = { "evt_${section.dayKey}_${it.id}_${it.startTimeMillis}" }
+                        ) { event ->
+                            val indicatorColor = event.colorArgb?.let { Color(it) } ?: accentColor
+                            val timeText = if (event.isAllDay) {
+                                "All day"
+                            } else {
+                                "${timeFormat.format(Date(event.startTimeMillis))} – ${timeFormat.format(Date(event.endTimeMillis))}"
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = palette.cardBackground,
+                                border = if (palette.isGlass) androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor) else null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable {
+                                        viewModel.openCalendarEvent(context, event.id)
+                                        onDismiss()
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(4.dp)
+                                            .height(36.dp)
+                                            .background(indicatorColor, RoundedCornerShape(2.dp))
+                                    )
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = event.title,
+                                            color = palette.textPrimary,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        val subLine = if (event.location.isNotBlank()) {
+                                            "$timeText · ${event.location}"
+                                        } else {
+                                            timeText
+                                        }
+                                        Text(
+                                            text = subLine,
+                                            color = palette.textSecondary,
+                                            fontSize = 12.5.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- BOTTOM "+ New event" PILL BUTTON ---
+            OutlinedButton(
+                onClick = {
+                    viewModel.launchCalendarNewEvent(context)
+                    onDismiss()
+                },
+                shape = CircleShape,
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, accentColor),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.textPrimary),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 16.dp)
+                    .height(48.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "New event",
+                    color = palette.textPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
