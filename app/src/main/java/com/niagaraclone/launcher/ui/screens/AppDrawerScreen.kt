@@ -37,6 +37,7 @@ import com.niagaraclone.launcher.ui.components.EditPopUpFolderSheet
 import com.niagaraclone.launcher.ui.components.INDEX_ITEMS
 import com.niagaraclone.launcher.ui.components.SmartSearchSheet
 import com.niagaraclone.launcher.ui.components.WaveSideIndex
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 import kotlinx.coroutines.launch
 
 private val AppModel.firstLetter: String
@@ -59,6 +60,7 @@ fun AppDrawerScreen(
     onOpenSettings: () -> Unit
 ) {
     val context = LocalContext.current
+    val palette = LocalLauncherPalette.current
     val allApps by viewModel.apps.collectAsState()
     val hiddenPackages by viewModel.hiddenPackages.collectAsState()
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
@@ -146,7 +148,11 @@ fun AppDrawerScreen(
         fullMap
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(palette.screenBackground)
+    ) {
         // Full A-Z App List with Niagara-style spacing and headers
         LazyColumn(
             state = listState,
@@ -173,7 +179,7 @@ fun AppDrawerScreen(
                             text = item.letter,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White.copy(alpha = 0.9f),
+                            color = palette.textPrimary,
                             style = TextStyle(
                                 shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f)
                             ),
@@ -185,6 +191,7 @@ fun AppDrawerScreen(
                             app = item.app,
                             badgeCount = notificationCounts[item.app.packageName] ?: 0,
                             accentColor = accentColor,
+                            palette = palette,
                             onClick = {
                                 val intent = context.packageManager.getLaunchIntentForPackage(item.app.packageName)
                                 intent?.let { context.startActivity(it) }
@@ -198,12 +205,13 @@ fun AppDrawerScreen(
                             text = "Cascadia Launcher",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White.copy(alpha = 0.9f),
+                            color = palette.textPrimary,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                         DrawerActionRow(
                             icon = Icons.Outlined.History,
                             label = "Recently installed",
+                            palette = palette,
                             onClick = { showRecentlyInstalledDialog = true }
                         )
                     }
@@ -211,6 +219,7 @@ fun AppDrawerScreen(
                         DrawerActionRow(
                             icon = Icons.Outlined.Settings,
                             label = "Cascadia settings",
+                            palette = palette,
                             onClick = onOpenSettings
                         )
                     }
@@ -218,7 +227,7 @@ fun AppDrawerScreen(
             }
         }
 
-        // Niagara-style Floating Search Button at Bottom-Right (see Image 3)
+        // Niagara-style Floating Search Button at Bottom-Right
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -236,7 +245,7 @@ fun AppDrawerScreen(
                     Icon(
                         imageVector = Icons.Default.Search,
                         contentDescription = "Search apps",
-                        tint = Color.White,
+                        tint = Color.Black,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -315,10 +324,10 @@ fun AppDrawerScreen(
 
         AlertDialog(
             onDismissRequest = { showRecentlyInstalledDialog = false },
-            title = { Text("Recently Installed Apps", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Recently Installed Apps", color = palette.textPrimary, fontWeight = FontWeight.Bold) },
             text = {
                 if (recentApps.isEmpty()) {
-                    Text("No newly installed apps in the last 30 days.", color = Color.Gray)
+                    Text("No newly installed apps in the last 30 days.", color = palette.textSecondary)
                 } else {
                     LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
                         itemsIndexed(recentApps) { _, app ->
@@ -340,7 +349,7 @@ fun AppDrawerScreen(
                                     )
                                     Spacer(modifier = Modifier.width(16.dp))
                                 }
-                                Text(text = app.label, color = Color.White, fontSize = 16.sp)
+                                Text(text = app.label, color = palette.textPrimary, fontSize = 16.sp)
                             }
                         }
                     }
@@ -351,7 +360,7 @@ fun AppDrawerScreen(
                     Text("Close", color = accentColor)
                 }
             },
-            containerColor = Color(0xFF1E1E1E)
+            containerColor = palette.sheetBackground
         )
     }
 }
@@ -362,6 +371,7 @@ private fun AppRow(
     app: AppModel,
     badgeCount: Int = 0,
     accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -384,7 +394,7 @@ private fun AppRow(
         Text(
             text = app.label,
             fontSize = 16.sp,
-            color = Color.White,
+            color = palette.textPrimary,
             fontWeight = FontWeight.Medium,
             style = TextStyle(
                 shadow = Shadow(color = Color.Black.copy(alpha = 0.45f), blurRadius = 4f)
@@ -406,6 +416,7 @@ private fun AppRow(
 private fun DrawerActionRow(
     icon: ImageVector,
     label: String,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onClick: () -> Unit
 ) {
     Row(
@@ -418,7 +429,7 @@ private fun DrawerActionRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.85f),
+            tint = palette.textPrimary.copy(alpha = 0.85f),
             modifier = Modifier.size(28.dp)
         )
         Spacer(modifier = Modifier.width(18.dp))
@@ -426,7 +437,7 @@ private fun DrawerActionRow(
             text = label,
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
-            color = Color.White
+            color = palette.textPrimary
         )
     }
 }
