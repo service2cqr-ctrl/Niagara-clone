@@ -15,6 +15,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -34,9 +35,7 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.UnfoldMore
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -55,6 +54,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -70,23 +70,8 @@ import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.services.NotificationSummaryModel
 import com.niagaraclone.launcher.services.ScreenLockService
 import com.niagaraclone.launcher.ui.LauncherViewModel
-import com.niagaraclone.launcher.ui.components.AddToCategorySheet
-import com.niagaraclone.launcher.ui.components.AppCustomizationSheet
-import com.niagaraclone.launcher.ui.components.AutoMusicPopUpCard
-import com.niagaraclone.launcher.ui.components.CalendarAgendaSheet
-import com.niagaraclone.launcher.ui.components.CascadiaButtonMenuSheet
-import com.niagaraclone.launcher.ui.components.EditPopUpFolderSheet
-import com.niagaraclone.launcher.ui.components.FabActionSelectionSheet
-import com.niagaraclone.launcher.ui.components.INDEX_ITEMS
-import com.niagaraclone.launcher.ui.components.MediaPlayerCard
-import com.niagaraclone.launcher.ui.components.PopUpFolderCard
-import com.niagaraclone.launcher.ui.components.SmartSearchSheet
-import com.niagaraclone.launcher.ui.components.StartupPermissionsDialog
-import com.niagaraclone.launcher.ui.components.WaveSideIndex
-import com.niagaraclone.launcher.ui.components.WeatherBottomSheet
-import com.niagaraclone.launcher.ui.components.WidgetMenuSheet
-import com.niagaraclone.launcher.ui.components.WidgetStackView
-import com.niagaraclone.launcher.ui.components.rememberCurrentTimeState
+import com.niagaraclone.launcher.ui.components.*
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -116,6 +101,7 @@ fun HomeScreen(
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+    val palette = LocalLauncherPalette.current
 
     val drawerListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -131,6 +117,7 @@ fun HomeScreen(
     val widgetIds by viewModel.widgetIds.collectAsState()
 
     val batteryStatus by viewModel.batteryStatus.collectAsState()
+    val isDefaultLauncher by viewModel.isDefaultLauncher.collectAsState()
 
     val rawShowMediaWidget by viewModel.showMediaWidget.collectAsState()
     val mediaWidgetTheme by viewModel.mediaWidgetTheme.collectAsState()
@@ -163,6 +150,15 @@ fun HomeScreen(
     val notificationCounts by viewModel.notificationCounts.collectAsState()
     val upcomingEvents by viewModel.upcomingEvents.collectAsState()
     val notificationSummaries by viewModel.notificationSummaries.collectAsState()
+
+    // Dismissible Home Setup Prompts (matching video 01:33-02:50)
+    val setupPrefs = remember { context.getSharedPreferences("cascadia_home_setup_prompts", Context.MODE_PRIVATE) }
+    var dismissedAccessibilityPrompt by remember { mutableStateOf(setupPrefs.getBoolean("dismiss_accessibility", false)) }
+    var dismissedCustomizePrompt by remember { mutableStateOf(setupPrefs.getBoolean("dismiss_customize", false)) }
+    var dismissedProductivityPrompt by remember { mutableStateOf(setupPrefs.getBoolean("dismiss_productivity", false)) }
+
+    var showAccessibilityInfoSheet by remember { mutableStateOf(false) }
+    var showEditFavoritesOverlay by remember { mutableStateOf(false) }
 
     var showAgendaSheet by remember { mutableStateOf(false) }
     var showWeatherSheet by remember { mutableStateOf(false) }
@@ -207,6 +203,8 @@ fun HomeScreen(
 
     val isAnyOverlayActive = isDrawerExpanded ||
             isScrubbingIndex ||
+            showEditFavoritesOverlay ||
+            showAccessibilityInfoSheet ||
             activePopUpApp != null ||
             isWidgetMenuOpen ||
             isMovingHeader ||
@@ -235,6 +233,8 @@ fun HomeScreen(
 
     BackHandler(enabled = isAnyOverlayActive) {
         when {
+            showEditFavoritesOverlay -> showEditFavoritesOverlay = false
+            showAccessibilityInfoSheet -> showAccessibilityInfoSheet = false
             selectedAppForCategory != null -> selectedAppForCategory = null
             selectedAppForCustomization != null -> selectedAppForCustomization = null
             editingFolderApp != null -> editingFolderApp = null
@@ -311,10 +311,10 @@ fun HomeScreen(
     var isEditingWidget by remember { mutableStateOf(false) }
     var popupYOffset by remember { mutableFloatStateOf(0f) }
 
-    val (currentTime, currentDate) = rememberCurrentTimeState(timeFormatPattern = "h:mm", dateFormatPattern = "EEE d MMM")
+    val (currentTime, currentDate) = rememberCurrentTimeState(timeFormatPattern = "h:mm", dateFormatPattern = "EEE, MMM d")
     val timeParts = remember(currentTime) { currentTime.split(":") }
-    val timeHours = timeParts.getOrNull(0) ?: "10"
-    val timeMinutes = timeParts.getOrNull(1) ?: "28"
+    val timeHours = timeParts.getOrNull(0) ?: "9"
+    val timeMinutes = timeParts.getOrNull(1) ?: "43"
 
     val liveTempDisplay = remember(liveWeather, tempUnit) {
         val c = liveWeather?.temperatureCelsius ?: 28f
@@ -372,12 +372,10 @@ fun HomeScreen(
         map
     }
 
-    // Scroll the full A-Z list to the exact finger-aligned position whenever scrubbing updates or finishes
     LaunchedEffect(pendingScrollLetter, isDrawerExpanded, isScrubbingIndex) {
         val targetChar = pendingScrollLetter ?: return@LaunchedEffect
         if (isDrawerExpanded) {
             val targetIdx = letterIndexMap[targetChar] ?: 0
-            // Position the selected letter header right near the finger's Y level (instead of the very top of screen)
             val desiredTopOffsetPx = (scrubFingerY - with(density) { 140.dp.toPx() }).roundToInt().coerceAtLeast(0)
             drawerListState.scrollToItem(targetIdx, scrollOffset = -desiredTopOffsetPx)
         }
@@ -412,15 +410,6 @@ fun HomeScreen(
         }
     }
 
-    if (!hasCompletedStartupCheck) {
-        StartupPermissionsDialog(
-            viewModel = viewModel,
-            onComplete = {
-                hasCompletedStartupCheck = true
-            }
-        )
-    }
-
     val showHomeFavorites = !isDrawerExpanded && (!isScrubbingIndex || activeLetter == "☆" || activeLetter == "⭐")
 
     Box(
@@ -433,7 +422,7 @@ fun HomeScreen(
                         if (quickLockEnabled) {
                             val isLocked = ScreenLockService.lockScreen()
                             if (!isLocked) {
-                                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                showAccessibilityInfoSheet = true
                             }
                         }
                     },
@@ -441,7 +430,7 @@ fun HomeScreen(
                 )
             }
     ) {
-        // --- LAYER 1: FULL SCROLLABLE A-Z LIST (Kept mounted when drawer is expanded so scrollToItem works 100% reliably) ---
+        // --- LAYER 1: FULL SCROLLABLE A-Z LIST ---
         if (isDrawerExpanded) {
             LazyColumn(
                 state = drawerListState,
@@ -488,19 +477,21 @@ fun HomeScreen(
                     ) {
                         Text(
                             text = "Cascadia Launcher",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White.copy(alpha = 0.85f),
                             modifier = Modifier.padding(bottom = 12.dp)
                         )
                         DrawerFooterRow(
                             icon = Icons.Default.History,
                             title = "Recently installed",
+                            accentColor = accentColor,
                             onClick = { showRecentlyInstalledDialog = true }
                         )
                         DrawerFooterRow(
                             icon = Icons.Default.Settings,
                             title = "Cascadia settings",
+                            accentColor = accentColor,
                             onClick = onOpenSettings
                         )
                     }
@@ -508,13 +499,12 @@ fun HomeScreen(
             }
         }
 
-        // --- LAYER 2: NIAGARA ACTIVE-LETTER-ONLY VIEW AT EXACT FINGER Y POSITION WHILE SCRUBBING ---
+        // --- LAYER 2: NIAGARA ACTIVE-LETTER-ONLY VIEW AT EXACT FINGER Y POSITION ---
         if (isScrubbingIndex && !showHomeFavorites) {
             var activeGroupHeightPx by remember { mutableIntStateOf(0) }
             val minTopPx = with(density) { 56.dp.toPx() }
             val maxBottomPx = screenHeightPx - with(density) { 80.dp.toPx() }
 
-            // Center the active letter's app block right around the finger's Y coordinate (clamped to screen bounds)
             val calculatedTopPx = remember(scrubFingerY, activeGroupHeightPx, screenHeightPx) {
                 val rawTop = scrubFingerY - (activeGroupHeightPx * 0.45f)
                 val maxAllowedTop = (maxBottomPx - activeGroupHeightPx).coerceAtLeast(minTopPx)
@@ -524,7 +514,7 @@ fun HomeScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(start = 24.dp, end = 128.dp) // Clear of the curved wave & floating bubble
+                    .padding(start = 24.dp, end = 128.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -538,19 +528,21 @@ fun HomeScreen(
                     if (resolvedScrubLetter == "∘") {
                         Text(
                             text = "Cascadia Launcher",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White.copy(alpha = 0.85f),
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                         DrawerFooterRow(
                             icon = Icons.Default.History,
                             title = "Recently installed",
+                            accentColor = accentColor,
                             onClick = { showRecentlyInstalledDialog = true }
                         )
                         DrawerFooterRow(
                             icon = Icons.Default.Settings,
                             title = "Cascadia settings",
+                            accentColor = accentColor,
                             onClick = onOpenSettings
                         )
                     } else {
@@ -567,7 +559,6 @@ fun HomeScreen(
                                 modifier = Modifier.padding(bottom = 4.dp)
                             )
                         }
-                        // Show up to 9 apps cleanly alongside the wave peak just like Niagara
                         activeAppsForLetter.take(9).forEach { app ->
                             val appNotification = notificationSummaries.firstOrNull { it.packageName == app.packageName }
                             FavoriteAppRow(
@@ -590,8 +581,9 @@ fun HomeScreen(
             }
         }
 
-        // --- LAYER 3: NIAGARA HOME SCREEN (Balanced in natural one-handed thumb zone) ---
+        // --- LAYER 3: NIAGARA HOME SCREEN ---
         if (showHomeFavorites) {
+            val hasSetupPrompts = !isDefaultLauncher || !dismissedAccessibilityPrompt || !dismissedCustomizePrompt || !dismissedProductivityPrompt
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -599,8 +591,7 @@ fun HomeScreen(
                     .navigationBarsPadding()
                     .padding(start = 28.dp, end = 56.dp)
             ) {
-                // Niagara positions the clock + favorites naturally in the lower-middle thumb zone
-                val baseTopWeight = if (widgetIds.isEmpty()) 0.32f else 0.08f
+                val baseTopWeight = if (widgetIds.isEmpty() && !hasSetupPrompts) 0.28f else 0.08f
                 Spacer(modifier = Modifier.weight(baseTopWeight))
                 if (homeLayoutOffsetY > 0f) {
                     Spacer(modifier = Modifier.height(homeLayoutOffsetY.dp))
@@ -662,7 +653,7 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = currentDate.ifEmpty { "Sun 18 Oct" },
+                            text = currentDate.ifEmpty { "Sun, Oct 18" },
                             color = Color.White.copy(alpha = 0.92f),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
@@ -725,7 +716,7 @@ fun HomeScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 mediaState?.let { media ->
                     if (showMediaWidget && media.isPlaying && media.title.isNotEmpty()) {
@@ -773,10 +764,67 @@ fun HomeScreen(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(0.68f, fill = true),
+                        .weight(0.72f, fill = true),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     contentPadding = PaddingValues(bottom = 96.dp)
                 ) {
+                    // Inline Niagara Home Setup Prompts (matching video 01:33-02:50)
+                    if (!isDefaultLauncher) {
+                        item(key = "prompt_set_default") {
+                            HomeSetupPromptRow(
+                                icon = Icons.Outlined.Home,
+                                title = "Set Cascadia Launcher as your home screen?",
+                                actionText = "Set as home screen",
+                                accentColor = accentColor,
+                                onClick = onRequestSetDefaultLauncher
+                            )
+                        }
+                    }
+
+                    if (!dismissedAccessibilityPrompt && ScreenLockService.instance == null) {
+                        item(key = "prompt_accessibility") {
+                            HomeSetupPromptRow(
+                                icon = Icons.Outlined.Info,
+                                title = "Some features use Accessibility access when turned on in Settings",
+                                actionText = "Learn More",
+                                accentColor = accentColor,
+                                onClick = { showAccessibilityInfoSheet = true }
+                            )
+                        }
+                    }
+
+                    if (!dismissedCustomizePrompt) {
+                        item(key = "prompt_customize") {
+                            HomeSetupPromptRow(
+                                icon = Icons.Outlined.Brush,
+                                title = "Customize Your Home Screen",
+                                actionText = "Customize",
+                                accentColor = accentColor,
+                                onClick = {
+                                    setupPrefs.edit().putBoolean("dismiss_customize", true).apply()
+                                    dismissedCustomizePrompt = true
+                                    onOpenSettings()
+                                }
+                            )
+                        }
+                    }
+
+                    if (!dismissedProductivityPrompt) {
+                        item(key = "prompt_productivity") {
+                            HomeSetupPromptRow(
+                                icon = Icons.Outlined.StarBorder,
+                                title = "Choose Your Productivity Features",
+                                actionText = "Choose",
+                                accentColor = accentColor,
+                                onClick = {
+                                    setupPrefs.edit().putBoolean("dismiss_productivity", true).apply()
+                                    dismissedProductivityPrompt = true
+                                    onOpenSettings()
+                                }
+                            )
+                        }
+                    }
+
                     items(favorites, key = { "fav_${it.packageName}" }) { app ->
                         val appNotification = notificationSummaries.firstOrNull { it.packageName == app.packageName }
                         FavoriteAppRow(
@@ -834,7 +882,7 @@ fun HomeScreen(
         )
 
         // --- LAYER 5: FLOATING CASCADIA / SEARCH BUTTON ---
-        if (cascadiaButtonEnabled && !isScrubbingIndex) {
+        if ((cascadiaButtonEnabled || isDrawerExpanded) && !isScrubbingIndex) {
             var totalDragY by remember { mutableFloatStateOf(0f) }
 
             Box(
@@ -844,7 +892,7 @@ fun HomeScreen(
             ) {
                 Surface(
                     shape = CircleShape,
-                    color = accentColor,
+                    color = if (isDrawerExpanded) Color(0xFF3F3D46).copy(alpha = 0.88f) else accentColor,
                     shadowElevation = 6.dp,
                     modifier = Modifier
                         .size(54.dp)
@@ -899,13 +947,85 @@ fun HomeScreen(
         }
 
         // --- OVERLAYS & SHEETS ---
+        if (!hasCompletedStartupCheck) {
+            StartupPermissionsDialog(
+                viewModel = viewModel,
+                onComplete = { hasCompletedStartupCheck = true }
+            )
+        }
+
+        if (showEditFavoritesOverlay) {
+            FavoritesPickerScreen(
+                apps = visibleApps,
+                initialSelected = favoritePackages,
+                accentColor = accentColor,
+                onDone = { updatedSet ->
+                    coroutineScope.launch {
+                        viewModel.repository.setFavoritePackages(updatedSet)
+                        showEditFavoritesOverlay = false
+                    }
+                }
+            )
+        }
+
+        if (showAccessibilityInfoSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showAccessibilityInfoSheet = false },
+                containerColor = palette.sheetBackground,
+                contentColor = palette.textPrimary,
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Accessibility Access", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = palette.textPrimary)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Quick Lock lets you double-tap the home screen to lock your phone.\n\nWhen turned on in Cascadia settings → Productivity → Quick Lock, this feature uses Accessibility access to turn off your screen. No data is collected.",
+                        color = palette.textSecondary,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    OutlinedButton(
+                        onClick = {
+                            setupPrefs.edit().putBoolean("dismiss_accessibility", true).apply()
+                            dismissedAccessibilityPrompt = true
+                            showAccessibilityInfoSheet = false
+                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+                        },
+                        shape = CircleShape,
+                        border = androidx.compose.foundation.BorderStroke(1.5.dp, accentColor),
+                        modifier = Modifier.fillMaxWidth().height(50.dp)
+                    ) {
+                        Text("Understood", color = palette.textPrimary, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(
+                        onClick = {
+                            setupPrefs.edit().putBoolean("dismiss_accessibility", true).apply()
+                            dismissedAccessibilityPrompt = true
+                            showAccessibilityInfoSheet = false
+                        }
+                    ) {
+                        Text("Keep disabled", color = palette.textSecondary)
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+        }
+
         if (isWidgetMenuOpen) {
             WidgetMenuSheet(
                 viewModel = viewModel,
                 onAddWidgetClick = onAddWidgetClick,
                 onMoveWidgetClick = { isMovingHeader = true },
                 onOpenSettings = onOpenSettings,
-                onOpenEditFavorites = { isDrawerExpanded = true },
+                onOpenEditFavorites = { showEditFavoritesOverlay = true },
                 onDismiss = { isWidgetMenuOpen = false }
             )
         }
@@ -1022,10 +1142,10 @@ fun HomeScreen(
 
             AlertDialog(
                 onDismissRequest = { showRecentlyInstalledDialog = false },
-                title = { Text("Recently Installed Apps", color = Color.White, fontWeight = FontWeight.Bold) },
+                title = { Text("Recently Installed Apps", color = palette.textPrimary, fontWeight = FontWeight.Bold) },
                 text = {
                     if (recentApps.isEmpty()) {
-                        Text("No newly installed apps in the last 30 days.", color = Color.Gray)
+                        Text("No newly installed apps in the last 30 days.", color = palette.textSecondary)
                     } else {
                         LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
                             items(recentApps) { app ->
@@ -1047,7 +1167,7 @@ fun HomeScreen(
                                         )
                                         Spacer(modifier = Modifier.width(16.dp))
                                     }
-                                    Text(text = app.label, color = Color.White, fontSize = 15.sp)
+                                    Text(text = app.label, color = palette.textPrimary, fontSize = 15.sp)
                                 }
                             }
                         }
@@ -1058,7 +1178,54 @@ fun HomeScreen(
                         Text("Close", color = accentColor)
                     }
                 },
-                containerColor = Color(0xFF1E1E1E)
+                containerColor = palette.sheetBackground
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeSetupPromptRow(
+    icon: ImageVector,
+    title: String,
+    actionText: String,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = accentColor,
+            modifier = Modifier.size(34.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+            }
+        }
+        Spacer(modifier = Modifier.width(18.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 15.sp,
+                lineHeight = 20.sp,
+                style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.55f), blurRadius = 4f))
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = actionText,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.align(Alignment.End)
             )
         }
     }
@@ -1084,8 +1251,7 @@ private fun ClockHeaderDisplay(
             }
         }
         else -> Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = timeHours, color = accentColor, fontSize = 66.sp, fontWeight = FontWeight.Bold, style = TextStyle(shadow = textShadow))
-            Text(text = timeMinutes, color = Color.White, fontSize = 66.sp, fontWeight = FontWeight.Bold, style = TextStyle(shadow = textShadow))
+            Text(text = "$timeHours:$timeMinutes", color = Color.White, fontSize = 56.sp, fontWeight = FontWeight.Normal, style = TextStyle(shadow = textShadow))
         }
     }
 }
@@ -1104,6 +1270,7 @@ private fun FavoriteAppRow(
     var bottomY by remember { mutableFloatStateOf(0f) }
     var isExpanded by remember { mutableStateOf(false) }
     var inlineReplyText by remember { mutableStateOf("") }
+    val palette = LocalLauncherPalette.current
 
     Column(
         modifier = Modifier
@@ -1172,16 +1339,17 @@ private fun FavoriteAppRow(
 
         if (isExpanded && notificationSummary != null) {
             Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF1E1E1E),
+                shape = RoundedCornerShape(14.dp),
+                color = palette.sheetBackground,
+                border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp, start = 52.dp)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text(text = notificationSummary.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(text = notificationSummary.title, color = palette.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(2.dp))
-                    Text(text = notificationSummary.text, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                    Text(text = notificationSummary.text, color = palette.textSecondary, fontSize = 13.sp)
 
                     Spacer(modifier = Modifier.height(10.dp))
 
@@ -1192,9 +1360,9 @@ private fun FavoriteAppRow(
                         OutlinedTextField(
                             value = inlineReplyText,
                             onValueChange = { inlineReplyText = it },
-                            placeholder = { Text("Direct reply...", color = Color.Gray, fontSize = 12.sp) },
+                            placeholder = { Text("Direct reply...", color = palette.textSecondary, fontSize = 12.sp) },
                             singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 13.sp),
+                            textStyle = LocalTextStyle.current.copy(color = palette.textPrimary, fontSize = 13.sp),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp)
@@ -1225,7 +1393,7 @@ private fun FavoriteAppRow(
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
                             modifier = Modifier.height(28.dp)
                         ) {
-                            Text(text = "Open App", color = Color.White, fontSize = 11.sp)
+                            Text(text = "Open App", color = palette.textPrimary, fontSize = 11.sp)
                         }
 
                         Spacer(modifier = Modifier.width(8.dp))
@@ -1237,7 +1405,7 @@ private fun FavoriteAppRow(
                             },
                             modifier = Modifier.height(28.dp)
                         ) {
-                            Text(text = "Dismiss", color = Color.Gray, fontSize = 11.sp)
+                            Text(text = "Dismiss", color = palette.textSecondary, fontSize = 11.sp)
                         }
                     }
                 }
@@ -1247,16 +1415,29 @@ private fun FavoriteAppRow(
 }
 
 @Composable
-private fun DrawerFooterRow(icon: ImageVector, title: String, onClick: () -> Unit) {
+private fun DrawerFooterRow(
+    icon: ImageVector,
+    title: String,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(28.dp))
-        Spacer(modifier = Modifier.width(16.dp))
+        Surface(
+            shape = CircleShape,
+            color = accentColor.copy(alpha = 0.85f),
+            modifier = Modifier.size(34.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(imageVector = icon, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+            }
+        }
+        Spacer(modifier = Modifier.width(18.dp))
         Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.White)
     }
 }
