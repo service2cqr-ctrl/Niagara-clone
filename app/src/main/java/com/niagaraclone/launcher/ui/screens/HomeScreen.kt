@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -926,7 +927,7 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // --- LAYER 5: FLOATING CASCADIA / SEARCH BUTTON ---
+            // --- LAYER 5: FLOATING CASCADIA / SEARCH BUTTON (With Elastic Motion Physics on Swipe Up!) ---
             if ((cascadiaButtonEnabled || isDrawerExpanded) && !isScrubbingIndex) {
                 val currentTapActionType by rememberUpdatedState(fabTapActionType)
                 val currentTapApp by rememberUpdatedState(assignedFabApp)
@@ -938,14 +939,14 @@ fun HomeScreen(
                 var hasTriggeredThresholdHaptic by remember { mutableStateOf(false) }
 
                 val animatedFabOffsetY by animateFloatAsState(
-                    targetValue = rawFabDragY.coerceIn(-110f, 18f),
-                    animationSpec = spring(stiffness = 650f, dampingRatio = 0.6f),
+                    targetValue = rawFabDragY.coerceIn(-120f, 18f),
+                    animationSpec = spring(stiffness = 550f, dampingRatio = 0.55f),
                     label = "fab_swipe_bounce"
                 )
 
                 val animatedFabScale by animateFloatAsState(
-                    targetValue = if (rawFabDragY < -28f) 1.14f else 1.0f,
-                    animationSpec = spring(stiffness = 650f, dampingRatio = 0.6f),
+                    targetValue = if (rawFabDragY < -30f) 1.18f else 1.0f,
+                    animationSpec = spring(stiffness = 550f, dampingRatio = 0.55f),
                     label = "fab_swipe_scale"
                 )
 
@@ -970,7 +971,7 @@ fun HomeScreen(
                         shape = CircleShape,
                         color = fabContainerColor,
                         border = if (palette.isGlass) androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor) else null,
-                        shadowElevation = 6.dp,
+                        shadowElevation = 8.dp,
                         modifier = Modifier
                             .size(54.dp)
                             .pointerInput(Unit) {
@@ -993,7 +994,7 @@ fun HomeScreen(
                                     },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
-                                        rawFabDragY += dragAmount.y * 0.85f
+                                        rawFabDragY += dragAmount.y * 0.9f
                                         if (rawFabDragY < -28f && !hasTriggeredThresholdHaptic) {
                                             hasTriggeredThresholdHaptic = true
                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1184,7 +1185,6 @@ fun HomeScreen(
             )
         }
 
-        // --- NIAGARA SWIPE-RIGHT POP-UP CARD (Shows Notifications + Sub-Apps + Shortcuts) ---
         activePopUpApp?.let { parentApp ->
             val subApps = remember(parentApp) { viewModel.getFolderSubApps(parentApp.packageName) }
             val appNotifs = remember(parentApp, notificationSummaries) {
@@ -1418,7 +1418,6 @@ private fun FavoriteAppRow(
                         hasTriggeredSwipe = false
                     },
                     onHorizontalDrag = { change, dragAmount ->
-                        // Accumulate horizontal drag distance so swiping right (or left) on an app row opens its Pop-up Card!
                         dragOffsetX += dragAmount
                         if (!hasTriggeredSwipe && kotlin.math.abs(dragOffsetX) > 42f) {
                             hasTriggeredSwipe = true
@@ -1474,8 +1473,8 @@ private fun FavoriteAppRow(
                     }
                     Text(
                         text = previewLine,
-                        color = Color.White.copy(alpha = 0.78f),
-                        fontSize = 12.5.sp,
+                        color = Color.White.copy(alpha = 0.72f),
+                        fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 3f)),
