@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 data class ContactSearchResult(val name: String, val phoneNumber: String)
 
@@ -41,6 +42,7 @@ fun SmartSearchSheet(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val palette = LocalLauncherPalette.current
     var query by remember { mutableStateOf("") }
     var contacts by remember { mutableStateOf<List<ContactSearchResult>>(emptyList()) }
 
@@ -70,8 +72,8 @@ fun SmartSearchSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141414), // Rich dark container matching other sheets
-        contentColor = Color.White,
+        containerColor = palette.sheetBackground,
+        contentColor = palette.textPrimary,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
@@ -83,16 +85,16 @@ fun SmartSearchSheet(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("Search apps, contacts & web...", color = Color.Gray) },
+                placeholder = { Text("Search apps, contacts & web...", color = palette.textSecondary) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = accentColor) },
-                textStyle = LocalTextStyle.current.copy(color = Color.White),
+                textStyle = LocalTextStyle.current.copy(color = palette.textPrimary),
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = accentColor,
-                    unfocusedBorderColor = Color(0xFF2C2C2C),
-                    focusedContainerColor = Color(0xFF1C1C1C),
-                    unfocusedContainerColor = Color(0xFF1C1C1C)
+                    unfocusedBorderColor = palette.borderColor,
+                    focusedContainerColor = palette.cardBackground,
+                    unfocusedContainerColor = palette.cardBackground
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -136,7 +138,7 @@ fun SmartSearchSheet(
                                 Image(bitmap = it.toBitmap(width = 40, height = 40).asImageBitmap(), contentDescription = null, modifier = Modifier.size(30.dp))
                                 Spacer(modifier = Modifier.width(14.dp))
                             } ?: Spacer(modifier = Modifier.width(44.dp))
-                            Text(text = app.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                            Text(text = app.label, color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -168,17 +170,17 @@ fun SmartSearchSheet(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(50),
-                                color = Color(0xFF262626),
+                                color = palette.cardBackground,
                                 modifier = Modifier.size(30.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Person, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.Person, contentDescription = null, tint = palette.textSecondary, modifier = Modifier.size(16.dp))
                                 }
                             }
                             Spacer(modifier = Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(text = contact.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                                Text(text = contact.phoneNumber, color = Color.Gray, fontSize = 12.sp)
+                                Text(text = contact.name, color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                                Text(text = contact.phoneNumber, color = palette.textSecondary, fontSize = 12.sp)
                             }
                             Icon(Icons.Default.Call, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
                         }
