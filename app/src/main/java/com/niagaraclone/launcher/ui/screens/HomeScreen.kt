@@ -12,6 +12,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -46,13 +48,16 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -102,6 +107,7 @@ fun HomeScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
     val configuration = LocalConfiguration.current
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     val palette = LocalLauncherPalette.current
@@ -417,10 +423,17 @@ fun HomeScreen(
     val showHomeFavorites = !isDrawerExpanded && (!isScrubbingIndex || activeLetter == "☆" || activeLetter == "⭐")
     val hideUnderlyingLayers = isFullScreenOnboardingBlockingHome || showEditFavoritesOverlay
 
+    // Subtle theme-aware background tint over the wallpaper when Light or Glass mode is selected
+    val homeWallpaperOverlayColor = when {
+        palette.isGlass -> palette.accent.copy(alpha = 0.08f)
+        palette.isLight -> Color.White.copy(alpha = 0.12f)
+        else -> Color.Transparent
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Transparent)
+            .background(homeWallpaperOverlayColor)
             .pointerInput(quickLockEnabled) {
                 detectTapGestures(
                     onDoubleTap = {
@@ -734,7 +747,6 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // --- ROBUST MEDIA PLAYER WIDGET ACTIVATION ---
                     val activeMedia = mediaState
                     if (rawShowMediaWidget && activeMedia != null && activeMedia.isPlaying && activeMedia.title.isNotEmpty()) {
                         MediaPlayerCard(
@@ -906,7 +918,7 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // --- LAYER 5: FLOATING CASCADIA / SEARCH BUTTON ---
+            // --- LAYER 5: FLOATING CASCADIA / SEARCH BUTTON (With Elastic Swipe-Up Movement!) ---
             if ((cascadiaButtonEnabled || isDrawerExpanded) && !isScrubbingIndex) {
                 val currentTapActionType by rememberUpdatedState(fabTapActionType)
                 val currentTapApp by rememberUpdatedState(assignedFabApp)
@@ -914,31 +926,70 @@ fun HomeScreen(
                 val currentSwipeApp by rememberUpdatedState(assignedFabSwipeApp)
                 val currentDrawerExpanded by rememberUpdatedState(isDrawerExpanded)
 
+                var rawFabDragY by remember { mutableFloatStateOf(0f) }
+                var hasTriggeredThresholdHaptic by remember { mutableStateOf(false) }
+
+                val animatedFabOffsetY by animateFloatAsState(
+                    targetValue = rawFabDragY.coerceIn(-110f, 18f),
+                    animationSpec = spring(stiffness = 650f, dampingRatio = 0.6f),
+                    label = "fab_swipe_bounce"
+                )
+
+                val animatedFabScale by animateFloatAsState(
+                    targetValue = if (rawFabDragY < -28f) 1.14f else 1.0f,
+                    animationSpec = spring(stiffness = 650f, dampingRatio = 0.6f),
+                    label = "fab_swipe_scale"
+                )
+
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(bottom = 44.dp, end = 52.dp)
+                        .graphicsLayer {
+                            translationY = animatedFabOffsetY
+                            scaleX = animatedFabScale
+                            scaleY = animatedFabScale
+                        }
                 ) {
+                    val fabContainerColor = when {
+                        isDrawerExpanded && palette.isLight -> Color.White.copy(alpha = 0.92f)
+                        isDrawerExpanded && palette.isGlass -> palette.cardBackground
+                        isDrawerExpanded -> Color(0xFF3F3D46).copy(alpha = 0.88f)
+                        else -> accentColor
+                    }
+
                     Surface(
                         shape = CircleShape,
-                        color = if (isDrawerExpanded) Color(0xFF3F3D46).copy(alpha = 0.88f) else accentColor,
+                        color = fabContainerColor,
+                        border = if (palette.isGlass) androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor) else null,
                         shadowElevation = 6.dp,
                         modifier = Modifier
                             .size(54.dp)
                             .pointerInput(Unit) {
-                                var totalDragY = 0f
                                 detectDragGestures(
-                                    onDragStart = { totalDragY = 0f },
+                                    onDragStart = {
+                                        rawFabDragY = 0f
+                                        hasTriggeredThresholdHaptic = false
+                                    },
                                     onDragEnd = {
-                                        if (totalDragY < -28f) {
+                                        val finalDrag = rawFabDragY
+                                        rawFabDragY = 0f
+                                        hasTriggeredThresholdHaptic = false
+                                        if (finalDrag < -28f) {
                                             executeAction(currentSwipeActionType, currentSwipeApp)
                                         }
-                                        totalDragY = 0f
                                     },
-                                    onDragCancel = { totalDragY = 0f },
+                                    onDragCancel = {
+                                        rawFabDragY = 0f
+                                        hasTriggeredThresholdHaptic = false
+                                    },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
-                                        totalDragY += dragAmount.y
+                                        rawFabDragY += dragAmount.y * 0.85f
+                                        if (rawFabDragY < -28f && !hasTriggeredThresholdHaptic) {
+                                            hasTriggeredThresholdHaptic = true
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        }
                                     }
                                 )
                             }
@@ -954,21 +1005,30 @@ fun HomeScreen(
                             )
                     ) {
                         Box(contentAlignment = Alignment.Center) {
+                            // While swiping up past threshold, preview the Swipe Action icon inside the moving button!
+                            val isShowingSwipePreview = rawFabDragY < -24f && !isDrawerExpanded
+                            val displayActionType = if (isShowingSwipePreview) fabSwipeActionType else fabTapActionType
+                            val displayApp = if (isShowingSwipePreview) assignedFabSwipeApp else assignedFabApp
+
                             if (isDrawerExpanded) {
-                                Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = "Search",
+                                    tint = if (palette.isLight) Color.Black else Color.White
+                                )
                             } else {
                                 when {
-                                    fabTapActionType == "APP" && assignedFabApp?.icon != null -> {
+                                    displayActionType == "APP" && displayApp?.icon != null -> {
                                         Image(
-                                            bitmap = assignedFabApp.icon!!.toBitmap(width = 36, height = 36).asImageBitmap(),
-                                            contentDescription = assignedFabApp.label,
+                                            bitmap = displayApp.icon!!.toBitmap(width = 36, height = 36).asImageBitmap(),
+                                            contentDescription = displayApp.label,
                                             modifier = Modifier.size(28.dp)
                                         )
                                     }
-                                    fabTapActionType == "SEARCH" -> Icon(Icons.Default.Search, contentDescription = null, tint = Color.Black)
-                                    fabTapActionType == "AGENDA" -> Icon(Icons.Outlined.CalendarToday, contentDescription = null, tint = Color.Black)
-                                    fabTapActionType == "VOICE_ASSISTANT" -> Icon(Icons.Outlined.Mic, contentDescription = null, tint = Color.Black)
-                                    fabTapActionType == "LOCK" -> Icon(Icons.Default.Lock, contentDescription = null, tint = Color.Black)
+                                    displayActionType == "SEARCH" -> Icon(Icons.Default.Search, contentDescription = null, tint = Color.Black)
+                                    displayActionType == "AGENDA" -> Icon(Icons.Outlined.CalendarToday, contentDescription = null, tint = Color.Black)
+                                    displayActionType == "VOICE_ASSISTANT" -> Icon(Icons.Outlined.Mic, contentDescription = null, tint = Color.Black)
+                                    displayActionType == "LOCK" -> Icon(Icons.Default.Lock, contentDescription = null, tint = Color.Black)
                                     else -> Icon(Icons.Default.Phone, contentDescription = null, tint = Color.Black)
                                 }
                             }
