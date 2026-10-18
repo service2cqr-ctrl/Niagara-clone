@@ -44,9 +44,9 @@ fun NiagaraCloneTheme(
             theme = AppTheme.PITCH_BLACK,
             accent = accentColor,
             screenBackground = Color.Black,
-            sheetBackground = Color.Black,
-            cardBackground = Color(0xFF141417),
-            borderColor = Color(0x1FFFFFFF),
+            sheetBackground = Color(0xFF0D0D11),
+            cardBackground = Color(0xFF16161C),
+            borderColor = Color(0x26FFFFFF),
             textPrimary = Color.White,
             textSecondary = Color(0xFF9CA3AF),
             homeTextColor = Color.White,
@@ -56,9 +56,9 @@ fun NiagaraCloneTheme(
         AppTheme.LIGHT -> LauncherPalette(
             theme = AppTheme.LIGHT,
             accent = accentColor,
-            screenBackground = Color(0xFFF7F7FA),
+            screenBackground = Color(0xFFF4F4F8),
             sheetBackground = Color(0xFFFFFFFF),
-            cardBackground = Color(0xFFEEEEF4),
+            cardBackground = Color(0xFFEFEFF5),
             borderColor = Color(0x1F000000),
             textPrimary = Color(0xFF121216),
             textSecondary = Color(0xFF52525B),
@@ -67,19 +67,21 @@ fun NiagaraCloneTheme(
             isGlass = false
         )
         AppTheme.GLASS -> {
-            val glassTintBase = accentColor.copy(alpha = 0.14f)
-                .compositeOver(Color(0xFF101016).copy(alpha = 0.74f))
-            val glassCardBase = accentColor.copy(alpha = 0.18f)
-                .compositeOver(Color(0xFF1C1C24).copy(alpha = 0.65f))
+            // True Frosted Glassmorphism: Dark refractive tint + luminous crystal border stroke
+            val glassSheetBase = Color(0xFF161622).copy(alpha = 0.68f)
+                .compositeOver(Color(0xFF080812).copy(alpha = 0.5f))
+            val glassCardBase = Color(0xFF232336).copy(alpha = 0.58f)
+                .compositeOver(accentColor.copy(alpha = 0.08f))
+            
             LauncherPalette(
                 theme = AppTheme.GLASS,
                 accent = accentColor,
-                screenBackground = glassTintBase,
-                sheetBackground = glassTintBase,
+                screenBackground = Color.Transparent, // Wallpaper shines through fully
+                sheetBackground = glassSheetBase,
                 cardBackground = glassCardBase,
-                borderColor = accentColor.copy(alpha = 0.38f),
+                borderColor = Color.White.copy(alpha = 0.28f), // Luminous glass reflection edge
                 textPrimary = Color.White,
-                textSecondary = Color(0xFFD4D4D8),
+                textSecondary = Color(0xFFE4E4E7),
                 homeTextColor = Color.White,
                 isLight = false,
                 isGlass = true
@@ -120,7 +122,7 @@ fun NiagaraCloneTheme(
 
 val AccentPresets = listOf(
     Color(0xFF4DD0E1), // Teal
-    Color(0xFFD98CE0), // Niagara Orchid / Lavender (from video)
+    Color(0xFFD98CE0), // Niagara Orchid / Lavender
     Color(0xFF3B82F6), // Blue
     Color(0xFF10B981), // Emerald
     Color(0xFFF59E0B), // Amber
