@@ -1,6 +1,7 @@
 package com.niagaraclone.launcher.ui.components
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 @Composable
 fun AutoMusicPopUpCard(
@@ -28,6 +30,7 @@ fun AutoMusicPopUpCard(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val palette = LocalLauncherPalette.current
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
     val accentColor = Color(accentColorArgb)
 
@@ -35,7 +38,8 @@ fun AutoMusicPopUpCard(
 
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = Color(0xFF161616).copy(alpha = 0.95f),
+        color = palette.cardBackground,
+        border = if (palette.isGlass) androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor) else null,
         shadowElevation = 8.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -47,7 +51,7 @@ fun AutoMusicPopUpCard(
         ) {
             Text(
                 text = "Connected Audio Apps",
-                color = Color.Gray,
+                color = palette.textSecondary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 4.dp, start = 4.dp)
@@ -78,7 +82,7 @@ fun AutoMusicPopUpCard(
 
                     Text(
                         text = app.label,
-                        color = Color.White,
+                        color = palette.textPrimary,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f)
@@ -86,7 +90,6 @@ fun AutoMusicPopUpCard(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    // Musical Note Badge styled with user's theme accent color
                     Text(
                         text = "♪",
                         color = accentColor,
