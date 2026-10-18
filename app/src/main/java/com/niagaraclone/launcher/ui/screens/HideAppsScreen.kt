@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -40,6 +41,7 @@ fun HideAppsScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val palette = LocalLauncherPalette.current
     val apps by viewModel.apps.collectAsState()
     val hiddenPackages by viewModel.hiddenPackages.collectAsState()
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
@@ -64,7 +66,7 @@ fun HideAppsScreen(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color.Black
+        color = palette.screenBackground
     ) {
         Column(
             modifier = Modifier
@@ -81,7 +83,7 @@ fun HideAppsScreen(
                     .padding(bottom = 12.dp)
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = palette.textPrimary)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -89,7 +91,7 @@ fun HideAppsScreen(
                         text = "Hidden apps",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = palette.textPrimary
                     )
                     Text(
                         text = if (hiddenPackages.isEmpty()) {
@@ -98,7 +100,7 @@ fun HideAppsScreen(
                             "${hiddenPackages.size} hidden • Tap icon to launch, long-press for info"
                         },
                         fontSize = 12.sp,
-                        color = Color.Gray
+                        color = palette.textSecondary
                     )
                 }
             }
@@ -110,14 +112,14 @@ fun HideAppsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp),
-                placeholder = { Text("Search apps to hide or launch...", color = Color.Gray, fontSize = 14.sp) },
+                placeholder = { Text("Search apps to hide or launch...", color = palette.textSecondary, fontSize = 14.sp) },
                 leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray)
+                    Icon(Icons.Default.Search, contentDescription = "Search", tint = palette.textSecondary)
                 },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray)
+                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = palette.textSecondary)
                         }
                     }
                 },
@@ -126,11 +128,11 @@ fun HideAppsScreen(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = accentColor,
-                    unfocusedBorderColor = Color(0xFF2C2C2C),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color(0xFF141414),
-                    unfocusedContainerColor = Color(0xFF141414)
+                    unfocusedBorderColor = palette.borderColor,
+                    focusedTextColor = palette.textPrimary,
+                    unfocusedTextColor = palette.textPrimary,
+                    focusedContainerColor = palette.cardBackground,
+                    unfocusedContainerColor = palette.cardBackground
                 )
             )
 
@@ -158,6 +160,7 @@ fun HideAppsScreen(
                             app = app,
                             isHidden = true,
                             accentColor = accentColor,
+                            palette = palette,
                             onToggleHide = { viewModel.toggleHidePackage(app.packageName) },
                             onLaunchApp = {
                                 context.packageManager.getLaunchIntentForPackage(app.packageName)?.let {
@@ -175,7 +178,7 @@ fun HideAppsScreen(
 
                     item(key = "divider_hidden") {
                         HorizontalDivider(
-                            color = Color(0xFF222222),
+                            color = palette.borderColor,
                             modifier = Modifier.padding(vertical = 12.dp)
                         )
                     }
@@ -184,7 +187,7 @@ fun HideAppsScreen(
                 item(key = "header_all_apps") {
                     Text(
                         text = "ALL APPS (${visibleApps.size})",
-                        color = Color.Gray,
+                        color = palette.textSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(top = 4.dp, bottom = 6.dp, start = 8.dp)
@@ -199,6 +202,7 @@ fun HideAppsScreen(
                         app = app,
                         isHidden = false,
                         accentColor = accentColor,
+                        palette = palette,
                         onToggleHide = { viewModel.toggleHidePackage(app.packageName) },
                         onLaunchApp = {
                             context.packageManager.getLaunchIntentForPackage(app.packageName)?.let {
@@ -224,6 +228,7 @@ private fun HideAppRow(
     app: AppModel,
     isHidden: Boolean,
     accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onToggleHide: () -> Unit,
     onLaunchApp: () -> Unit,
     onOpenAppInfo: () -> Unit
@@ -249,7 +254,7 @@ private fun HideAppRow(
 
         Text(
             text = app.label,
-            color = Color.White,
+            color = palette.textPrimary,
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.weight(1f)
@@ -263,7 +268,7 @@ private fun HideAppRow(
                 Icon(
                     imageVector = Icons.Outlined.Launch,
                     contentDescription = "Launch hidden app",
-                    tint = Color.Gray,
+                    tint = palette.textSecondary,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -274,7 +279,7 @@ private fun HideAppRow(
                 Icon(
                     imageVector = Icons.Outlined.Info,
                     contentDescription = "App info",
-                    tint = Color.Gray,
+                    tint = palette.textSecondary,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -286,7 +291,7 @@ private fun HideAppRow(
             colors = CheckboxDefaults.colors(
                 checkedColor = accentColor,
                 checkmarkColor = Color.Black,
-                uncheckedColor = Color.Gray
+                uncheckedColor = palette.textSecondary
             )
         )
     }
