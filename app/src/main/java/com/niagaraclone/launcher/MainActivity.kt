@@ -109,8 +109,6 @@ class MainActivity : ComponentActivity() {
             ActivityCompat.requestPermissions(this, permissionsToRequest.toTypedArray(), REQUEST_CODE_PERMISSIONS)
         }
 
-        requestDefaultLauncher()
-
         appWidgetManager = AppWidgetManager.getInstance(this)
         appWidgetHost = AppWidgetHost(this, APPWIDGET_HOST_ID)
 
@@ -128,9 +126,14 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
 
         setContent {
+            // Collect both appTheme (Pitch Black / Light / Glass) and accentColorArgb!
+            val currentAppTheme by viewModel.theme.collectAsState()
             val accentArgb by viewModel.accentColorArgb.collectAsState()
 
-            NiagaraCloneTheme(accentColor = Color(accentArgb)) {
+            NiagaraCloneTheme(
+                appTheme = currentAppTheme,
+                accentColor = Color(accentArgb)
+            ) {
                 var page by remember { mutableStateOf(Page.HOME) }
                 var triggerWidgetMoveEdit by remember { mutableStateOf(false) }
 
@@ -240,7 +243,6 @@ class MainActivity : ComponentActivity() {
     private fun configureOrBindWidget(widgetId: Int) {
         val widgetInfo = appWidgetManager.getAppWidgetInfo(widgetId)
         if (widgetInfo == null) {
-            // Widget needs system permission binding first
             try {
                 val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
                     putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
