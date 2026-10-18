@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,10 +40,12 @@ fun CascadiaButtonMenuSheet(
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val palette = LocalLauncherPalette.current
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141414),
-        contentColor = Color.White,
+        containerColor = palette.sheetBackground,
+        contentColor = palette.textPrimary,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
@@ -54,13 +57,14 @@ fun CascadiaButtonMenuSheet(
                 text = "Cascadia Button",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
+                color = palette.textPrimary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
             SheetRowItem(
                 icon = Icons.Outlined.Edit,
                 title = "Edit tap action",
+                textColor = palette.textPrimary,
                 onClick = {
                     onDismiss()
                     onEditTapAction()
@@ -70,6 +74,7 @@ fun CascadiaButtonMenuSheet(
             SheetRowItem(
                 icon = Icons.Outlined.Edit,
                 title = "Edit swipe up action",
+                textColor = palette.textPrimary,
                 onClick = {
                     onDismiss()
                     onEditSwipeAction()
@@ -79,12 +84,14 @@ fun CascadiaButtonMenuSheet(
             SheetRowItem(
                 icon = Icons.Outlined.StarBorder,
                 title = "Enable Pro badge",
+                textColor = palette.textPrimary,
                 onClick = { onDismiss() }
             )
 
             SheetRowItem(
                 icon = Icons.Default.Settings,
                 title = "Cascadia settings",
+                textColor = palette.textPrimary,
                 onClick = {
                     onDismiss()
                     onOpenSettings()
@@ -108,24 +115,25 @@ fun FabActionSelectionSheet(
     val fabPackage by (if (isSwipeAction) viewModel.fabSwipePackage else viewModel.fabTapPackage).collectAsState()
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
     val accentColor = Color(accentColorArgb)
+    val palette = LocalLauncherPalette.current
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141414),
-        contentColor = Color.White,
+        containerColor = palette.sheetBackground,
+        contentColor = palette.textPrimary,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 550.dp) // Bound height safely inside bottom sheet
+                .heightIn(max = 550.dp)
                 .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
             Text(
                 text = if (isSwipeAction) "Select Swipe Up Action" else "Select Tap Action",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
+                color = palette.textPrimary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
@@ -149,6 +157,7 @@ fun FabActionSelectionSheet(
                         icon = Icons.Default.Phone,
                         isSelected = fabActionType == "DIAL",
                         accentColor = accentColor,
+                        textColor = palette.textPrimary,
                         onClick = {
                             if (isSwipeAction) viewModel.setFabSwipeAction("DIAL") else viewModel.setFabTapAction("DIAL")
                             onDismiss()
@@ -162,6 +171,7 @@ fun FabActionSelectionSheet(
                         icon = Icons.Default.Search,
                         isSelected = fabActionType == "SEARCH",
                         accentColor = accentColor,
+                        textColor = palette.textPrimary,
                         onClick = {
                             if (isSwipeAction) viewModel.setFabSwipeAction("SEARCH") else viewModel.setFabTapAction("SEARCH")
                             onDismiss()
@@ -175,6 +185,7 @@ fun FabActionSelectionSheet(
                         icon = Icons.Outlined.CalendarToday,
                         isSelected = fabActionType == "AGENDA",
                         accentColor = accentColor,
+                        textColor = palette.textPrimary,
                         onClick = {
                             if (isSwipeAction) viewModel.setFabSwipeAction("AGENDA") else viewModel.setFabTapAction("AGENDA")
                             onDismiss()
@@ -188,6 +199,7 @@ fun FabActionSelectionSheet(
                         icon = Icons.Outlined.Mic,
                         isSelected = fabActionType == "VOICE_ASSISTANT",
                         accentColor = accentColor,
+                        textColor = palette.textPrimary,
                         onClick = {
                             if (isSwipeAction) viewModel.setFabSwipeAction("VOICE_ASSISTANT") else viewModel.setFabTapAction("VOICE_ASSISTANT")
                             onDismiss()
@@ -201,6 +213,7 @@ fun FabActionSelectionSheet(
                         icon = Icons.Default.Lock,
                         isSelected = fabActionType == "LOCK",
                         accentColor = accentColor,
+                        textColor = palette.textPrimary,
                         onClick = {
                             if (isSwipeAction) viewModel.setFabSwipeAction("LOCK") else viewModel.setFabTapAction("LOCK")
                             onDismiss()
@@ -239,7 +252,7 @@ fun FabActionSelectionSheet(
                             Spacer(modifier = Modifier.width(16.dp))
                         } ?: Spacer(modifier = Modifier.width(44.dp))
 
-                        Text(text = app.label, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text(text = app.label, color = palette.textPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         if (isAppSelected) {
                             Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = accentColor)
                         }
@@ -256,6 +269,7 @@ private fun ActionOptionRow(
     icon: ImageVector,
     isSelected: Boolean,
     accentColor: Color,
+    textColor: Color,
     onClick: () -> Unit
 ) {
     Row(
@@ -265,9 +279,9 @@ private fun ActionOptionRow(
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+        Icon(imageVector = icon, contentDescription = null, tint = textColor, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(16.dp))
-        Text(text = title, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Text(text = title, color = textColor, fontSize = 16.sp, modifier = Modifier.weight(1f))
         if (isSelected) {
             Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = accentColor)
         }
@@ -275,7 +289,7 @@ private fun ActionOptionRow(
 }
 
 @Composable
-private fun SheetRowItem(icon: ImageVector, title: String, onClick: () -> Unit) {
+private fun SheetRowItem(icon: ImageVector, title: String, textColor: Color, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -283,8 +297,8 @@ private fun SheetRowItem(icon: ImageVector, title: String, onClick: () -> Unit) 
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(24.dp))
+        Icon(imageVector = icon, contentDescription = null, tint = textColor.copy(alpha = 0.85f), modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(16.dp))
-        Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color.White)
+        Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = textColor)
     }
 }
