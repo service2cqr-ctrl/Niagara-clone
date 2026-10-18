@@ -35,7 +35,6 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -63,6 +62,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -423,7 +423,6 @@ fun HomeScreen(
     val showHomeFavorites = !isDrawerExpanded && (!isScrubbingIndex || activeLetter == "☆" || activeLetter == "⭐")
     val hideUnderlyingLayers = isFullScreenOnboardingBlockingHome || showEditFavoritesOverlay
 
-    // Subtle theme-aware background tint over the wallpaper when Light or Glass mode is selected
     val homeWallpaperOverlayColor = when {
         palette.isGlass -> palette.accent.copy(alpha = 0.08f)
         palette.isLight -> Color.White.copy(alpha = 0.12f)
@@ -476,14 +475,17 @@ fun HomeScreen(
                         }
                         items(appGroup, key = { "drawer_${it.packageName}" }) { app ->
                             val appNotification = notificationSummaries.firstOrNull { it.packageName == app.packageName }
+                            val hasSubApps = remember(app.packageName) { viewModel.getFolderSubApps(app.packageName).isNotEmpty() }
                             FavoriteAppRow(
                                 app = app,
                                 badgeCount = notificationCounts[app.packageName] ?: 0,
                                 notificationSummary = appNotification,
+                                hasPopUpFolder = hasSubApps,
                                 accentColor = accentColor,
                                 onClick = { context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) } },
                                 onLongClick = { selectedAppForCustomization = app },
                                 onSwipeRight = { yOffset ->
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     popupYOffset = yOffset
                                     activePopUpApp = app
                                 }
@@ -590,16 +592,19 @@ fun HomeScreen(
                             }
                             activeAppsForLetter.take(8).forEach { app ->
                                 val appNotification = notificationSummaries.firstOrNull { it.packageName == app.packageName }
+                                val hasSubApps = remember(app.packageName) { viewModel.getFolderSubApps(app.packageName).isNotEmpty() }
                                 FavoriteAppRow(
                                     app = app,
                                     badgeCount = notificationCounts[app.packageName] ?: 0,
                                     notificationSummary = appNotification,
+                                    hasPopUpFolder = hasSubApps,
                                     accentColor = accentColor,
                                     onClick = {
                                         context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) }
                                     },
                                     onLongClick = { selectedAppForCustomization = app },
                                     onSwipeRight = { yOffset ->
+                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         popupYOffset = yOffset
                                         activePopUpApp = app
                                     }
@@ -864,16 +869,19 @@ fun HomeScreen(
 
                         items(favorites, key = { "fav_${it.packageName}" }) { app ->
                             val appNotification = notificationSummaries.firstOrNull { it.packageName == app.packageName }
+                            val hasSubApps = remember(app.packageName) { viewModel.getFolderSubApps(app.packageName).isNotEmpty() }
                             FavoriteAppRow(
                                 app = app,
                                 badgeCount = notificationCounts[app.packageName] ?: 0,
                                 notificationSummary = appNotification,
+                                hasPopUpFolder = hasSubApps,
                                 accentColor = accentColor,
                                 onClick = {
                                     context.packageManager.getLaunchIntentForPackage(app.packageName)?.let { context.startActivity(it) }
                                 },
                                 onLongClick = { selectedAppForCustomization = app },
                                 onSwipeRight = { yOffset ->
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     popupYOffset = yOffset
                                     activePopUpApp = app
                                 }
@@ -918,7 +926,7 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // --- LAYER 5: FLOATING CASCADIA / SEARCH BUTTON (With Elastic Swipe-Up Movement!) ---
+            // --- LAYER 5: FLOATING CASCADIA / SEARCH BUTTON ---
             if ((cascadiaButtonEnabled || isDrawerExpanded) && !isScrubbingIndex) {
                 val currentTapActionType by rememberUpdatedState(fabTapActionType)
                 val currentTapApp by rememberUpdatedState(assignedFabApp)
@@ -1005,7 +1013,6 @@ fun HomeScreen(
                             )
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            // While swiping up past threshold, preview the Swipe Action icon inside the moving button!
                             val isShowingSwipePreview = rawFabDragY < -24f && !isDrawerExpanded
                             val displayActionType = if (isShowingSwipePreview) fabSwipeActionType else fabTapActionType
                             val displayApp = if (isShowingSwipePreview) assignedFabSwipeApp else assignedFabApp
@@ -1177,12 +1184,16 @@ fun HomeScreen(
             )
         }
 
+        // --- NIAGARA SWIPE-RIGHT POP-UP CARD (Shows Notifications + Sub-Apps + Shortcuts) ---
         activePopUpApp?.let { parentApp ->
             val subApps = remember(parentApp) { viewModel.getFolderSubApps(parentApp.packageName) }
+            val appNotifs = remember(parentApp, notificationSummaries) {
+                notificationSummaries.filter { it.packageName == parentApp.packageName }
+            }
 
             Popup(
                 alignment = Alignment.TopStart,
-                offset = IntOffset(0, (popupYOffset - 120f).coerceAtLeast(0f).roundToInt()),
+                offset = IntOffset(0, (popupYOffset - 110f).coerceIn(100f, screenHeightPx - 360f).roundToInt()),
                 onDismissRequest = { activePopUpApp = null },
                 properties = PopupProperties(
                     focusable = true,
@@ -1190,12 +1201,21 @@ fun HomeScreen(
                     dismissOnClickOutside = true
                 )
             ) {
-                Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, end = 48.dp)
+                ) {
                     PopUpFolderCard(
                         viewModel = viewModel,
                         parentPackage = parentApp.packageName,
                         folderName = parentApp.label,
                         subApps = subApps,
+                        appNotifications = appNotifs,
+                        onEditPopUp = {
+                            editingFolderApp = parentApp
+                            activePopUpApp = null
+                        },
                         onDismiss = { activePopUpApp = null }
                     )
                 }
@@ -1360,36 +1380,56 @@ private fun FavoriteAppRow(
     app: AppModel,
     badgeCount: Int = 0,
     notificationSummary: NotificationSummaryModel? = null,
+    hasPopUpFolder: Boolean = false,
     accentColor: Color = Color(0xFF4DD0E1),
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onSwipeRight: (Float) -> Unit
 ) {
     var bottomY by remember { mutableFloatStateOf(0f) }
-    var isExpanded by remember { mutableStateOf(false) }
-    var inlineReplyText by remember { mutableStateOf("") }
-    val palette = LocalLauncherPalette.current
+    var dragOffsetX by remember { mutableFloatStateOf(0f) }
+    var hasTriggeredSwipe by remember { mutableStateOf(false) }
+
+    val animatedSwipeOffsetX by animateFloatAsState(
+        targetValue = dragOffsetX.coerceIn(0f, 36f),
+        animationSpec = spring(stiffness = 700f, dampingRatio = 0.7f),
+        label = "app_row_swipe_x"
+    )
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .onGloballyPositioned { coordinates -> bottomY = coordinates.boundsInRoot().bottom }
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { change, dragAmount ->
-                    if (dragAmount > 30f) {
-                        change.consume()
-                        onSwipeRight(bottomY)
+            .graphicsLayer {
+                translationX = animatedSwipeOffsetX
+            }
+            .pointerInput(app.packageName) {
+                detectHorizontalDragGestures(
+                    onDragStart = {
+                        dragOffsetX = 0f
+                        hasTriggeredSwipe = false
+                    },
+                    onDragEnd = {
+                        dragOffsetX = 0f
+                        hasTriggeredSwipe = false
+                    },
+                    onDragCancel = {
+                        dragOffsetX = 0f
+                        hasTriggeredSwipe = false
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        // Accumulate horizontal drag distance so swiping right (or left) on an app row opens its Pop-up Card!
+                        dragOffsetX += dragAmount
+                        if (!hasTriggeredSwipe && kotlin.math.abs(dragOffsetX) > 42f) {
+                            hasTriggeredSwipe = true
+                            change.consume()
+                            onSwipeRight(bottomY)
+                        }
                     }
-                }
+                )
             }
             .combinedClickable(
-                onClick = {
-                    if (notificationSummary != null) {
-                        isExpanded = !isExpanded
-                    } else {
-                        onClick()
-                    }
-                },
+                onClick = onClick,
                 onLongClick = onLongClick
             )
             .padding(vertical = 7.dp)
@@ -1408,19 +1448,38 @@ private fun FavoriteAppRow(
             } ?: Spacer(modifier = Modifier.width(52.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = app.label,
-                    color = Color.White,
-                    fontSize = 16.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.45f), blurRadius = 4f))
-                )
-                if (notificationSummary != null && !isExpanded) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = notificationSummary.text.ifEmpty { notificationSummary.title },
-                        color = Color.White.copy(alpha = 0.72f),
-                        fontSize = 12.sp,
-                        maxLines = 1
+                        text = app.label,
+                        color = Color.White,
+                        fontSize = 16.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.45f), blurRadius = 4f))
+                    )
+                    if (hasPopUpFolder) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Outlined.OpenInNew,
+                            contentDescription = "Pop-up folder",
+                            tint = Color.White.copy(alpha = 0.55f),
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                }
+                if (notificationSummary != null) {
+                    val previewLine = if (notificationSummary.title.isNotBlank() && notificationSummary.text.isNotBlank()) {
+                        "${notificationSummary.title}: ${notificationSummary.text}"
+                    } else {
+                        notificationSummary.text.ifEmpty { notificationSummary.title }
+                    }
+                    Text(
+                        text = previewLine,
+                        color = Color.White.copy(alpha = 0.78f),
+                        fontSize = 12.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 3f)),
+                        modifier = Modifier.clickable { onSwipeRight(bottomY) }
                     )
                 }
             }
@@ -1431,82 +1490,8 @@ private fun FavoriteAppRow(
                         .padding(start = 8.dp)
                         .size(8.dp)
                         .background(accentColor, CircleShape)
+                        .clickable { onSwipeRight(bottomY) }
                 )
-            }
-        }
-
-        if (isExpanded && notificationSummary != null) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = palette.sheetBackground,
-                border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp, start = 52.dp)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(text = notificationSummary.title, color = palette.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(text = notificationSummary.text, color = palette.textSecondary, fontSize = 13.sp)
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = inlineReplyText,
-                            onValueChange = { inlineReplyText = it },
-                            placeholder = { Text("Direct reply...", color = palette.textSecondary, fontSize = 12.sp) },
-                            singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(color = palette.textPrimary, fontSize = 13.sp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                        )
-
-                        IconButton(
-                            onClick = {
-                                if (inlineReplyText.isNotBlank()) {
-                                    MediaNotificationListener.sendDirectReply(notificationSummary.id, inlineReplyText)
-                                    inlineReplyText = ""
-                                    isExpanded = false
-                                }
-                            }
-                        ) {
-                            Icon(Icons.Default.Send, contentDescription = "Send Direct Reply", tint = accentColor)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        OutlinedButton(
-                            onClick = onClick,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
-                            modifier = Modifier.height(28.dp)
-                        ) {
-                            Text(text = "Open App", color = palette.textPrimary, fontSize = 11.sp)
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        TextButton(
-                            onClick = {
-                                MediaNotificationListener.dismissNotification(notificationSummary.id)
-                                isExpanded = false
-                            },
-                            modifier = Modifier.height(28.dp)
-                        ) {
-                            Text(text = "Dismiss", color = palette.textSecondary, fontSize = 11.sp)
-                        }
-                    }
-                }
             }
         }
     }
