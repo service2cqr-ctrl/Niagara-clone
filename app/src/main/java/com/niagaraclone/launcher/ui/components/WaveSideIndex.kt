@@ -1,4 +1,4 @@
-Package com.niagaraclone.launcher.ui.components
+package com.niagaraclone.launcher.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
