@@ -63,8 +63,8 @@ class SettingsRepository(private val context: Context) {
     private val SUGGEST_APPS_KEY = booleanPreferencesKey("suggest_apps_enabled")
     private val SORT_BY_USAGE_KEY = booleanPreferencesKey("sort_by_usage_enabled")
 
-    val appTheme: StateFlow<AppTheme> = context.dataStore.data.map {
-        when (it[APP_THEME_KEY]) {
+    val appTheme: StateFlow<AppTheme> = context.dataStore.data.map { prefs ->
+        when (prefs[APP_THEME_KEY]?.uppercase()) {
             "LIGHT" -> AppTheme.LIGHT
             "GLASS" -> AppTheme.GLASS
             else -> AppTheme.PITCH_BLACK
@@ -160,7 +160,7 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setAppTheme(theme: AppTheme) { context.dataStore.edit { it[APP_THEME_KEY] = theme.name } }
+    suspend fun setAppTheme(theme: AppTheme) { context.dataStore.edit { it[APP_THEME_KEY] = theme.name.uppercase() } }
     suspend fun setClockStyle(style: String) { context.dataStore.edit { it[CLOCK_STYLE_KEY] = style } }
     suspend fun setAccentColorArgb(color: Int) { context.dataStore.edit { it[ACCENT_COLOR_KEY] = color } }
     suspend fun setHomeOffsetY(offset: Float) { context.dataStore.edit { it[HOME_OFFSET_Y_KEY] = offset } }
