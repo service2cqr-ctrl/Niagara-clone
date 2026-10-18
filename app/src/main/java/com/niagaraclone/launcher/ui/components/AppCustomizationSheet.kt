@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +41,7 @@ fun AppCustomizationSheet(
     onOpenEditFolderSheet: () -> Unit
 ) {
     val context = LocalContext.current
+    val palette = LocalLauncherPalette.current
     var isAdvancedExpanded by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
 
@@ -53,8 +55,8 @@ fun AppCustomizationSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141414),
-        contentColor = Color.White,
+        containerColor = palette.sheetBackground,
+        contentColor = palette.textPrimary,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
@@ -81,13 +83,14 @@ fun AppCustomizationSheet(
                     text = app.label,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = palette.textPrimary
                 )
             }
 
             SheetActionRow(
                 icon = if (isFavorite) Icons.Outlined.Star else Icons.Outlined.StarBorder,
                 title = if (isFavorite) "Remove from favorites" else "Edit favorites",
+                textColor = palette.textPrimary,
                 onClick = {
                     viewModel.toggleFavorite(app.packageName)
                     onDismiss()
@@ -97,6 +100,7 @@ fun AppCustomizationSheet(
             SheetActionRow(
                 icon = Icons.Outlined.Info,
                 title = "App info",
+                textColor = palette.textPrimary,
                 onClick = {
                     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                         data = Uri.fromParts("package", app.packageName, null)
@@ -110,6 +114,7 @@ fun AppCustomizationSheet(
             SheetActionRow(
                 icon = Icons.Outlined.HourglassEmpty,
                 title = "Screen time",
+                textColor = palette.textPrimary,
                 onClick = {
                     try {
                         val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
@@ -126,12 +131,14 @@ fun AppCustomizationSheet(
             SheetActionRow(
                 icon = Icons.Outlined.AccountTree,
                 title = "Add to category",
+                textColor = palette.textPrimary,
                 onClick = { onOpenCategorySheet() }
             )
 
             SheetActionRow(
                 icon = Icons.Outlined.Delete,
                 title = "Uninstall",
+                textColor = palette.textPrimary,
                 onClick = {
                     val intent = Intent(Intent.ACTION_DELETE).apply {
                         data = Uri.fromParts("package", app.packageName, null)
@@ -152,7 +159,7 @@ fun AppCustomizationSheet(
                 Icon(
                     imageVector = if (isAdvancedExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = palette.textPrimary,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(16.dp))
@@ -160,7 +167,7 @@ fun AppCustomizationSheet(
                     text = "Advanced",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color.White
+                    color = palette.textPrimary
                 )
             }
 
@@ -169,18 +176,21 @@ fun AppCustomizationSheet(
                     SheetActionRow(
                         icon = Icons.Outlined.OpenInNew,
                         title = "Edit ${app.label} pop-up",
+                        textColor = palette.textPrimary,
                         onClick = { onOpenEditFolderSheet() }
                     )
 
                     SheetActionRow(
                         icon = Icons.Outlined.Edit,
                         title = "Edit icon/name",
+                        textColor = palette.textPrimary,
                         onClick = { showRenameDialog = true }
                     )
 
                     SheetActionRow(
                         icon = if (isHidden) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
                         title = if (isHidden) "Unhide from app list" else "Hide from app list",
+                        textColor = palette.textPrimary,
                         onClick = {
                             viewModel.toggleHidePackage(app.packageName)
                             onDismiss()
@@ -190,13 +200,14 @@ fun AppCustomizationSheet(
             }
 
             HorizontalDivider(
-                color = Color.White.copy(alpha = 0.15f),
+                color = palette.borderColor,
                 modifier = Modifier.padding(vertical = 16.dp)
             )
 
             SheetActionRow(
                 icon = Icons.Outlined.Settings,
                 title = "Cascadia settings",
+                textColor = palette.textPrimary,
                 onClick = {
                     onDismiss()
                     onOpenSettings()
@@ -207,23 +218,22 @@ fun AppCustomizationSheet(
         }
     }
 
-    // --- EDIT NAME DIALOG ---
     if (showRenameDialog) {
         var newName by remember { mutableStateOf(app.label) }
 
         AlertDialog(
             onDismissRequest = { showRenameDialog = false },
-            title = { Text("Edit App Name", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Edit App Name", color = palette.textPrimary, fontWeight = FontWeight.Bold) },
             text = {
                 OutlinedTextField(
                     value = newName,
                     onValueChange = { newName = it },
                     singleLine = true,
-                    textStyle = LocalTextStyle.current.copy(color = Color.White),
+                    textStyle = LocalTextStyle.current.copy(color = palette.textPrimary),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = accentColor,
-                        unfocusedBorderColor = Color.DarkGray
+                        unfocusedBorderColor = palette.borderColor
                     )
                 )
             },
@@ -238,10 +248,10 @@ fun AppCustomizationSheet(
             },
             dismissButton = {
                 TextButton(onClick = { showRenameDialog = false }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = palette.textSecondary)
                 }
             },
-            containerColor = Color(0xFF1E1E1E)
+            containerColor = palette.sheetBackground
         )
     }
 }
@@ -250,6 +260,7 @@ fun AppCustomizationSheet(
 private fun SheetActionRow(
     icon: ImageVector,
     title: String,
+    textColor: Color,
     onClick: () -> Unit
 ) {
     Row(
@@ -262,14 +273,14 @@ private fun SheetActionRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.9f),
+            tint = textColor.copy(alpha = 0.88f),
             modifier = Modifier.size(22.dp)
         )
         Spacer(modifier = Modifier.width(18.dp))
         Text(
             text = title,
             fontSize = 15.sp,
-            color = Color.White,
+            color = textColor,
             fontWeight = FontWeight.Normal
         )
     }
