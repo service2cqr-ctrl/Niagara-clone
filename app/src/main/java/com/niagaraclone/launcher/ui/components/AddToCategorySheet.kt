@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,6 +27,7 @@ fun AddToCategorySheet(
     viewModel: LauncherViewModel,
     onDismiss: () -> Unit
 ) {
+    val palette = LocalLauncherPalette.current
     val selectedMusicPackages by viewModel.selectedMusicPackages.collectAsState()
     val hiddenPackages by viewModel.hiddenPackages.collectAsState()
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
@@ -39,8 +41,8 @@ fun AddToCategorySheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141414),
-        contentColor = Color.White,
+        containerColor = palette.sheetBackground,
+        contentColor = palette.textPrimary,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
@@ -53,7 +55,7 @@ fun AddToCategorySheet(
                 text = "Add to category",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
+                color = palette.textPrimary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
@@ -63,6 +65,7 @@ fun AddToCategorySheet(
                 subtitle = if (isMusicApp) "Added to music player triggers • Tap to remove" else "Appear when headphones or speakers are connected",
                 isChecked = isMusicApp,
                 accentColor = accentColor,
+                palette = palette,
                 onClick = {
                     viewModel.toggleMusicPackage(app.packageName)
                     onDismiss()
@@ -75,6 +78,7 @@ fun AddToCategorySheet(
                 subtitle = if (isHiddenApp) "Currently hidden from app list • Tap to unhide" else "Tidy up your app list to find apps quicker",
                 isChecked = isHiddenApp,
                 accentColor = accentColor,
+                palette = palette,
                 onClick = {
                     viewModel.toggleHidePackage(app.packageName)
                     onDismiss()
@@ -87,6 +91,7 @@ fun AddToCategorySheet(
                 subtitle = "Group ${app.label} into a new custom folder",
                 isChecked = false,
                 accentColor = accentColor,
+                palette = palette,
                 onClick = { showCreateFolderDialog = true }
             )
 
@@ -97,22 +102,24 @@ fun AddToCategorySheet(
     if (showCreateFolderDialog) {
         AlertDialog(
             onDismissRequest = { showCreateFolderDialog = false },
-            containerColor = Color(0xFF1E1E1E),
-            title = { Text("Create Pop-up Folder", color = Color.White, fontWeight = FontWeight.Bold) },
+            containerColor = palette.sheetBackground,
+            title = { Text("Create Pop-up Folder", color = palette.textPrimary, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    Text("Enter a name for the new folder containing ${app.label}:", color = Color.Gray, fontSize = 14.sp)
+                    Text("Enter a name for the new folder containing ${app.label}:", color = palette.textSecondary, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = newFolderName,
                         onValueChange = { newFolderName = it },
-                        placeholder = { Text("Folder name", color = Color.Gray) },
+                        placeholder = { Text("Folder name", color = palette.textSecondary) },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = accentColor,
-                            unfocusedBorderColor = Color.DarkGray,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
+                            unfocusedBorderColor = palette.borderColor,
+                            focusedTextColor = palette.textPrimary,
+                            unfocusedTextColor = palette.textPrimary,
+                            focusedContainerColor = palette.cardBackground,
+                            unfocusedContainerColor = palette.cardBackground
                         )
                     )
                 }
@@ -134,7 +141,7 @@ fun AddToCategorySheet(
             },
             dismissButton = {
                 TextButton(onClick = { showCreateFolderDialog = false }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = palette.textSecondary)
                 }
             }
         )
@@ -148,6 +155,7 @@ private fun CategoryRow(
     subtitle: String?,
     isChecked: Boolean,
     accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onClick: () -> Unit
 ) {
     Row(
@@ -160,7 +168,7 @@ private fun CategoryRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (isChecked) accentColor else Color.White.copy(alpha = 0.9f),
+            tint = if (isChecked) accentColor else palette.textPrimary.copy(alpha = 0.9f),
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.width(18.dp))
@@ -168,11 +176,11 @@ private fun CategoryRow(
             Text(
                 text = title,
                 fontSize = 16.sp,
-                color = if (isChecked) accentColor else Color.White,
+                color = if (isChecked) accentColor else palette.textPrimary,
                 fontWeight = FontWeight.Medium
             )
             if (subtitle != null) {
-                Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
+                Text(text = subtitle, fontSize = 12.sp, color = palette.textSecondary)
             }
         }
         if (isChecked) {
@@ -186,7 +194,7 @@ private fun CategoryRow(
             Icon(
                 imageVector = Icons.Outlined.ChevronRight,
                 contentDescription = null,
-                tint = Color.Gray,
+                tint = palette.textSecondary,
                 modifier = Modifier.size(20.dp)
             )
         }
