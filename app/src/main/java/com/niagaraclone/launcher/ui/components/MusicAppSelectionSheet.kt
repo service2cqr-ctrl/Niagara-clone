@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.niagaraclone.launcher.data.AppModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 private enum class MusicSheetStep { EXPLANATION, SELECTION }
 
@@ -38,6 +40,7 @@ fun MusicAppSelectionSheet(
     viewModel: LauncherViewModel,
     onDismiss: () -> Unit
 ) {
+    val palette = LocalLauncherPalette.current
     var step by remember { mutableStateOf(MusicSheetStep.EXPLANATION) }
 
     val apps by viewModel.apps.collectAsState()
@@ -47,8 +50,8 @@ fun MusicAppSelectionSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141414), // Rich dark container matching other sheets
-        contentColor = Color.White,
+        containerColor = palette.sheetBackground,
+        contentColor = palette.textPrimary,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
         AnimatedContent(
@@ -59,6 +62,7 @@ fun MusicAppSelectionSheet(
             when (currentStep) {
                 MusicSheetStep.EXPLANATION -> MusicExplanationStep(
                     accentColor = accentColor,
+                    palette = palette,
                     onSelectAppsClick = { step = MusicSheetStep.SELECTION },
                     onCancelClick = onDismiss
                 )
@@ -66,6 +70,7 @@ fun MusicAppSelectionSheet(
                     apps = apps,
                     selectedPackages = selectedPackages,
                     accentColor = accentColor,
+                    palette = palette,
                     onTogglePackage = { pkg -> viewModel.toggleMusicPackage(pkg) },
                     onDone = onDismiss
                 )
@@ -77,6 +82,7 @@ fun MusicAppSelectionSheet(
 @Composable
 private fun MusicExplanationStep(
     accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onSelectAppsClick: () -> Unit,
     onCancelClick: () -> Unit
 ) {
@@ -100,14 +106,14 @@ private fun MusicExplanationStep(
                 text = "Launch your music apps right when you need them",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = palette.textPrimary
             )
         }
 
         Text(
             text = "Select your favourite music, podcast, or other apps to automatically appear on the home screen when connecting speakers or headphones.",
             fontSize = 14.sp,
-            color = Color.Gray,
+            color = palette.textSecondary,
             lineHeight = 20.sp
         )
 
@@ -116,7 +122,7 @@ private fun MusicExplanationStep(
         Text(
             text = "Cascadia Launcher needs nearby devices permission to show your music apps on the home screen when connecting headphones or speakers.",
             fontSize = 13.sp,
-            color = Color.Gray.copy(alpha = 0.8f),
+            color = palette.textSecondary.copy(alpha = 0.8f),
             lineHeight = 18.sp
         )
 
@@ -139,7 +145,7 @@ private fun MusicExplanationStep(
             onClick = onCancelClick,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(text = "Cancel", fontSize = 16.sp, color = Color.White)
+            Text(text = "Cancel", fontSize = 16.sp, color = palette.textPrimary)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -151,6 +157,7 @@ private fun MusicSelectionStep(
     apps: List<AppModel>,
     selectedPackages: Set<String>,
     accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onTogglePackage: (String) -> Unit,
     onDone: () -> Unit
 ) {
@@ -180,12 +187,12 @@ private fun MusicSelectionStep(
                 text = "Music apps",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = palette.textPrimary
             )
             Text(
                 text = "Appear when headphones or speakers are connected",
                 fontSize = 13.sp,
-                color = Color.Gray,
+                color = palette.textSecondary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
@@ -204,6 +211,7 @@ private fun MusicSelectionStep(
                             app = app,
                             isSelected = true,
                             accentColor = accentColor,
+                            palette = palette,
                             onToggle = { onTogglePackage(app.packageName) },
                             showDragHandle = true
                         )
@@ -212,7 +220,8 @@ private fun MusicSelectionStep(
                     item(key = "sort_usage_btn") {
                         Surface(
                             shape = CircleShape,
-                            color = Color(0xFF222222),
+                            color = palette.cardBackground,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor),
                             modifier = Modifier
                                 .padding(vertical = 8.dp)
                                 .clickable { }
@@ -223,7 +232,7 @@ private fun MusicSelectionStep(
                             ) {
                                 Icon(Icons.Default.SwapVert, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "Sort apps by usage", color = Color.White, fontSize = 13.sp)
+                                Text(text = "Sort apps by usage", color = palette.textPrimary, fontSize = 13.sp)
                             }
                         }
                     }
@@ -231,13 +240,14 @@ private fun MusicSelectionStep(
 
                 if (suggestedApps.isNotEmpty()) {
                     item(key = "header_suggested") {
-                        Text(text = "SUGGESTIONS", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+                        Text(text = "SUGGESTIONS", color = palette.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
                     }
                     items(suggestedApps, key = { "sug_${it.packageName}" }) { app ->
                         MusicAppRowItem(
                             app = app,
                             isSelected = false,
                             accentColor = accentColor,
+                            palette = palette,
                             onToggle = { onTogglePackage(app.packageName) },
                             showDragHandle = false
                         )
@@ -245,7 +255,7 @@ private fun MusicSelectionStep(
                 }
 
                 item(key = "header_all_apps") {
-                    Text(text = "ALL APPS", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+                    Text(text = "ALL APPS", color = palette.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
                 }
 
                 items(otherApps, key = { "oth_${it.packageName}" }) { app ->
@@ -253,6 +263,7 @@ private fun MusicSelectionStep(
                         app = app,
                         isSelected = false,
                         accentColor = accentColor,
+                        palette = palette,
                         onToggle = { onTogglePackage(app.packageName) },
                         showDragHandle = false
                     )
@@ -264,7 +275,6 @@ private fun MusicSelectionStep(
             }
         }
 
-        // Sticky Confirm Button
         Button(
             onClick = onDone,
             shape = CircleShape,
@@ -287,6 +297,7 @@ private fun MusicAppRowItem(
     app: AppModel,
     isSelected: Boolean,
     accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette,
     onToggle: () -> Unit,
     showDragHandle: Boolean
 ) {
@@ -303,7 +314,7 @@ private fun MusicAppRowItem(
             colors = CheckboxDefaults.colors(
                 checkedColor = accentColor,
                 checkmarkColor = Color.Black,
-                uncheckedColor = Color.Gray
+                uncheckedColor = palette.textSecondary
             )
         )
         Spacer(modifier = Modifier.width(8.dp))
@@ -319,7 +330,7 @@ private fun MusicAppRowItem(
 
         Text(
             text = app.label,
-            color = Color.White,
+            color = palette.textPrimary,
             fontSize = 15.sp,
             modifier = Modifier.weight(1f)
         )
@@ -328,7 +339,7 @@ private fun MusicAppRowItem(
             Icon(
                 imageVector = Icons.Default.DragHandle,
                 contentDescription = "Reorder",
-                tint = Color.Gray,
+                tint = palette.textSecondary,
                 modifier = Modifier.size(20.dp)
             )
         }
