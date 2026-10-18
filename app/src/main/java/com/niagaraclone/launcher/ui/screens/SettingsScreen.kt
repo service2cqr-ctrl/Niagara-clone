@@ -24,9 +24,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -39,7 +39,6 @@ import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.components.MusicAppSelectionSheet
 import com.niagaraclone.launcher.ui.components.UserGuideSheet
 import com.niagaraclone.launcher.ui.components.WeatherBottomSheet
-import com.niagaraclone.launcher.ui.theme.AccentPresets
 import com.niagaraclone.launcher.ui.theme.AppTheme
 import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 import com.niagaraclone.launcher.utils.IconPackManager
@@ -76,10 +75,11 @@ fun SettingsScreen(
     val palette = LocalLauncherPalette.current
 
     BackHandler {
-        if (currentPage == SettingsPage.MAIN) {
-            onDismiss()
-        } else {
-            currentPage = SettingsPage.MAIN
+        when (currentPage) {
+            SettingsPage.MAIN -> onDismiss()
+            SettingsPage.BACKUP_RESTORE -> currentPage = SettingsPage.ADVANCED
+            SettingsPage.HIDE_APPS -> currentPage = SettingsPage.PRODUCTIVITY
+            else -> currentPage = SettingsPage.MAIN
         }
     }
 
@@ -118,7 +118,6 @@ fun SettingsScreen(
                 onBack = { currentPage = SettingsPage.MAIN }
             )
             SettingsPage.ADVANCED -> AdvancedSettingsContent(
-                viewModel = viewModel,
                 accentColor = accentColor,
                 onNavigateToBackup = { currentPage = SettingsPage.BACKUP_RESTORE },
                 onBack = { currentPage = SettingsPage.MAIN }
@@ -190,6 +189,12 @@ private fun MainSettingsContent(
                 fontWeight = FontWeight.Bold,
                 color = palette.textPrimary
             )
+            Text(
+                text = "Free version",
+                fontSize = 15.sp,
+                color = palette.textSecondary,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
 
         SettingsCategoryItem(
@@ -211,14 +216,14 @@ private fun MainSettingsContent(
         SettingsCategoryItem(
             icon = Icons.Outlined.AutoAwesome,
             title = "Cascadia Pro",
-            subtitle = null,
+            subtitle = "Unlocked",
             accentColor = accentColor,
             onClick = { onNavigate(SettingsPage.PRO) }
         )
 
         SettingsCategoryItem(
             icon = Icons.Outlined.HelpOutline,
-            title = "Help & User Guide",
+            title = "Help & Feedback",
             subtitle = "Learn gestures and launcher shortcuts",
             accentColor = accentColor,
             onClick = onOpenUserGuide
@@ -248,6 +253,7 @@ private fun ProductivitySettingsContent(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val palette = LocalLauncherPalette.current
 
     var showCalendarDialog by remember { mutableStateOf(false) }
     var showPermissionDialog by remember { mutableStateOf(false) }
@@ -255,12 +261,14 @@ private fun ProductivitySettingsContent(
     var showMusicAppSheet by remember { mutableStateOf(false) }
     var showFolderInfoDialog by remember { mutableStateOf(false) }
     var showSmartSearchDialog by remember { mutableStateOf(false) }
+    var showMediaThemeDialog by remember { mutableStateOf(false) }
 
     val rawMediaWidgetEnabled by viewModel.showMediaWidget.collectAsState()
     val selectedMediaTheme by viewModel.mediaWidgetTheme.collectAsState()
     val isPermissionGranted by viewModel.notificationPermissionGranted.collectAsState()
     val isMediaWidgetActive = rawMediaWidgetEnabled && isPermissionGranted
 
+    val weatherEnabled by viewModel.weatherEnabled.collectAsState()
     val quickLockEnabled by viewModel.quickLockEnabled.collectAsState()
     val hapticFeedbackEnabled by viewModel.hapticFeedbackEnabled.collectAsState()
     val rotationEnabled by viewModel.rotationEnabled.collectAsState()
@@ -276,8 +284,6 @@ private fun ProductivitySettingsContent(
     val suggestAppsEnabled by viewModel.suggestAppsEnabled.collectAsState()
     val sortByUsageEnabled by viewModel.sortByUsageEnabled.collectAsState()
 
-    var showMediaThemeDialog by remember { mutableStateOf(false) }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -289,17 +295,28 @@ private fun ProductivitySettingsContent(
         SubPageHeader(title = "Productivity", accentColor = accentColor, onBack = onBack)
 
         SectionHeader("Instant Access", accentColor)
-        ToggleSettingRow("Quick Replies", "Reply right from your home screen", quickRepliesEnabled, accentColor) {
-            coroutineScope.launch { viewModel.repository.setQuickRepliesEnabled(it) }
-        }
+        ToggleSettingRow(
+            icon = Icons.Outlined.ChatBubbleOutline,
+            title = "Quick Replies",
+            subtitle = "Reply right from your home screen",
+            checked = quickRepliesEnabled,
+            accentColor = accentColor,
+            onCheckedChange = { enabled ->
+                coroutineScope.launch { viewModel.repository.setQuickRepliesEnabled(enabled) }
+                if (enabled && !isPermissionGranted) {
+                    showPermissionDialog = true
+                }
+            }
+        )
 
         ClickableSettingRow(
-            icon = Icons.Outlined.CalendarMonth,
+            icon = Icons.Outlined.CalendarToday,
             title = "Calendar Agenda",
             subtitle = "Open your calendar agenda by tapping the date",
             onClick = { showCalendarDialog = true }
         )
         ToggleSettingRow(
+            icon = Icons.Outlined.EventNote,
             title = "Calendar Preview",
             subtitle = "See upcoming events on your home screen",
             checked = calendarPreviewEnabled,
@@ -309,48 +326,33 @@ private fun ProductivitySettingsContent(
             }
         )
 
-        ClickableSettingRow(
+        ToggleSettingRow(
             icon = Icons.Outlined.WbSunny,
             title = "Weather Forecast",
             subtitle = "See the full forecast by tapping the current weather",
-            onClick = { isWeatherSheetOpen = true }
+            checked = weatherEnabled,
+            accentColor = accentColor,
+            onRowClick = { isWeatherSheetOpen = true },
+            onCheckedChange = { enabled ->
+                viewModel.setWeatherEnabled(enabled)
+                if (enabled) isWeatherSheetOpen = true
+            }
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showMediaThemeDialog = true }
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = "Media Player", fontSize = 16.sp, color = Color.White)
-                Text(
-                    text = "Theme: ${when (selectedMediaTheme) {
-                        MediaWidgetTheme.FROSTED_GLASS -> "Frosted Glass"
-                        MediaWidgetTheme.DARK -> "Dark"
-                        MediaWidgetTheme.LIGHT -> "Light"
-                        MediaWidgetTheme.MATCH_ACCENT -> "Match Accent"
-                        MediaWidgetTheme.ALBUM_ART -> "Album Art"
-                    }}",
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
+        ToggleSettingRow(
+            icon = Icons.Outlined.PlayArrow,
+            title = "Media Player",
+            subtitle = "Control music and videos from your home screen",
+            checked = isMediaWidgetActive,
+            accentColor = accentColor,
+            onRowClick = { showMediaThemeDialog = true },
+            onCheckedChange = { checked ->
+                viewModel.setShowMediaWidget(checked)
+                if (checked && !isPermissionGranted) {
+                    showPermissionDialog = true
+                }
             }
-            Switch(
-                checked = isMediaWidgetActive,
-                onCheckedChange = { checked ->
-                    viewModel.setShowMediaWidget(checked)
-                    if (checked && !isPermissionGranted) {
-                        showPermissionDialog = true
-                    }
-                },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.Black,
-                    checkedTrackColor = accentColor
-                )
-            )
-        }
+        )
 
         ClickableSettingRow(
             icon = Icons.Outlined.MusicNote,
@@ -360,12 +362,27 @@ private fun ProductivitySettingsContent(
         )
 
         SectionHeader("Digital Wellbeing", accentColor)
-        ToggleSettingRow("Usage Breaker", "Get reminders to take breaks", usageBreakerEnabled, accentColor) {
-            coroutineScope.launch { viewModel.repository.setUsageBreakerEnabled(it) }
-        }
-        ToggleSettingRow("Notification Summary", "Bundle notifications to reduce distractions", notificationSummaryEnabled, accentColor) {
-            coroutineScope.launch { viewModel.repository.setNotificationSummaryEnabled(it) }
-        }
+        ToggleSettingRow(
+            icon = Icons.Outlined.Timer,
+            title = "Usage Breaker",
+            subtitle = "Get reminders to take breaks",
+            checked = usageBreakerEnabled,
+            accentColor = accentColor,
+            onCheckedChange = { coroutineScope.launch { viewModel.repository.setUsageBreakerEnabled(it) } }
+        )
+        ToggleSettingRow(
+            icon = Icons.Outlined.NotificationsPaused,
+            title = "Notification Summary",
+            subtitle = "Bundle notifications to reduce distractions",
+            checked = notificationSummaryEnabled,
+            accentColor = accentColor,
+            onCheckedChange = { enabled ->
+                coroutineScope.launch { viewModel.repository.setNotificationSummaryEnabled(enabled) }
+                if (enabled && !isPermissionGranted) {
+                    showPermissionDialog = true
+                }
+            }
+        )
 
         SectionHeader("App Organization", accentColor)
         ClickableSettingRow(
@@ -376,16 +393,26 @@ private fun ProductivitySettingsContent(
         )
         ClickableSettingRow(
             icon = Icons.Outlined.Folder,
-            title = "Folders & Pop-ups",
+            title = "Folders & Pop-Ups",
             subtitle = "Group apps to keep your app list tidy",
             onClick = { showFolderInfoDialog = true }
         )
-        ToggleSettingRow("Suggest Often-Used Apps", "Directly access often-used apps from your favorites", suggestAppsEnabled, accentColor) {
-            coroutineScope.launch { viewModel.repository.setSuggestAppsEnabled(it) }
-        }
-        ToggleSettingRow("Sort All Apps List By Usage", "Prioritize most-used apps for each letter", sortByUsageEnabled, accentColor) {
-            coroutineScope.launch { viewModel.repository.setSortByUsageEnabled(it) }
-        }
+        ToggleSettingRow(
+            icon = Icons.Outlined.AutoAwesome,
+            title = "Suggest Often-Used Apps",
+            subtitle = "Directly access often-used apps from your favorites",
+            checked = suggestAppsEnabled,
+            accentColor = accentColor,
+            onCheckedChange = { coroutineScope.launch { viewModel.repository.setSuggestAppsEnabled(it) } }
+        )
+        ToggleSettingRow(
+            icon = Icons.Outlined.Sort,
+            title = "Sort All Apps List By Usage",
+            subtitle = "Prioritize most-used apps for each letter",
+            checked = sortByUsageEnabled,
+            accentColor = accentColor,
+            onCheckedChange = { coroutineScope.launch { viewModel.repository.setSortByUsageEnabled(it) } }
+        )
 
         SectionHeader("Smart Search", accentColor)
         ClickableSettingRow(
@@ -397,6 +424,7 @@ private fun ProductivitySettingsContent(
 
         SectionHeader("Shortcuts & Gestures", accentColor)
         ToggleSettingRow(
+            icon = Icons.Outlined.RadioButtonChecked,
             title = "Cascadia Button",
             subtitle = "Run quick actions from your home screen",
             checked = cascadiaButtonEnabled,
@@ -404,6 +432,7 @@ private fun ProductivitySettingsContent(
             onCheckedChange = { viewModel.setCascadiaButtonEnabled(it) }
         )
         ToggleSettingRow(
+            icon = Icons.Outlined.PowerSettingsNew,
             title = "Quick Lock",
             subtitle = "Double-tap empty home screen space to lock phone",
             checked = quickLockEnabled,
@@ -425,6 +454,7 @@ private fun ProductivitySettingsContent(
             onClick = onMoveWidgetClick
         )
         ToggleSettingRow(
+            icon = Icons.Outlined.BatteryStd,
             title = "Show Battery Percentage",
             subtitle = "Display battery level next to date",
             checked = showBatteryPercentage,
@@ -432,6 +462,7 @@ private fun ProductivitySettingsContent(
             onCheckedChange = { viewModel.setShowBatteryPercentage(it) }
         )
         ToggleSettingRow(
+            icon = Icons.Outlined.ScreenRotation,
             title = "Allow Home Screen Rotation",
             subtitle = "When device is rotated",
             checked = rotationEnabled,
@@ -439,8 +470,9 @@ private fun ProductivitySettingsContent(
             onCheckedChange = { viewModel.setRotationEnabled(it) }
         )
         ToggleSettingRow(
+            icon = Icons.Outlined.Vibration,
             title = "Allow Haptic Feedback",
-            subtitle = "Follow system settings",
+            subtitle = "Follow system",
             checked = hapticFeedbackEnabled,
             accentColor = accentColor,
             onCheckedChange = { viewModel.setHapticFeedbackEnabled(it) }
@@ -456,29 +488,153 @@ private fun ProductivitySettingsContent(
     if (showFolderInfoDialog) {
         AlertDialog(
             onDismissRequest = { showFolderInfoDialog = false },
-            title = { Text("Folders & Pop-ups", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { Text("Swipe right on any favorite app on your home screen to open its Pop-up folder.", color = Color.Gray) },
-            confirmButton = { TextButton(onClick = { showFolderInfoDialog = false }) { Text("Got it", color = accentColor) } },
-            containerColor = Color(0xFF161616)
+            title = { Text("Folders & Pop-ups", color = palette.textPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Swipe right on any favorite app on your home screen to open its Pop-up folder and shortcuts.",
+                    color = palette.textSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showFolderInfoDialog = false }) {
+                    Text("Got it", color = accentColor, fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = palette.sheetBackground
         )
     }
     if (showSmartSearchDialog) {
         AlertDialog(
             onDismissRequest = { showSmartSearchDialog = false },
-            title = { Text("Smart Search Settings", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Smart Search Settings", color = palette.textPrimary, fontWeight = FontWeight.Bold) },
             text = {
-                ToggleSettingRow("Include Contacts", "Search phone contacts and dial directly", searchContactsEnabled, accentColor) {
-                    coroutineScope.launch { viewModel.repository.setSearchContactsEnabled(it) }
+                ToggleSettingRow(
+                    title = "Include Contacts",
+                    subtitle = "Search phone contacts and dial directly",
+                    checked = searchContactsEnabled,
+                    accentColor = accentColor,
+                    onCheckedChange = { coroutineScope.launch { viewModel.repository.setSearchContactsEnabled(it) } }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showSmartSearchDialog = false }) {
+                    Text("Done", color = accentColor, fontWeight = FontWeight.Bold)
                 }
             },
-            confirmButton = { TextButton(onClick = { showSmartSearchDialog = false }) { Text("Done", color = accentColor) } },
-            containerColor = Color(0xFF161616)
+            containerColor = palette.sheetBackground
+        )
+    }
+    if (showMediaThemeDialog) {
+        AlertDialog(
+            onDismissRequest = { showMediaThemeDialog = false },
+            title = { Text("Media Player Theme", color = palette.textPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    MediaWidgetTheme.entries.forEach { theme ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setMediaWidgetTheme(theme)
+                                    showMediaThemeDialog = false
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = (selectedMediaTheme == theme),
+                                onClick = {
+                                    viewModel.setMediaWidgetTheme(theme)
+                                    showMediaThemeDialog = false
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = accentColor,
+                                    unselectedColor = palette.textSecondary
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = when (theme) {
+                                    MediaWidgetTheme.FROSTED_GLASS -> "Frosted Glass"
+                                    MediaWidgetTheme.DARK -> "Dark"
+                                    MediaWidgetTheme.LIGHT -> "Light"
+                                    MediaWidgetTheme.MATCH_ACCENT -> "Match Accent"
+                                    MediaWidgetTheme.ALBUM_ART -> "Album Art"
+                                },
+                                color = palette.textPrimary,
+                                fontSize = 15.sp
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showMediaThemeDialog = false }) {
+                    Text("Close", color = accentColor)
+                }
+            },
+            containerColor = palette.sheetBackground
+        )
+    }
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            title = { Text(text = "Notification Access", color = palette.textPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    text = "To display live track info, notification summaries, and inline replies, allow Notification Access in system settings.",
+                    color = palette.textSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPermissionDialog = false
+                        openNotificationAccessSettings(context)
+                    }
+                ) {
+                    Text(text = "Allow notification access", color = accentColor, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionDialog = false }) {
+                    Text(text = "Cancel", color = palette.textSecondary)
+                }
+            },
+            containerColor = palette.sheetBackground
+        )
+    }
+    if (showCalendarDialog) {
+        AlertDialog(
+            onDismissRequest = { showCalendarDialog = false },
+            title = { Text("Calendar Agenda", color = palette.textPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Check your plans and upcoming events by tapping the date", color = palette.textSecondary, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ToggleSettingRow(
+                        title = "Show Calendar Preview",
+                        subtitle = "Display next event under date",
+                        checked = calendarPreviewEnabled,
+                        accentColor = accentColor,
+                        onCheckedChange = { enabled ->
+                            coroutineScope.launch { viewModel.repository.setCalendarPreviewEnabled(enabled) }
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCalendarDialog = false }) {
+                    Text("Done", color = accentColor, fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = palette.sheetBackground
         )
     }
 }
 
 // -----------------------------------------------------------------------------
-// 3. THEMES PAGE (Featuring Pitch Black, Light, Glass & Accent Color Picker)
+// 3. THEMES PAGE (Pitch Black, Light, Glass + Accent Color Picker)
 // -----------------------------------------------------------------------------
 @Composable
 private fun ThemesSettingsContent(
@@ -491,12 +647,23 @@ private fun ThemesSettingsContent(
     val accentColorArgb by viewModel.accentColorArgb.collectAsState()
     val selectedIconPack by viewModel.selectedIconPack.collectAsState()
     val coroutineScope = rememberCoroutineScope()
+    val palette = LocalLauncherPalette.current
 
     var showColorPicker by remember { mutableStateOf(false) }
     var showIconPackPicker by remember { mutableStateOf(false) }
 
     val iconPackManager = remember { IconPackManager(context) }
     val installedIconPacks = remember { iconPackManager.getInstalledIconPacks() }
+
+    val namedColorPresets = listOf(
+        0xFFD98CE0.toInt() to "Niagara Orchid",
+        0xFF4DD0E1.toInt() to "Cascadia Teal",
+        0xFF3B82F6.toInt() to "Ocean Blue",
+        0xFF10B981.toInt() to "Emerald Green",
+        0xFFF59E0B.toInt() to "Warm Amber",
+        0xFFF43F5E.toInt() to "Coral Rose",
+        0xFF8B5CF6.toInt() to "Royal Violet"
+    )
 
     Column(
         modifier = Modifier
@@ -508,9 +675,8 @@ private fun ThemesSettingsContent(
     ) {
         SubPageHeader(title = "Themes", accentColor = accentColor, onBack = onBack)
 
-        SectionHeader("Theme Style", accentColor)
+        SectionHeader("Theme Mode", accentColor)
 
-        // 3 Theme Options: Pitch Black, Light, Glass
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -519,6 +685,7 @@ private fun ThemesSettingsContent(
         ) {
             ThemeCardOption(
                 title = "Pitch Black",
+                subtitle = "AMOLED",
                 isSelected = currentAppTheme == AppTheme.PITCH_BLACK,
                 backgroundColor = Color.Black,
                 textColor = Color.White,
@@ -528,17 +695,19 @@ private fun ThemesSettingsContent(
             )
             ThemeCardOption(
                 title = "Light",
+                subtitle = "Daylight",
                 isSelected = currentAppTheme == AppTheme.LIGHT,
-                backgroundColor = Color(0xFFFAFAFA),
-                textColor = Color(0xFF121212),
+                backgroundColor = Color(0xFFF5F5F8),
+                textColor = Color(0xFF121216),
                 accentColor = accentColor,
                 modifier = Modifier.weight(1f),
                 onClick = { coroutineScope.launch { viewModel.setAppTheme(AppTheme.LIGHT) } }
             )
             ThemeCardOption(
                 title = "Glass",
+                subtitle = "Frosted",
                 isSelected = currentAppTheme == AppTheme.GLASS,
-                backgroundColor = accentColor.copy(alpha = 0.25f),
+                backgroundColor = accentColor.copy(alpha = 0.28f),
                 textColor = Color.White,
                 accentColor = accentColor,
                 modifier = Modifier.weight(1f),
@@ -546,12 +715,21 @@ private fun ThemesSettingsContent(
             )
         }
 
-        SectionHeader("Customization", accentColor)
+        SectionHeader("Personalization", accentColor)
         ClickableSettingRow(
             icon = Icons.Outlined.Palette,
             title = "Accent Color",
-            subtitle = "Customize home screen clock and accent colors",
+            subtitle = "Customize clock, wave, and theme highlights",
             onClick = { showColorPicker = true }
+        )
+        ClickableSettingRow(
+            icon = Icons.Outlined.AutoFixHigh,
+            title = "Extract Wallpaper Accent",
+            subtitle = "Match accent color with your current wallpaper",
+            onClick = {
+                viewModel.extractWallpaperAccentColor()
+                Toast.makeText(context, "Wallpaper accent color applied", Toast.LENGTH_SHORT).show()
+            }
         )
         ClickableSettingRow(
             icon = Icons.Outlined.GridOn,
@@ -564,40 +742,55 @@ private fun ThemesSettingsContent(
     if (showColorPicker) {
         AlertDialog(
             onDismissRequest = { showColorPicker = false },
-            title = { Text("Choose Accent Color", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Choose Accent Color", color = palette.textPrimary, fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AccentPresets.forEach { colorPreset ->
-                        val colorVal = colorPreset.hashCode() // or ColorInt
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    namedColorPresets.forEach { (colorInt, label) ->
+                        val itemColor = Color(colorInt)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    viewModel.setAccentColor(colorPreset.hashCode()) // stores int
+                                    viewModel.setAccentColor(colorInt)
                                     showColorPicker = false
                                 }
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(modifier = Modifier.size(28.dp).background(colorPreset, CircleShape))
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(itemColor, CircleShape)
+                                    .border(1.dp, palette.borderColor, CircleShape)
+                            )
                             Spacer(modifier = Modifier.width(16.dp))
-                            Text(text = "Preset color", color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                            if (accentColorArgb == colorPreset.hashCode()) {
-                                Icon(Icons.Default.Check, contentDescription = null, tint = colorPreset)
+                            Text(
+                                text = label,
+                                color = palette.textPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (accentColor.toArgb() == colorInt) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = itemColor)
                             }
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showColorPicker = false }) { Text("Close", color = accentColor) } },
-            containerColor = Color(0xFF161616)
+            confirmButton = {
+                TextButton(onClick = { showColorPicker = false }) {
+                    Text("Close", color = accentColor)
+                }
+            },
+            containerColor = palette.sheetBackground
         )
     }
 
     if (showIconPackPicker) {
         AlertDialog(
             onDismissRequest = { showIconPackPicker = false },
-            title = { Text("Select Icon Pack", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Select Icon Pack", color = palette.textPrimary, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     Row(
@@ -610,9 +803,13 @@ private fun ThemesSettingsContent(
                             .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        RadioButton(selected = selectedIconPack == "SYSTEM" || selectedIconPack.isEmpty(), onClick = null, colors = RadioButtonDefaults.colors(selectedColor = accentColor))
+                        RadioButton(
+                            selected = selectedIconPack == "SYSTEM" || selectedIconPack.isEmpty(),
+                            onClick = null,
+                            colors = RadioButtonDefaults.colors(selectedColor = accentColor)
+                        )
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text("Default System Icons", color = Color.White, fontSize = 16.sp)
+                        Text("Default System Icons", color = palette.textPrimary, fontSize = 15.sp)
                     }
                     installedIconPacks.forEach { pack ->
                         Row(
@@ -625,15 +822,31 @@ private fun ThemesSettingsContent(
                                 .padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            RadioButton(selected = selectedIconPack == pack.packageName, onClick = null, colors = RadioButtonDefaults.colors(selectedColor = accentColor))
+                            RadioButton(
+                                selected = selectedIconPack == pack.packageName,
+                                onClick = null,
+                                colors = RadioButtonDefaults.colors(selectedColor = accentColor)
+                            )
                             Spacer(modifier = Modifier.width(12.dp))
-                            Text(pack.label, color = Color.White, fontSize = 16.sp)
+                            pack.icon?.let { iconDrawable ->
+                                Image(
+                                    bitmap = iconDrawable.toBitmap(width = 36, height = 36).asImageBitmap(),
+                                    contentDescription = pack.label,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                            }
+                            Text(pack.label, color = palette.textPrimary, fontSize = 15.sp)
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showIconPackPicker = false }) { Text("Close", color = accentColor) } },
-            containerColor = Color(0xFF161616)
+            confirmButton = {
+                TextButton(onClick = { showIconPackPicker = false }) {
+                    Text("Close", color = accentColor)
+                }
+            },
+            containerColor = palette.sheetBackground
         )
     }
 }
@@ -641,6 +854,7 @@ private fun ThemesSettingsContent(
 @Composable
 private fun ThemeCardOption(
     title: String,
+    subtitle: String,
     isSelected: Boolean,
     backgroundColor: Color,
     textColor: Color,
@@ -649,33 +863,41 @@ private fun ThemeCardOption(
     onClick: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         color = backgroundColor,
         modifier = modifier
-            .height(90.dp)
+            .height(98.dp)
             .border(
                 width = if (isSelected) 2.5.dp else 1.dp,
-                color = if (isSelected) accentColor else Color.Gray.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(16.dp)
+                color = if (isSelected) accentColor else Color.Gray.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(18.dp)
             )
             .clickable(onClick = onClick)
     ) {
         Box(
-            modifier = Modifier.fillMaxSize().padding(12.dp),
-            contentAlignment = Alignment.BottomStart
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp)
         ) {
-            Text(
-                text = title,
-                color = textColor,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
-            )
             if (isSelected) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .size(10.dp)
                         .background(accentColor, CircleShape)
+                )
+            }
+            Column(modifier = Modifier.align(Alignment.BottomStart)) {
+                Text(
+                    text = title,
+                    color = textColor,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = subtitle,
+                    color = textColor.copy(alpha = 0.7f),
+                    fontSize = 11.sp
                 )
             }
         }
@@ -687,32 +909,85 @@ private fun ThemeCardOption(
 // -----------------------------------------------------------------------------
 @Composable
 private fun CascadiaProContent(accentColor: Color, onBack: () -> Unit) {
+    val palette = LocalLauncherPalette.current
     Column(
-        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = accentColor, modifier = Modifier.size(80.dp))
         Spacer(modifier = Modifier.height(24.dp))
-        Text(text = "Cascadia Pro", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(24.dp))
-        OutlinedButton(onClick = onBack) { Text("Back", color = Color.White) }
+        Text(text = "Cascadia Pro", color = palette.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(text = "All Pro features are unlocked", color = palette.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
+        Spacer(modifier = Modifier.height(32.dp))
+        OutlinedButton(onClick = onBack) { Text("Back", color = palette.textPrimary) }
     }
 }
 
 @Composable
 private fun AdvancedSettingsContent(
-    viewModel: LauncherViewModel,
     accentColor: Color,
     onNavigateToBackup: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val palette = LocalLauncherPalette.current
+
     Column(
-        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(24.dp)
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
     ) {
         SubPageHeader(title = "Advanced", accentColor = accentColor, onBack = onBack)
-        ClickableSettingRow(icon = Icons.Outlined.Save, title = "Backup & Restore (Beta)", subtitle = null, onClick = onNavigateToBackup)
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.Info,
+            title = "App info",
+            subtitle = "Version 1.16.32",
+            onClick = {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                }
+                context.startActivity(intent)
+            }
+        )
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.Save,
+            title = "Backup & Restore (Beta)",
+            subtitle = null,
+            onClick = onNavigateToBackup
+        )
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.Home,
+            title = "Change default launcher",
+            subtitle = null,
+            onClick = {
+                val intent = Intent(Settings.ACTION_HOME_SETTINGS)
+                context.startActivity(intent)
+            }
+        )
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.Delete,
+            title = "Uninstall launcher",
+            subtitle = null,
+            onClick = {
+                val intent = Intent(Intent.ACTION_DELETE).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                }
+                context.startActivity(intent)
+            }
+        )
+
         ClickableSettingRow(
             icon = Icons.Outlined.RestartAlt,
             title = "Restart launcher",
@@ -724,70 +999,212 @@ private fun AdvancedSettingsContent(
                 context.startActivity(intent)
             }
         )
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Text("Privacy policy", color = palette.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
+        Text("Terms of Service", color = palette.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
+        Text("Open source licenses", color = palette.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
     }
 }
 
 @Composable
-private fun BackupRestoreContent(viewModel: LauncherViewModel, accentColor: Color, onBack: () -> Unit) {
+private fun BackupRestoreContent(
+    viewModel: LauncherViewModel,
+    accentColor: Color,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
-    Column(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(24.dp)) {
+    val palette = LocalLauncherPalette.current
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let {
+            val jsonString = viewModel.exportBackupJson(context)
+            val success = try {
+                context.contentResolver.openOutputStream(it)?.use { stream ->
+                    stream.write(jsonString.toByteArray())
+                }
+                true
+            } catch (e: Exception) {
+                false
+            }
+            Toast.makeText(context, if (success) "Backup saved!" else "Failed to save backup", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            val success = try {
+                val jsonString = context.contentResolver.openInputStream(it)?.bufferedReader()?.use { reader ->
+                    reader.readText()
+                } ?: ""
+                viewModel.importBackupJson(context, jsonString)
+            } catch (e: Exception) {
+                false
+            }
+            Toast.makeText(context, if (success) "Backup restored!" else "Failed to restore backup", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
+    ) {
         SubPageHeader(title = "Backup & Restore (Beta)", accentColor = accentColor, onBack = onBack)
-        Text("Back up your home screen setup and restore it on any device.", color = Color.Gray, fontSize = 14.sp)
+        Text("Back up your home screen setup and restore it on any device.", color = palette.textSecondary, fontSize = 14.sp)
         Spacer(modifier = Modifier.height(24.dp))
-        ClickableSettingRow(icon = Icons.Outlined.FileUpload, title = "Create backup", subtitle = "Save setup to JSON", onClick = {
-            val json = viewModel.exportBackupJson()
-            Toast.makeText(context, "Backup snapshot generated", Toast.LENGTH_SHORT).show()
-        })
+
+        ClickableSettingRow(
+            icon = Icons.Outlined.FileUpload,
+            title = "Create backup",
+            subtitle = "Save setup to JSON",
+            onClick = { exportLauncher.launch("cascadia_backup.json") }
+        )
+        ClickableSettingRow(
+            icon = Icons.Outlined.RestartAlt,
+            title = "Restore backup",
+            subtitle = "Load setup from JSON file",
+            onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) }
+        )
     }
 }
 
+// -----------------------------------------------------------------------------
+// REUSABLE THEME-AWARE COMPONENTS
+// -----------------------------------------------------------------------------
 @Composable
 private fun SubPageHeader(title: String, accentColor: Color, onBack: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
-        IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White) }
+    val palette = LocalLauncherPalette.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 20.dp)
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = palette.textPrimary)
+        }
         Spacer(modifier = Modifier.width(8.dp))
-        Surface(shape = CircleShape, color = accentColor.copy(alpha = 0.2f)) {
-            Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = accentColor, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+        Surface(
+            shape = CircleShape,
+            color = accentColor.copy(alpha = 0.18f)
+        ) {
+            Text(
+                text = title,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                color = palette.textPrimary,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
         }
     }
 }
 
 @Composable
 private fun SectionHeader(title: String, accentColor: Color) {
-    Text(text = title, color = accentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 22.dp, bottom = 8.dp))
+    Text(
+        text = title,
+        color = accentColor,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 22.dp, bottom = 8.dp)
+    )
 }
 
 @Composable
-private fun SettingsCategoryItem(icon: ImageVector, title: String, subtitle: String?, accentColor: Color, onClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun SettingsCategoryItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String?,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    val palette = LocalLauncherPalette.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(18.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 17.sp, color = Color.White, fontWeight = FontWeight.Medium)
-            if (subtitle != null) Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
+            Text(text = title, fontSize = 17.sp, color = palette.textPrimary, fontWeight = FontWeight.Medium)
+            if (subtitle != null) Text(text = subtitle, fontSize = 13.sp, color = palette.textSecondary)
         }
     }
 }
 
 @Composable
-private fun ToggleSettingRow(title: String, subtitle: String?, checked: Boolean, accentColor: Color, onCheckedChange: (Boolean) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun ToggleSettingRow(
+    title: String,
+    subtitle: String?,
+    checked: Boolean,
+    accentColor: Color,
+    icon: ImageVector? = null,
+    onRowClick: (() -> Unit)? = null,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val palette = LocalLauncherPalette.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                if (onRowClick != null) onRowClick() else onCheckedChange(!checked)
+            }
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (icon != null) {
+            Icon(imageVector = icon, contentDescription = null, tint = palette.textPrimary.copy(alpha = 0.85f), modifier = Modifier.size(22.dp))
+            Spacer(modifier = Modifier.width(18.dp))
+        }
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 15.sp, color = Color.White)
-            if (subtitle != null) Text(text = subtitle, fontSize = 11.sp, color = Color.Gray)
+            Text(text = title, fontSize = 16.sp, color = palette.textPrimary, fontWeight = FontWeight.Medium)
+            if (subtitle != null) Text(text = subtitle, fontSize = 12.sp, color = palette.textSecondary)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = accentColor))
+        Spacer(modifier = Modifier.width(12.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.Black,
+                checkedTrackColor = accentColor,
+                uncheckedThumbColor = palette.textSecondary,
+                uncheckedTrackColor = palette.cardBackground
+            )
+        )
     }
 }
 
 @Composable
-private fun ClickableSettingRow(icon: ImageVector, title: String, subtitle: String?, onClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(imageVector = icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(22.dp))
+private fun ClickableSettingRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit
+) {
+    val palette = LocalLauncherPalette.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = palette.textPrimary.copy(alpha = 0.85f), modifier = Modifier.size(22.dp))
         Spacer(modifier = Modifier.width(18.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 15.sp, color = Color.White)
-            if (subtitle != null) Text(text = subtitle, fontSize = 11.sp, color = Color.Gray)
+            Text(text = title, fontSize = 16.sp, color = palette.textPrimary, fontWeight = FontWeight.Medium)
+            if (subtitle != null) Text(text = subtitle, fontSize = 12.sp, color = palette.textSecondary)
         }
     }
 }
