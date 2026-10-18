@@ -1,28 +1,27 @@
 package com.niagaraclone.launcher.ui.components
 
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -30,108 +29,86 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.data.MediaWidgetTheme
 import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
+import com.niagaraclone.launcher.ui.theme.glassSurface
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MediaPlayerCard(
     albumArt: ImageBitmap?,
     trackTitle: String,
     artistName: String,
     isPlaying: Boolean,
-    widgetTheme: MediaWidgetTheme = MediaWidgetTheme.FROSTED_GLASS,
-    accentColor: Color = Color(0xFF4DD0E1),
+    widgetTheme: MediaWidgetTheme,
+    accentColor: Color,
     onPlayPauseToggle: () -> Unit,
     onOpenApp: () -> Unit,
-    onNextTrack: () -> Unit,
-    onPreviousTrack: () -> Unit,
+    onNextTrack: () -> Unit = {},
+    onPreviousTrack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val palette = LocalLauncherPalette.current
+    val useGlassEffect = palette.isGlass || widgetTheme == MediaWidgetTheme.FROSTED_GLASS
+    val cardShape = RoundedCornerShape(24.dp)
 
-    val backgroundColor = when {
-        palette.isGlass -> palette.cardBackground
-        widgetTheme == MediaWidgetTheme.LIGHT -> Color.White.copy(alpha = 0.88f)
-        widgetTheme == MediaWidgetTheme.DARK -> Color(0xFF16161C).copy(alpha = 0.92f)
-        widgetTheme == MediaWidgetTheme.MATCH_ACCENT -> accentColor.copy(alpha = 0.35f)
+    val containerColor = when {
+        useGlassEffect -> Color.Transparent
+        widgetTheme == MediaWidgetTheme.LIGHT -> Color(0xFFF2F2F7)
+        widgetTheme == MediaWidgetTheme.MATCH_ACCENT -> accentColor.copy(alpha = 0.22f)
         else -> palette.cardBackground
     }
 
-    val borderBrush = when {
-        palette.isGlass -> Brush.verticalGradient(
-            listOf(Color.White.copy(alpha = 0.35f), Color.White.copy(alpha = 0.1f))
-        )
-        widgetTheme == MediaWidgetTheme.LIGHT -> Brush.verticalGradient(
-            listOf(Color.Black.copy(alpha = 0.1f), Color.Black.copy(alpha = 0.05f))
-        )
-        widgetTheme == MediaWidgetTheme.DARK -> Brush.verticalGradient(
-            listOf(Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.05f))
-        )
-        widgetTheme == MediaWidgetTheme.MATCH_ACCENT -> Brush.verticalGradient(
-            listOf(accentColor.copy(alpha = 0.7f), accentColor.copy(alpha = 0.2f))
-        )
-        else -> Brush.verticalGradient(
-            listOf(Color.White.copy(alpha = 0.45f), Color.White.copy(alpha = 0.12f))
-        )
-    }
-
-    val textColorPrimary = when {
-        palette.isGlass -> Color.White
-        widgetTheme == MediaWidgetTheme.LIGHT -> Color(0xFF111111)
+    val primaryTextColor = when {
+        useGlassEffect -> Color.White
+        widgetTheme == MediaWidgetTheme.LIGHT -> Color.Black
         else -> palette.textPrimary
     }
 
-    val textColorSecondary = when {
-        palette.isGlass -> Color(0xFFE4E4E7)
-        widgetTheme == MediaWidgetTheme.LIGHT -> Color.Black.copy(alpha = 0.6f)
+    val secondaryTextColor = when {
+        useGlassEffect -> Color.White.copy(alpha = 0.78f)
+        widgetTheme == MediaWidgetTheme.LIGHT -> Color.DarkGray
         else -> palette.textSecondary
     }
 
-    val equalizerColor = when {
-        palette.isGlass -> accentColor
-        widgetTheme == MediaWidgetTheme.LIGHT -> Color.Black.copy(alpha = 0.8f)
-        else -> Color.White
+    val cardModifier = if (useGlassEffect) {
+        modifier
+            .fillMaxWidth()
+            .glassSurface(shape = cardShape, isSheet = false, borderWidth = 1.2.dp)
+            .clickable { onOpenApp() }
+    } else {
+        modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(containerColor, cardShape)
+            .border(1.dp, palette.borderColor, cardShape)
+            .clickable { onOpenApp() }
     }
 
-    var dragAmountTotal by remember { mutableFloatStateOf(0f) }
+    Box(modifier = cardModifier) {
+        // Optional subtle album art backdrop tint
+        if (widgetTheme == MediaWidgetTheme.ALBUM_ART && albumArt != null) {
+            Image(
+                bitmap = albumArt,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alpha = 0.28f,
+                modifier = Modifier.matchParentSize()
+            )
+        }
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .clip(CircleShape)
-            .background(backgroundColor)
-            .border(1.2.dp, borderBrush, CircleShape)
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragStart = { dragAmountTotal = 0f },
-                    onDragEnd = {
-                        if (dragAmountTotal > 60f) {
-                            onNextTrack()
-                        } else if (dragAmountTotal < -60f) {
-                            onPreviousTrack()
-                        }
-                    },
-                    onHorizontalDrag = { change, dragAmount ->
-                        change.consume()
-                        dragAmountTotal += dragAmount
-                    }
-                )
-            }
-            .clickable { onOpenApp() }
-            .padding(start = 6.dp, end = 16.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
         Row(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.Black.copy(alpha = 0.25f))
-                    .clickable { onPlayPauseToggle() },
-                contentAlignment = Alignment.Center
+            // Album Art Thumbnail with crystal rim
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = Color.White.copy(alpha = 0.12f),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    Color.White.copy(alpha = if (useGlassEffect) 0.35f else 0.1f)
+                ),
+                modifier = Modifier.size(52.dp)
             ) {
                 if (albumArt != null) {
                     Image(
@@ -141,104 +118,97 @@ fun MediaPlayerCard(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = "Music",
-                        tint = textColorSecondary,
-                        modifier = Modifier.size(22.dp)
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            // Track & Artist Info
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = trackTitle,
+                    color = primaryTextColor,
+                    fontSize = 15.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (artistName.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = artistName,
+                        color = secondaryTextColor,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 8.dp),
-                verticalArrangement = Arrangement.Center
+            // Transport Controls
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Text(
-                    text = trackTitle,
-                    color = textColorPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
-                )
-                Spacer(modifier = Modifier.height(1.dp))
-                Text(
-                    text = artistName,
-                    color = textColorSecondary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Normal,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                IconButton(
+                    onClick = onPreviousTrack,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SkipPrevious,
+                        contentDescription = "Previous",
+                        tint = primaryTextColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                // Frosted Glass Play/Pause Pill
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    accentColor,
+                                    accentColor.copy(alpha = 0.8f)
+                                ),
+                                start = Offset(0f, 0f),
+                                end = Offset(100f, 100f)
+                            )
+                        )
+                        .border(1.dp, Color.White.copy(alpha = 0.45f), CircleShape)
+                        .clickable { onPlayPauseToggle() }
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        tint = Color.Black,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = onNextTrack,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SkipNext,
+                        contentDescription = "Next",
+                        tint = primaryTextColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
-
-            AnimatedEqualizer(
-                isPlaying = isPlaying,
-                barColor = equalizerColor
-            )
-        }
-    }
-}
-
-@Composable
-private fun AnimatedEqualizer(
-    isPlaying: Boolean,
-    barColor: Color,
-    modifier: Modifier = Modifier
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "equalizer")
-
-    val h1 by if (isPlaying) {
-        infiniteTransition.animateFloat(
-            initialValue = 0.25f, targetValue = 0.95f,
-            animationSpec = infiniteRepeatable(tween(380, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "bar1"
-        )
-    } else remember { mutableFloatStateOf(0.2f) }
-
-    val h2 by if (isPlaying) {
-        infiniteTransition.animateFloat(
-            initialValue = 0.85f, targetValue = 0.15f,
-            animationSpec = infiniteRepeatable(tween(300, easing = LinearOutSlowInEasing), RepeatMode.Reverse),
-            label = "bar2"
-        )
-    } else remember { mutableFloatStateOf(0.4f) }
-
-    val h3 by if (isPlaying) {
-        infiniteTransition.animateFloat(
-            initialValue = 0.35f, targetValue = 0.90f,
-            animationSpec = infiniteRepeatable(tween(450, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-            label = "bar3"
-        )
-    } else remember { mutableFloatStateOf(0.25f) }
-
-    val h4 by if (isPlaying) {
-        infiniteTransition.animateFloat(
-            initialValue = 0.70f, targetValue = 0.20f,
-            animationSpec = infiniteRepeatable(tween(340, easing = LinearEasing), RepeatMode.Reverse),
-            label = "bar4"
-        )
-    } else remember { mutableFloatStateOf(0.35f) }
-
-    Row(
-        modifier = modifier.height(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.5.dp),
-        verticalAlignment = Alignment.Bottom
-    ) {
-        listOf(h1, h2, h3, h4).forEach { heightFraction ->
-            Box(
-                modifier = Modifier
-                    .width(2.5.dp)
-                    .fillMaxHeight(heightFraction)
-                    .clip(CircleShape)
-                    .background(barColor)
-            )
         }
     }
 }
