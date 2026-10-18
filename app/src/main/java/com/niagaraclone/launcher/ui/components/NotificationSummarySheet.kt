@@ -2,6 +2,7 @@ package com.niagaraclone.launcher.ui.components
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.services.NotificationSummaryModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,11 +28,12 @@ fun NotificationSummarySheet(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val palette = LocalLauncherPalette.current
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141414), // Rich dark container matching other sheets
-        contentColor = Color.White,
+        containerColor = palette.sheetBackground,
+        contentColor = palette.textPrimary,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
@@ -47,7 +50,7 @@ fun NotificationSummarySheet(
                     text = "Notification summary",
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = palette.textPrimary
                 )
                 if (summaries.isNotEmpty()) {
                     TextButton(
@@ -65,7 +68,7 @@ fun NotificationSummarySheet(
             if (summaries.isEmpty()) {
                 Text(
                     text = "No active notifications.",
-                    color = Color.Gray,
+                    color = palette.textSecondary,
                     fontSize = 15.sp,
                     modifier = Modifier.padding(vertical = 24.dp)
                 )
@@ -84,7 +87,8 @@ fun NotificationSummarySheet(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(Color(0xFF1E1E1E), RoundedCornerShape(14.dp))
+                                .background(palette.cardBackground, RoundedCornerShape(14.dp))
+                                .border(1.dp, palette.borderColor, RoundedCornerShape(14.dp))
                                 .clickable {
                                     try {
                                         val intent = context.packageManager.getLaunchIntentForPackage(item.packageName)
@@ -100,7 +104,7 @@ fun NotificationSummarySheet(
                         ) {
                             Text(
                                 text = item.title,
-                                color = Color.White,
+                                color = palette.textPrimary,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -108,7 +112,7 @@ fun NotificationSummarySheet(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = item.text,
-                                    color = Color.Gray,
+                                    color = palette.textSecondary,
                                     fontSize = 13.sp,
                                     maxLines = 2
                                 )
