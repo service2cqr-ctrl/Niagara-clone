@@ -46,6 +46,7 @@ fun WaveSideIndex(
     allowSystemBackOnRightEdge: Boolean = false,
     onTouchStart: () -> Unit = {},
     onCharSelected: (String) -> Unit = {},
+    onCharSelectedWithY: (String, Float) -> Unit = { char, _ -> onCharSelected(char) },
     onDragEnd: (String) -> Unit = {},
     accentColor: Color = Color(0xFF4DD0E1)
 ) {
@@ -74,7 +75,7 @@ fun WaveSideIndex(
 
     val waveProgress by animateFloatAsState(
         targetValue = if (isDragging) 1f else 0f,
-        animationSpec = spring(stiffness = 800f, dampingRatio = 0.8f),
+        animationSpec = spring(stiffness = 850f, dampingRatio = 0.82f),
         label = "wave_master_progress"
     )
 
@@ -99,18 +100,21 @@ fun WaveSideIndex(
             }
         }
 
+        val currentChar = INDEX_ITEMS[closestIdx]
         if (closestIdx != lastSelectedIndex) {
             lastSelectedIndex = closestIdx
             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            onCharSelected(INDEX_ITEMS[closestIdx])
         }
+        // Always report both character and current finger Y so the active app list tracks smoothly
+        onCharSelected(currentChar)
+        onCharSelectedWithY(currentChar, rootY)
     }
 
     val handleIndexPointerInput: suspend PointerInputScope.() -> Unit = {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
-            val topBoundPx = with(density) { (topPaddingDp - 12.dp).toPx() }
-            val bottomBoundPx = containerHeightPx - with(density) { (bottomPaddingDp - 12.dp).toPx() }
+            val topBoundPx = with(density) { (topPaddingDp - 16.dp).toPx() }
+            val bottomBoundPx = containerHeightPx - with(density) { (bottomPaddingDp - 16.dp).toPx() }
 
             if (down.position.y < topBoundPx || down.position.y > bottomBoundPx) {
                 return@awaitEachGesture
@@ -119,26 +123,27 @@ fun WaveSideIndex(
             val startX = down.position.x
             val startY = down.position.y
             var isRejectedAsBackSwipe = false
+            var isQuickTapReleased = false
             var initialTouchY = startY
 
-            // Wait up to 110ms before activating indexer to verify this is NOT a system Back gesture
-            val shouldActivate = withTimeoutOrNull(110L) {
-                var activate = false
+            // Wait up to 95ms to distinguish a horizontal Back-swipe or a quick Tap from a continuous Drag
+            withTimeoutOrNull(95L) {
                 while (true) {
                     val event = awaitPointerEvent()
                     val change = event.changes.firstOrNull() ?: break
 
-                    // If another gesture (or system Back) consumed or cancelled the pointer, abort immediately!
                     if (change.isConsumed) {
                         isRejectedAsBackSwipe = true
                         break
                     }
 
+                    // Finger already lifted within 95ms -> it's a direct tap!
                     if (!change.pressed) {
-                        // Clean tap on a letter without swiping horizontally
                         val totalDx = abs(change.position.x - startX)
-                        if (totalDx < with(density) { 10.dp.toPx() }) {
-                            activate = true
+                        if (totalDx < with(density) { 12.dp.toPx() }) {
+                            change.consume()
+                            initialTouchY = change.position.y
+                            isQuickTapReleased = true
                         } else {
                             isRejectedAsBackSwipe = true
                         }
@@ -148,67 +153,85 @@ fun WaveSideIndex(
                     val dx = abs(change.position.x - startX)
                     val dy = abs(change.position.y - startY)
 
-                    // Horizontal movement detected -> user is performing a system Back gesture, do NOT react
-                    if (dx > with(density) { 10.dp.toPx() } && dx > dy * 1.1f) {
+                    // Horizontal swipe inward -> user is doing Android system Back gesture
+                    if (dx > with(density) { 10.dp.toPx() } && dx > dy * 1.15f) {
                         isRejectedAsBackSwipe = true
                         break
                     }
 
-                    // Intentional vertical scrub along the alphabet bar -> activate immediately
-                    if (dy > with(density) { 5.dp.toPx() }) {
+                    // Vertical slide -> start continuous wave scrub immediately
+                    if (dy > with(density) { 4.dp.toPx() }) {
                         change.consume()
                         initialTouchY = change.position.y
-                        activate = true
                         break
                     }
                 }
-                activate
             }
 
             if (isRejectedAsBackSwipe) {
                 return@awaitEachGesture
             }
 
-            // If timeout elapsed while finger held still on the bar, activate
-            if (shouldActivate != false) {
-                var selectedCharOnRelease = "☆"
-                var wasCancelledBySystem = false
-                try {
-                    isDragging = true
-                    touchY = initialTouchY.coerceIn(topBoundPx, bottomBoundPx)
-                    pullFactor = 1f
-                    onTouchStart()
+            // CASE 1: Direct Quick Tap on a letter -> jump immediately without entering the drag loop!
+            if (isQuickTapReleased) {
+                val clampedY = initialTouchY.coerceIn(topBoundPx, bottomBoundPx)
+                onTouchStart()
+                updateSelection(clampedY)
+                val tappedChar = if (lastSelectedIndex in INDEX_ITEMS.indices) {
+                    INDEX_ITEMS[lastSelectedIndex]
+                } else {
+                    "☆"
+                }
+                isDragging = false
+                lastSelectedIndex = -1
+                onDragEnd(tappedChar)
+                return@awaitEachGesture
+            }
+
+            // CASE 2: Finger is still pressed -> run continuous wave scrubbing loop
+            var selectedCharOnRelease = "☆"
+            var wasCancelledBySystem = false
+            try {
+                isDragging = true
+                touchY = initialTouchY.coerceIn(topBoundPx, bottomBoundPx)
+                pullFactor = 1f
+                onTouchStart()
+                updateSelection(touchY)
+                if (lastSelectedIndex in INDEX_ITEMS.indices) {
+                    selectedCharOnRelease = INDEX_ITEMS[lastSelectedIndex]
+                }
+
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull() ?: break
+
+                    if (change.isConsumed) {
+                        wasCancelledBySystem = true
+                        break
+                    }
+
+                    if (!change.pressed || event.changes.none { it.pressed }) {
+                        change.consume()
+                        break
+                    }
+
+                    change.consume()
+                    touchY = change.position.y.coerceIn(topBoundPx, bottomBoundPx)
+                    val extraPullPx = (startX - change.position.x).coerceAtLeast(0f)
+                    val maxExtraPullPx = with(density) { 90.dp.toPx() }
+                    pullFactor = 1f + (extraPullPx / maxExtraPullPx).coerceIn(0f, 0.35f)
                     updateSelection(touchY)
-
-                    do {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull() ?: break
-
-                        if (change.isConsumed) {
-                            wasCancelledBySystem = true
-                            break
-                        }
-
-                        if (change.pressed) {
-                            change.consume()
-                            touchY = change.position.y.coerceIn(topBoundPx, bottomBoundPx)
-                            val extraPullPx = (startX - change.position.x).coerceAtLeast(0f)
-                            val maxExtraPullPx = with(density) { 90.dp.toPx() }
-                            pullFactor = 1f + (extraPullPx / maxExtraPullPx).coerceIn(0f, 0.35f)
-                            updateSelection(touchY)
-                            if (lastSelectedIndex in INDEX_ITEMS.indices) {
-                                selectedCharOnRelease = INDEX_ITEMS[lastSelectedIndex]
-                            }
-                        }
-                    } while (event.changes.any { it.pressed })
-                } finally {
                     if (lastSelectedIndex in INDEX_ITEMS.indices) {
                         selectedCharOnRelease = INDEX_ITEMS[lastSelectedIndex]
                     }
-                    isDragging = false
-                    lastSelectedIndex = -1
-                    onDragEnd(if (wasCancelledBySystem) "☆" else selectedCharOnRelease)
                 }
+            } finally {
+                if (lastSelectedIndex in INDEX_ITEMS.indices) {
+                    selectedCharOnRelease = INDEX_ITEMS[lastSelectedIndex]
+                }
+                isDragging = false
+                lastSelectedIndex = -1
+                onDragEnd(if (wasCancelledBySystem) "☆" else selectedCharOnRelease)
             }
         }
     }
@@ -224,7 +247,6 @@ fun WaveSideIndex(
             }
     ) {
         // Touch target strip inset by 16.dp from the physical right edge
-        // so the outer 16.dp bezel belongs exclusively to Android's system Back gesture
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
