@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,13 +24,14 @@ fun UserGuideSheet(
     viewModel: LauncherViewModel? = null,
     onDismiss: () -> Unit
 ) {
+    val palette = LocalLauncherPalette.current
     val accentColorArgb = viewModel?.accentColorArgb?.collectAsState()?.value ?: 0xFF4DD0E1.toInt()
     val accentColor = Color(accentColorArgb)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141414), // Rich dark container matching other sheets
-        contentColor = Color.White,
+        containerColor = palette.sheetBackground,
+        contentColor = palette.textPrimary,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
@@ -42,11 +44,11 @@ fun UserGuideSheet(
                 text = "Cascadia User Guide",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = palette.textPrimary
             )
             Text(
                 text = "Master your home screen gestures and features",
-                color = Color.Gray,
+                color = palette.textSecondary,
                 fontSize = 14.sp
             )
 
@@ -56,28 +58,32 @@ fun UserGuideSheet(
                 icon = Icons.Outlined.Swipe,
                 title = "Wave Alphabet Indexer",
                 description = "Slide your finger along the right edge of the screen to quickly jump to any app letter. Dragging inward expands a curved wave.",
-                accentColor = accentColor
+                accentColor = accentColor,
+                palette = palette
             )
 
             GuideCard(
                 icon = Icons.Outlined.Folder,
                 title = "Pop-up Folders",
                 description = "Swipe right on any favorite app row to reveal its pop-up folder and default system shortcuts.",
-                accentColor = accentColor
+                accentColor = accentColor,
+                palette = palette
             )
 
             GuideCard(
                 icon = Icons.Outlined.TouchApp,
                 title = "Cascadia Button",
                 description = "Tap the floating action button to trigger your primary quick action (e.g. Phone). Swipe up on the button to perform your secondary shortcut (e.g. Search).",
-                accentColor = accentColor
+                accentColor = accentColor,
+                palette = palette
             )
 
             GuideCard(
                 icon = Icons.Outlined.Lock,
                 title = "Quick Lock",
                 description = "Double-tap any empty space on your home screen to instantly turn off and lock your display.",
-                accentColor = accentColor
+                accentColor = accentColor,
+                palette = palette
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -90,11 +96,13 @@ private fun GuideCard(
     icon: ImageVector,
     title: String,
     description: String,
-    accentColor: Color
+    accentColor: Color,
+    palette: com.niagaraclone.launcher.ui.theme.LauncherPalette
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = Color(0xFF1E1E1E),
+        color = palette.cardBackground,
+        border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor),
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
@@ -113,14 +121,14 @@ private fun GuideCard(
             Column {
                 Text(
                     text = title,
-                    color = Color.White,
+                    color = palette.textPrimary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = description,
-                    color = Color.Gray,
+                    color = palette.textSecondary,
                     fontSize = 13.sp,
                     lineHeight = 18.sp
                 )
