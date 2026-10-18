@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niagaraclone.launcher.ui.LauncherViewModel
+import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
 
 @Composable
 fun UsageBreakerDialog(
@@ -21,6 +22,7 @@ fun UsageBreakerDialog(
     onContinue: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val palette = LocalLauncherPalette.current
     val accentColorArgb = viewModel?.accentColorArgb?.collectAsState()?.value ?: 0xFF4DD0E1.toInt()
     val accentColor = Color(accentColorArgb)
 
@@ -29,7 +31,7 @@ fun UsageBreakerDialog(
         title = {
             Text(
                 text = "Take a break?",
-                color = Color.White,
+                color = palette.textPrimary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -37,7 +39,7 @@ fun UsageBreakerDialog(
         text = {
             Text(
                 text = "You've opened $appName $launchCount times today. Consider taking a short pause.",
-                color = Color.White.copy(alpha = 0.8f),
+                color = palette.textSecondary,
                 fontSize = 15.sp,
                 lineHeight = 22.sp
             )
@@ -55,11 +57,12 @@ fun UsageBreakerDialog(
             TextButton(onClick = onDismiss) {
                 Text(
                     text = "Take a break",
-                    color = Color.Gray
+                    color = palette.textSecondary
                 )
             }
         },
         shape = RoundedCornerShape(24.dp),
-        containerColor = Color(0xFF161616)
+        containerColor = palette.sheetBackground,
+        tonalElevation = 6.dp
     )
 }
