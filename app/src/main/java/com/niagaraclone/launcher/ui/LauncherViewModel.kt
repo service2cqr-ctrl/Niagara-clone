@@ -25,7 +25,9 @@ import com.niagaraclone.launcher.backup.BackupManager
 import com.niagaraclone.launcher.data.*
 import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.ui.theme.AppTheme
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
@@ -77,7 +79,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     val notificationCounts = MediaNotificationListener.activeNotificationCounts
     val notificationSummaries = MediaNotificationListener.notificationSummaries
-    val upcomingEvents = repository.upcomingEvents
+
+    private val _upcomingEvents = MutableStateFlow<List<CalendarEventModel>>(emptyList())
+    val upcomingEvents: StateFlow<List<CalendarEventModel>> = _upcomingEvents.asStateFlow()
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -245,8 +249,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun loadCalendarEvents() {
         viewModelScope.launch {
             val events = calendarRepository.getUpcomingEvents(14)
-            repository.updateUpcomingEvents(events)
+            _upcomingEvents.value = events
         }
+    }
+
+    fun updateUpcomingEvents(events: List<CalendarEventModel>) {
+        _upcomingEvents.value = events
     }
 
     fun launchCalendarNewEvent(context: Context) {
