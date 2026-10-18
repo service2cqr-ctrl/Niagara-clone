@@ -1,4 +1,4 @@
-package com.niagaraclone.launcher.ui.components
+Package com.niagaraclone.launcher.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -317,7 +317,7 @@ fun WaveSideIndex(
 
             val badgeOffsetY = (touchY - badgeSizePx / 2f).roundToInt()
             val peakX = basePeakOffsetPx * pullFactor * waveProgress
-            val badgeOffsetX = -(peakX + with(density) { 38.dp.toPx() }).roundCent()
+            val badgeOffsetX = -(peakX + with(density) { 38.dp.toPx() }).roundToInt()
 
             Box(
                 modifier = Modifier
