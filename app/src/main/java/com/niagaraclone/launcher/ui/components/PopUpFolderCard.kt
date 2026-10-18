@@ -13,13 +13,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -36,6 +36,7 @@ import com.niagaraclone.launcher.services.MediaNotificationListener
 import com.niagaraclone.launcher.services.NotificationSummaryModel
 import com.niagaraclone.launcher.ui.LauncherViewModel
 import com.niagaraclone.launcher.ui.theme.LocalLauncherPalette
+import com.niagaraclone.launcher.ui.theme.glassSurface
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -57,16 +58,14 @@ fun PopUpFolderCard(
     val accentColor = Color(accentColorArgb)
 
     val hasAnyContent = appNotifications.isNotEmpty() || subApps.isNotEmpty() || shortcuts.isNotEmpty()
+    val cardShape = RoundedCornerShape(26.dp)
 
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = palette.sheetBackground,
-        tonalElevation = 10.dp,
-        shadowElevation = 18.dp,
-        border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor),
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .wrapContentHeight()
+            .shadow(elevation = 22.dp, shape = cardShape, clip = false)
+            .glassSurface(shape = cardShape, isSheet = true, borderWidth = 1.3.dp)
             .combinedClickable(
                 onClick = {},
                 onLongClick = onEditPopUp
@@ -77,7 +76,7 @@ fun PopUpFolderCard(
                 .fillMaxWidth()
                 .padding(18.dp)
         ) {
-            // --- HEADER ROW (Matches Niagara's Pop-up Header) ---
+            // --- HEADER ROW ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -131,7 +130,7 @@ fun PopUpFolderCard(
                 }
             }
 
-            // --- 1. ACTIVE NOTIFICATIONS SECTION (Swiping right on app shows notifications here!) ---
+            // --- 1. ACTIVE NOTIFICATIONS SECTION ---
             if (appNotifications.isNotEmpty()) {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -139,14 +138,12 @@ fun PopUpFolderCard(
                 ) {
                     appNotifications.take(3).forEach { notif ->
                         var replyText by remember(notif.id) { mutableStateOf("") }
+                        val notifShape = RoundedCornerShape(16.dp)
 
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = palette.cardBackground,
-                            border = if (palette.isGlass) androidx.compose.foundation.BorderStroke(1.dp, palette.borderColor) else null,
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
+                                .glassSurface(shape = notifShape, isSheet = false, borderWidth = 1.dp)
                                 .clickable {
                                     try {
                                         notif.sbn?.notification?.contentIntent?.send()
@@ -332,7 +329,7 @@ fun PopUpFolderCard(
                 }
             }
 
-            // --- 4. NIAGARA EMPTY-STATE POP-UP MESSAGE (Matches Video 01:42, 02:39, 02:52) ---
+            // --- 4. NIAGARA EMPTY-STATE POP-UP MESSAGE ---
             if (!hasAnyContent) {
                 Text(
                     text = buildAnnotatedString {
